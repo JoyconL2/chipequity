@@ -1,0 +1,88 @@
+{
+ "a": 0.3034,
+ "b": 0.6322,
+ "c": -2.9818,
+ "k": 25,
+ "unknown_mpg": 15.05,
+ "max_min": 40.0,
+ "stages": [
+  {
+   "lo": 0,
+   "hi": 0,
+   "hca": 2.158,
+   "sigma": 12.156
+  },
+  {
+   "lo": 1,
+   "hi": 10,
+   "hca": 2.859,
+   "sigma": 12.184
+  },
+  {
+   "lo": 11,
+   "hi": 25,
+   "hca": 2.776,
+   "sigma": 12.316
+  },
+  {
+   "lo": 26,
+   "hi": 50,
+   "hca": 2.853,
+   "sigma": 12.353
+  },
+  {
+   "lo": 51,
+   "hi": 82,
+   "hca": 2.783,
+   "sigma": 12.475
+  }
+ ],
+ "prior_window": "regular-season 3-year CEPM ending last season",
+ "backtest": {
+  "preseason": {
+   "rmse_roster": 3.0139222211097763,
+   "rmse_last_season": 3.7380985591104916,
+   "rmse_zero": 4.701434329219673,
+   "r_roster": 0.7674874973128689,
+   "r_last_season": 0.6064828404123209,
+   "n_team_seasons": 861
+  },
+  "games": [
+   {
+    "stage": "opening",
+    "games": 497,
+    "acc": 0.6519,
+    "logloss": 0.6211
+   },
+   {
+    "stage": "1-10",
+    "games": 4466,
+    "acc": 0.6677,
+    "logloss": 0.6085
+   },
+   {
+    "stage": "11-25",
+    "games": 6541,
+    "acc": 0.6664,
+    "logloss": 0.603
+   },
+   {
+    "stage": "26-50",
+    "games": 10748,
+    "acc": 0.6634,
+    "logloss": 0.6142
+   },
+   {
+    "stage": "51-82",
+    "games": 12102,
+    "acc": 0.6863,
+    "logloss": 0.5925
+   }
+  ],
+  "series": {
+   "n": 435,
+   "acc": 0.754
+  },
+  "seasons": "1997-98 to 2025-26"
+ }
+}

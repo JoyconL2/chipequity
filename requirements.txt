@@ -1,0 +1,7 @@
+numpy
+pandas
+scipy
+requests
+pytest
+pbpstats        # or clone https://github.com/dblackrun/pbpstats into ./pbplib
+# node (any recent version) for site/model.js and pomodel/export_series.js

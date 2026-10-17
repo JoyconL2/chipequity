@@ -1,0 +1,119 @@
+{
+ "a": 0.2593,
+ "bP": 0.4594,
+ "bD": 0.1375,
+ "bU": -2.2889,
+ "bX": 0.1308,
+ "form": "priors+market",
+ "unknown_mpg": 19.89,
+ "max_min": 40,
+ "min_gp": 5,
+ "cepm": "3-year CEPM (window ending last season, regular season + playoffs; 2-year when no 3-year window)",
+ "slope": 0.02998,
+ "k": 20,
+ "center": true,
+ "spread": 1.3,
+ "spread_most_accurate": 1.1,
+ "unknown_slots": 4,
+ "unknown_floor": 10.0,
+ "healthy_form": {
+  "max_gp_last": 49,
+  "min_gp_last": 5
+ },
+ "star_rule": {
+  "max_gp_last": 4,
+  "min_gp_before": 20,
+  "min_mpg_before": 28,
+  "min_cepm": 2.0,
+  "shrink": 1.0
+ },
+ "pace": 1.0101010101010102,
+ "band80_wins": 10.9,
+ "backtest": {
+  "seasons": "1999-00 to 2025-26",
+  "teams": 801,
+  "net_rmse": 3.59,
+  "net_mae": 2.81,
+  "net_rmse_last_season_only": 3.88,
+  "net_rmse_roster_model": 3.48,
+  "net_rmse_average": 4.84,
+  "spread_note": "unstretched projection SD 8.2 wins vs market 10.2 vs actual 12.3; x1.15 is most accurate (wins MAE 6.84), x1.3 matches the real spread (6.97)",
+  "tested_not_used": "playoff experience; experience on winning rosters (newcomers ~0 effect); 2-year CEPM (tie)",
+  "market": {
+   "w_model": 0.32,
+   "fold_weights": {
+    "2018-19": 0.21,
+    "2020-21": 0.6,
+    "2021-22": 0.53,
+    "2022-23": 0.2,
+    "2024-25": 0.29,
+    "2025-26": 0.6
+   },
+   "mae_model": 7.435210979930126,
+   "mae_market": 7.102818930041152,
+   "mae_blend": 7.208480359952275,
+   "n": 180,
+   "seasons": [
+    "2018-19",
+    "2020-21",
+    "2021-22",
+    "2022-23",
+    "2024-25",
+    "2025-26"
+   ]
+  },
+  "wins_mae_82": 6.99,
+  "within_5_wins": 0.432,
+  "in_season": [
+   {
+    "games_played": 0,
+    "wins_mae_82": 6.99,
+    "within_5": 0.431
+   },
+   {
+    "games_played": 10,
+    "wins_mae_82": 5.96,
+    "within_5": 0.503
+   },
+   {
+    "games_played": 20,
+    "wins_mae_82": 5.1,
+    "within_5": 0.563
+   },
+   {
+    "games_played": 41,
+    "wins_mae_82": 3.58,
+    "within_5": 0.732
+   },
+   {
+    "games_played": 60,
+    "wins_mae_82": 2.27,
+    "within_5": 0.929
+   }
+  ],
+  "priors": {
+   "note": "user priors on purpose: last season's net x share of last season's top-8 core that returns; +0.3 net per CEPM point of the best player and +0.15 per point of support quality above league average",
+   "wins_mae_model_current": 6.97,
+   "wins_mae_priors": 7.11,
+   "on_market_seasons": {
+    "current_model": 7.78,
+    "priors_model": 7.89,
+    "market": 7.1,
+    "priors_50_50_market": 7.25,
+    "priors_30_70_market": 7.14
+   },
+   "n_market": 180
+  }
+ },
+ "bPC": 0.4035,
+ "bTop1": 0.3,
+ "bAux": 0.15,
+ "w_model": null,
+ "w_model_most_accurate": 0.3,
+ "alloc_role_cap": [
+  1.15,
+  2
+ ],
+ "alloc_top": 5,
+ "blend": "none: ESPN BPI shown for comparison (untested), betting market removed"
+}

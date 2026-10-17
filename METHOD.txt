@@ -1,0 +1,242 @@
+BASKETBALL DONE RIGHT: METHOD
+How every number on the site is made (Chip Equity)
+Exported 2026-10-17
+1. WHAT CHIP EQUITY IS
+======================
+
+Chip Equity is how many points per 100 possessions a player is worth to his team over an average player, counting how much of the game he actually carries. It has three parts:
+
+    Chip Equity = (0.65 × Regression + 0.35 × LeadMargin) × CompShare
+- Regression: a regularized adjusted plus-minus (RAPM). It looks at the score while each player is on the floor, accounts for every teammate and opponent sharing the floor with him, and solves for everyone at once. Where the on-court evidence is thin, it leans on a box-score estimate learned from the plus-minus data itself instead of shrinking the player to zero. Sections 3 to 5 describe it.
+- LeadMargin: his team's scoring margin per 100 possessions in the stretches where he is the best player on the floor, garbage time left out. Playoff stretches count double and are adjusted for how good the opponent was (section 6).
+- CompShare: the share of his team's competitive minutes he played, in the games he played (section 6).
+
+Every part splits into offense and defense, so Chip Equity ≈ Off + Def. Positive is good on both ends.
+
+2. DATA
+=======
+
+Every NBA.com play-by-play event since 1996-97 (regular season and playoffs) is parsed into stints: stretches where the same ten players are on the floor. That's about 1.2 million stints. Parsing uses the open-source pbpstats library offline on archived NBA.com play-by-play, plus NBA.com's live play-by-play for games the archive is missing. For each stint s we keep the ten players, each side's possessions and points, the score, game time and date.
+
+    p_s = (poss_s(home) + poss_s(away)) / 2
+
+3. CLEANING
+===========
+
+Garbage time
+------------
+
+A stint is dropped when it starts in the 4th quarter with a big lead for the time left and two or fewer starters are on the floor. That removes about 2.5% of possessions.
+
+    Time left in the 4th   Lead at least
+    --------------------   -------------
+    12:00 – 9:00           25
+    9:00 – 6:00            20
+    6:00 – 0:00            10
+
+Era scaling
+-----------
+
+Each season's points are rescaled to the average scoring level of all seasons, so +5 in a low-scoring league counts more than +5 in a high-scoring one:
+
+    e_t = average ORtg / ORtg_t,   where ORtg_t = 100 × (points in season t) / (possessions in season t)
+
+4. THE REGRESSION
+=================
+
+Each stint gives two rows, one per side. With offense O, defense D, season t and league average μ, the target is that side's era-scaled points per 100 possessions:
+
+    y(s,O) = 100 × (pts_O / poss_O) × e_t − μ  =  Σ(i in O) o_i  −  Σ(j in D) d_j  +  γ·c_s  +  α  +  ε
+
+A good defender lowers the opponent's points, so d enters with a minus sign and positive defensive Chip Equity is good. The controls c (signed for the side) are fit alongside the players:
+- Home court.
+- Fatigue: how long the five have been on the floor without rest, and minutes already played in the game.
+- Back-to-back nights (difference between the teams).
+- Score state: margin at the start of the stint, clipped to ±20, divided by 10 (teams with a lead ease off).
+- Clutch: 4th quarter or overtime, 5:00 or less left, margin 5 or less.
+
+Rows are weighted by possessions, w_s = p_s. The solution minimizes a weighted ridge loss that pulls each player toward his box-score prior (o^0, d^0, section 5) instead of toward zero:
+
+    minimize over o, d, γ, α:   Σ_s w_s × (y_s − ŷ_s)²  +  λ × Σ_i [ (o_i − o_i⁰)² + (d_i − d_i⁰)² ]  +  Σ_k κ_k × γ_k²
+- λ is chosen by 5-fold cross-validation over whole games (from 250 to 16,000); it settles at 2,000 in nearly every window. The control penalties are κ = 300 (home court 1), and the intercept α is unpenalized.
+- Players with fewer than 1,000 possessions in a window share one "replacement" column, so a handful of possessions can't produce an extreme number.
+- The sparse system is solved exactly (normal equations). offensive Chip Equity_i = o_i and defensive Chip Equity_i = d_i.
+- Total Chip Equity comes from a matching fit on each stint's whole margin (home minus away per 100, same players, controls, prior and λ), with one value per player. It and offensive Chip Equity + defensive Chip Equity agree closely (correlation 0.997, about 0.15 apart on average), but they aren't forced to be identical.
+
+5. THE BOX-SCORE PRIOR
+======================
+
+The prior is a linear model of box-score stats, learned from pure plus-minus (3-year RAPM with no prior), separately for offense and defense:
+
+    o_i⁰ = a_o + Σ_f b(o,f) × x(i,f)        d_i⁰ = a_d + Σ_f b(d,f) × x(i,f)
+
+Inputs x are per 100 possessions and relative to that season's league average, averaged over the window by possessions:
+- Scoring: points added above league efficiency, true-shooting attempts, shot diet (rim, mid-range, three, free throws), unassisted points (self-creation).
+- Passing: assists, plus assists that created rim shots and threes counted separately (assists valued by the shot they create).
+- Possession: live-ball and dead-ball turnovers separately, fouls drawn, offensive fouls.
+- Rebounding: offensive and defensive rebounds as separate inputs.
+- Defense: steals, blocks, fouls, charges drawn.
+- Role: minutes per game.
+
+Coefficients come from a ridge fit weighted by √possessions, with its own penalty (30) chosen by out-of-sample error. To avoid leakage, the prior for any window is predicted by a model trained only on windows that share no season with it. Out of sample, the box model explains about 50% of 3-year RAPM. Some learned weights (points per 100 per unit):
+
+    Input (per 100)                        Offense   Defense
+    ------------------------------------   -------   -------
+    Points added above league efficiency   +0.50     +0.07
+    Assist creating a rim shot             +0.42     +0.12
+    Assist creating a three                +0.29     +0.30
+    Offensive rebound                      +0.34     −0.19
+    Live-ball turnover                     −0.50     −0.47
+    Dead-ball turnover                     −0.86     +0.03
+    Defensive rebound                      +0.00     +0.14
+    Steal                                  +0.24     +0.88
+    Block                                  −0.07     +0.51
+    Charge drawn                           +0.30     +0.61
+
+1996-97 to 1999-00 box stats are rebuilt from play-by-play.
+
+6. WINDOWS, PEAKS AND DECADES
+=============================
+- Windows. Chip Equity is fit on rolling windows of 2, 3, 4 and 5 seasons ending each season (and on single seasons, below), with every possession weighted equally, regular season and playoffs together. "3-year Chip Equity, 2025-26" means the window 2023-24 to 2025-26. Ranks are among every player in that window.
+- 1-year Chip Equity. Each season is also fit on its own, with the same box-score prior built for single seasons and its own cross-validated λ (2,000 in most seasons). One season is a smaller sample, so 1-year numbers lean more on the box-score estimate and move more from year to year. To let a big real on-court signal through for players who carry heavy minutes, the shrinkage is lighter for them: λ_i = λ × min(1, 3,000 / possessions_i), so a 6,000-possession season gets half the usual pull. Tested on every season since 1998-99, this predicted next season's team results as well as uniform shrinkage (same net-rating miss, 3.448).
+- Peaks. A player's best window of each length, with a minimum on-court sample of 3,000 / 4,500 / 6,000 / 7,500 possessions for 2 / 3 / 4 / 5 years.
+- Decades. One fit over each decade (1996-97 to 1999-00, the 2000s, 2010s, 2020s), minimum 3,000 possessions.
+- Model Chip Equity. The odds models use a regular-season-only 3-year version, so they never see the playoffs they predict.
+- λ for every displayed window comes from the regular-season cross-validation for that window.
+
+From the regression to Chip Equity
+----------------------------------
+
+The regression is a rate: how much a player helps per 100 possessions while he's on the floor. Chip Equity also counts how much of his team's winning he carries, by blending in the margin his team runs up when he's the main man and scaling by the meaningful minutes he plays:
+
+    Chip Equity = (0.65 × Regression + 0.35 × LeadMargin) × CompShare
+- LeadMargin: his team's scoring margin per 100 possessions in the stretches where he is the best player on the floor, garbage time left out, pulled toward zero for small samples (n / (n + 3,000) lead possessions). A player who blows teams out as the main man gets credit for the blowouts; a teammate riding along doesn't, because the star was the lead in those minutes. It is split into offense and defense against the league average.
+- Who counts as the lead: the player with the highest 3-year regression on the floor (the window ending that season). An earlier version used the single-season number, which let a role player having a hot year take the star's credit in the minutes they shared (Lamar Odom over Kobe Bryant in 2008-09). The steadier pick kept the same predictive accuracy.
+- Playoffs and opponents: his playoff stretches as the lead count too, each playoff possession worth two regular-season ones, and the margin is adjusted for the opponent: the opponent team's regular-season offense and defense (against the league, garbage time out) are added back. Going +5 against a +6 team counts as +11; the same +5 against an average team counts as +5. Playoff opponents average about +4.8 per 100, so deep runs against good teams count for the most. Adjusting for the five opponents on the floor instead overcounted, so the team number is used.
+- CompShare: the share of his team's competitive minutes he played, in the games he played. Garbage time is left out, so a star who sits the fourth quarter of a 30-point win isn't penalized for it.
+- Single seasons are steadied: 40% of both the regression and the lead margin come from the three-season window ending that year (the first full window, 1996-99, for 1996-97 and 1997-98), so one hot season counts for less than a sustained peak. Single-season regressions use lighter shrinkage for players with fewer than 3,000 possessions.
+- Multi-year windows (2 to 5 years) and decades use the same formula with every input pooled over the window's seasons. The playoff model uses it too, with regular-season-only inputs (section 10).
+- How it was chosen. Versions were judged on prediction: playoff series and next season's team results. Load built from usage, stint length or on-ball share rewarded high-volume players whose teams didn't win more with them; plain on-court margin rewarded great teammates; lead margin fixed both. This version picks 75.6% of past playoff series (log loss 0.4952) and misses next season's team wins by 7.0 on average, the same as the plain regression. Counting opponent-adjusted playoff stretches raised the playoff picks from 75.1%.
+- The single-season leaderboard starts at 1997-98. 1996-97 is the first season in the data, with nothing earlier to check it against, and it ran noticeably high; its numbers still show everywhere else.
+- The headline all-time number is each player's best 5-year Chip Equity (best 3-year for shorter careers).
+
+7. PLAYOFF-ONLY CHIP EQUITY
+===========================
+
+"Playoffs only" Chip Equity is a separate fit for each postseason, using only that postseason's possessions. Its prior is the same box model applied to the player's playoff box stats, shrunk toward zero because one postseason is a small sample:
+
+    o⁰(i,PO) = n_i / (n_i + 600) × ( a_o + Σ_f b(o,f) × x(i,f)^PO )
+
+where n_i is his playoff possessions. Players need 150 possessions for their own column, and lists show 300 or more. Career playoff Chip Equity is the possession-weighted average over every postseason, shown for 2,000+ playoff possessions.
+
+The playoff number uses the same recipe as the main stat: 0.65 × this playoff-only fit + 0.35 × his opponent-adjusted playoff lead margin (pulled toward zero by n / (n + 1,000) lead possessions), times his share of his team's competitive playoff minutes. A run against strong opponents counts for more than the same margin against weak ones.
+
+8. READING THE NUMBERS
+======================
+- Units are points per 100 possessions compared with an average player, so the five players on the floor add up to the lineup's expected margin per 100.
+- Defense spreads less than offense. Among players in a 3-year window, one standard deviation is about 1.8 on offense and 1.4 on defense, so a given defensive Chip Equity is rarer than the same offensive Chip Equity.
+- Treat gaps under about 1 point as too close to call.
+- On-court plus-minus can't fully separate players who are almost always on the floor together; the prior helps but doesn't remove this.
+
+9. OTHER STATS ON THE SITE
+==========================
+
+    TS% = PTS / (2 × (FGA + 0.44 × FTA))      rTS = TS% − league TS%      per 75 = stat × 75 / possessions on floor
+- Opp-adj rTS (playoff series) = his TS% minus the TS% that opponent allowed in the regular season.
+- roRTG = his team's offensive rating with him on the floor in the series, minus the opponent's regular-season defensive rating.
+- Net rating = offensive rating − defensive rating (points per 100 possessions; pbpstats.com possessions).
+- SRS solves every regular-season game at once for each team's rating r:
+
+    margin_g = r_home − r_away + ε,   with Σ_t r_t = 0   (least squares)
+- Opponent-adjusted net (title runs) = the champion's playoff net rating + the games-weighted average regular-season net rating of the teams it beat.
+- Expected win% (used for "luck"): PTS^14 / (PTS^14 + OPP^14).
+
+10. PLAYOFF MATCHUP MODEL
+=========================
+
+Each team gets a strength S in points per 100 possessions:
+
+    S = 0.67 × Net + 0.36 × Top3 + 0.37 × Avail + 0.32 × 100 × (W% − expected W%)
+
+    Top3 = Σ(top 3) ChipEquity_i        Avail = 5 × Σ_i f_i × ChipEquity_i^rs / Σ_i f_i
+- Chip Equity^rs is the regular-season-only 3-year Chip Equity, and Top3 is the three biggest Chip Equity numbers on the roster (section 6), built from Chip Equity^rs, the same three regular seasons and only the earlier postseasons in that window, so nothing comes from the playoffs being predicted. Tested on all 450 series: 75.6% picked, log loss 0.4952.
+- f_i is floor time in the team's last 15 regular-season games, or in its earlier rounds of that postseason. Players without a Chip Equity count as −2.
+- For teams from different seasons, the playoff résumé is added: 0.25 × min(1, games/16) × (opponent-adjusted playoff net − Net).
+
+Each game, with h_g = +1 / −1 / 0 for home / away / neutral (2-2-1-1-1), and the series is summed over every path to four wins:
+
+    m = (S_A − S_B) × pace / 100        P(A wins game g) = Φ( (m + 2.5 × h_g) / 12 )
+
+The weights were fit leave-one-season-out on every playoff series from 1997 to 2026. It picks 75.8% of 450 series with a log loss of 0.485 (lower means better-calibrated odds); net rating alone picks 72.7% with a log loss of 0.547. Even knowing exactly who played in each series only reaches about 76%. Calibration (favorite's odds → how often favorites won):
+
+    Favorite's odds   Series   Favorites won
+    ---------------   ------   -------------
+    50–60%            76       50%
+    60–75%            133      68%
+    75–90%            135      84%
+    90–100%           106      93%
+
+11. LIVE WIN PROBABILITY
+========================
+
+During a game, with lead L for the home team, pregame margin m and the share of the game left φ = seconds left / 2880:
+
+    P(home wins) = Φ( (L + m × φ) / (σ × √φ) )
+
+12. 2026-27 ROSTERS AND TEAM PAGES
+==================================
+
+Current rosters, positions and injury status load from ESPN each time the page opens; if that fails, last season's rosters are shown and the page says so. Each player is matched to NBA.com data by name.
+- Stats are each player's 2025-26 regular season (all teams combined); his 2025-26 team is where he played the most minutes.
+- Chip Equity is the 3-year window ending 2025-26 (regular season + playoffs).
+- Top performers are ranked on the current roster by 3-year Chip Equity, so a player who changed teams counts for his new team.
+- Projected starting five = the five healthy top performers (same score as above), kept to a realistic lineup of guards, forwards and a center using ESPN's positions.
+- Team record, ratings and playoff result are from 2025-26.
+
+Projected net rating and record
+-------------------------------
+
+Before the season, each team's net rating is projected by this site's model alone. It counts last season's net rating only as far as last season's core is back, adjusts for who came and went, and adds a bonus for a lead star with quality support pieces. The last two are the site's own basketball priors, put in on purpose. The league is then centered at zero and stretched by 1.3 so the standings spread like real seasons:
+
+    Net_model = 0.26 + 0.40 × Net(last season) × K + 0.14 × (V_now − V_last season) + 0.13 × V_now  −  2.29 × Σ(new i) (m_i / 48)  +  0.3 × Star(vs league)  +  0.15 × Support(vs league)   [then centered so the league averages 0, and stretched ×1.3]
+
+    V_now = Σ(known i) (m_i / 48) × ChipEquity_i^3-yr        V_last season = Σ(i) 5 × (share of the team's minutes last season) × ChipEquity_i^3-yr
+- K is core continuity: the share of last season's minutes played by the team's top 8 that is back on the roster and healthy. A team that kept its core keeps its record; a team that turned it over starts closer to average. A returning star who missed last season counts as core that wasn't there, so a season played without him counts for less; and if he played for the same team in his last healthy season, Net_last season is the better of last season and that season (the team is judged on its record with him).
+- V is roster value: last season's roster with its real minutes, and this season's roster with projected minutes, both rated with the same Chip Equity, so the difference is purely who came and went.
+- Star is the best player's Chip Equity and Support is the summed positive Chip Equity of the other rotation players (15+ projected minutes), each measured against this season's league average.
+- Wins = 82 × (0.5 + 0.0300 × Net), the historical link between net rating and winning percentage.
+- Chip Equity^3-yr is the 3-year Chip Equity ending 2025-26 (regular season + playoffs; the 2-year window when a player has no 3-year one). "New" players have fewer than 5 games last season (rookies, players returning from abroad or injury).
+- m_i = projected minutes: last season's minutes per game (a new player with no NBA data gets the minutes the known players leave, between 10 and 19.9: rookies on deep teams barely play; tested on past seasons, this beat a flat default), then fit to 240 the way real rotations work: the team's top 5 keep their usual minutes (a returning star's from his last healthy season), and everyone else shares what's left in proportion to his usual minutes (nobody above 40, and no bench player more than 15% past his usual minutes). Tested on past seasons, this tied the alternatives (wins miss 7.11). Everyone is projected healthy except players ruled out for the season.
+- Healthy form: a player who played 5–49 games last season is rated on the better of two 3-year windows: the one ending last season and the one ending the season before (his last mostly healthy stretch), so a short season never drags a player below his healthy level. Tested on past seasons, it was neutral on accuracy (wins miss 6.91 vs 6.92).
+- Two-way players are listed on rosters but get no projected minutes (they rarely play in a team's first 10 games, which is what the model was tested on).
+- Returning stars (fewer than 5 games last season, but 28+ minutes and Chip Equity of +2 or better the season before) count at their full Chip Equity with their last healthy minutes (projected healthy). On past seasons, full value vs a 50% discount made no real difference (wins miss within 0.05).
+
+As the regular season goes, the projection blends with the team's real net rating after n games, and the record follows from it (preseason games never count):
+
+    Net_n = (n × Net_actual + 20 × Net_0) / (n + 20)        Wins = W_so_far + (82 − n) × (0.5 + 0.0300 × Net_n)
+
+How it was built: every season from 1999-00 to 2025-26 was predicted using only what was known before it started (the roster = players in the team's first 10 games), with every number fit on the other seasons. Versions were tested one change at a time and a change was kept only if it predicted better: adding last season's net rating helped; 3-year and 2-year Chip Equity tied (3-year is used); concentrating minutes on stars, experience splits, roster continuity, a second Chip Equity window, playoff experience and experience on winning rosters didn't help (a newcomer's winning pedigree adds nothing beyond his Chip Equity). Held out, the preseason projection misses net rating by 3.59 (RMSE; last season's net alone: 3.88, everyone average: 4.84). The 80% range on the record page is ±10.9 wins before the season and narrows as games are played:
+
+    Games played   Avg miss on final wins (per 82)   Within 5 wins
+    ------------   -------------------------------   -------------
+    0              7.0                               43%
+    10             6.0                               50%
+    20             5.1                               56%
+    41             3.6                               73%
+    60             2.3                               93%
+
+Compared with ESPN BPI
+----------------------
+
+ESPN's Basketball Power Index projected wins are shown beside the projection for comparison; they aren't blended in. How accurate BPI has been can't be checked here yet: ESPN publishes its preseason projections on pages this site can't archive, so there is no set of past preseason BPI numbers to test against final records. For reference, on the 180 past team-seasons with a preseason betting line, the line missed final wins by 7.1 on average and this site's model by 7.9.
+
+Single-game and series odds for this season stay off until they've been tested the same way.
+
+13. SOURCES AND LIMITS
+======================
+- NBA.com play-by-play, archived and live: stints, Chip Equity, per-game box scores, records, playoff series, SRS, TS% allowed.
+- pbpstats.com team season totals for 2000-01 on (team ratings, league averages). 1996-97 to 1999-00 are computed the same way from play-by-play.
+- ESPN's public NBA data for live scores, current rosters, injuries and current-season records.
+- League TS% is points / (2 × (FGA + 0.44 FTA)) over all teams.
+- A few games the parser couldn't read are missing, and three 2019-20 bubble games are filled from official results.
+- Players with fewer than 100 minutes in a season are left out of season tables.
