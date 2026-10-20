@@ -5,25 +5,12 @@
   rel     : on-court margin minus his teammates' average on-court margin (minutes together weighted)"""
 import sys, numpy as np, pandas as pd
 sys.argv = ["x"]; src = open("../rapm_engine.py").read(); exec(src[:src.index("def main(")])
-df = pd.read_pickle("../rapm_out/stints_all.pkl"); df = df[(df.season_type == "rs")].copy(); df = df[~garbage_time(df)]
+df = pd.read_pickle(__import__("os").environ.get("STINTS_PKL", "../rapm_out/stints_all.pkl")); df = df[(df.season_type == "rs")].copy(); df = df[~garbage_time(df)]
 
 import os
-_TAG = os.environ.get("LEADBY", "r3")   # lead = highest 3-year regression on the floor (r1 = 1-year, the old pick)
-def _lead_map():
-    d1 = pd.read_csv("../cepm/disp1.csv"); d3 = pd.read_csv("../cepm/disp3.csv")
-    m1 = {(int(p), s): r for p, s, r in zip(d1.player, d1.window_end, d1.rapm)}
-    if _TAG == "r1": return m1
-    m3 = {(int(p), s): r for p, s, r in zip(d3.player, d3.window_end, d3.rapm)}
-    SS = sorted(set(d1.window_end)); nxt = {SS[i]: SS[i + 1] for i in range(len(SS) - 1)}
-    out = {}
-    for (p, s), r in m1.items():
-        a = m3.get((p, s))
-        if _TAG == "r3": out[(p, s)] = a if a is not None else r
-        else:
-            b = m3.get((p, nxt.get(s))); v = [x for x in (a, b) if x is not None]
-            out[(p, s)] = sum(v) / len(v) if v else r
-    return out
-LEADV = _lead_map()
+_TAG = os.environ.get("LEADBY", "u2")   # lead = highest 3-year regression + 2 x (usage vs league - 1) on the floor (lead_map.py)
+from lead_map import lead_map as _lm
+LEADV = _lm(_TAG)
 cep = LEADV
 out = {}
 for season, d in df.groupby("season"):
@@ -46,4 +33,4 @@ for season, d in df.groupby("season"):
 rows = [dict(p=p, season=s, poss=a[0], on=a[1] / a[0], share=a[2] / a[0], lead_poss=a[3], lead=(a[4] / a[3] if a[3] > 0 else 0.0), lead_off=(100 * a[6] / a[3] - a[8] if a[3] > 0 else 0.0), lead_def=(a[8] - 100 * a[7] / a[3] if a[3] > 0 else 0.0)) for (p, s), a in out.items()]
 R = pd.DataFrame(rows)
 # rel: on-court margin minus teammates' on-court margin, weighted by their minutes together (approx: team-season average of teammates' on)
-R.to_csv("margin_attr_od.csv" if _TAG == "r3" else f"margin_attr_od_{_TAG}.csv", index=False); print(len(R))
+R.to_csv("margin_attr_od.csv" if _TAG == "u2" else f"margin_attr_od_{_TAG}.csv", index=False); print(len(R))

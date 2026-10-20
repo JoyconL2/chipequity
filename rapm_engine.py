@@ -184,6 +184,7 @@ def run(df, window_end, window, decay, min_poss, lam_grid, od=True, prior_df=Non
     d = df[df.season.isin(use)].copy()
     d["decay"] = d.season.map({s: decay ** (len(use) - 1 - j) for j, s in enumerate(use)})
     idx, onposs = player_index(d, min_poss)
+    if len(idx) == 0: return None          # early in a season nobody has min_poss yet
     N = len(idx) + 1
     # ---- net model (user's spec) for lambda selection ----
     def build_net(tr, te):
@@ -239,7 +240,7 @@ def main():
         if r is None: continue
         out, covs, scores = r; res.append(out)
         print(f"{s}: lambda {out['lambda'].iloc[0]}, controls {({k: round(v, 2) for k, v in covs.items()})}")
-    pd.concat(res).to_csv(a.out, index=False); print("saved", a.out)
+    (pd.concat(res) if res else pd.DataFrame(columns=["player", "rapm", "o_rapm", "d_rapm", "poss", "window_end", "seasons", "lambda"])).to_csv(a.out, index=False); print("saved", a.out)
 
 if __name__ == "__main__":
     main()

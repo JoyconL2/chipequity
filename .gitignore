@@ -12,11 +12,26 @@ cepm/*.log
 pomodel/*.csv
 pomodel/*.json
 mymodel/features_*.csv
+site/data.json
 site/data_1996.json
 site/courtside_page.html
 site/Courtside_Stats.html
+loadout/orig.html
 Basketball_Done_Right.html
 __pycache__/
 *.pyc
 .DS_Store
 load/eval_list.json
+# weekly update (update/run.py): downloads, intermediate files, restored history
+live/
+update/tmp/
+site/data_base.json
+site/Basketball_Done_Right.html
+wowy/wowy_base.json
+wowy/wowy.json
+load/*.csv
+load/*_base.csv
+pomodel/player_game.csv
+!base/stints/
+!base/stints/*.xz
+wowy/lineups/

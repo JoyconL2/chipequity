@@ -6,17 +6,30 @@
   CompShare  = his share of his team's non-garbage minutes, in games he played
 LeadMargin also counts his playoff lead stints, each playoff possession worth 2 regular-season ones, with the margin
 adjusted for the opponent: + the opponent team's regular-season offense/defense vs league (load/po_lead.py).
+Lead margin is also adjusted for teammates: - 0.5 x the four teammates' 3-year o and d (centred by season).
 Playoff-only Chip Equity (pcepm) = (0.65 x playoff-only regression + 0.35 x opponent-adjusted playoff lead margin
 x n/(n+1000)) x playoff competitive share.
 Single seasons are steadied 40% toward the 3-season window (first full window 1996-99 for the first two seasons).
 Writes data.json rw (1-3 year rows), peak (best 2-5 year windows + decades), cerm (playoff model, regular season only)
 and empties the old Chip Equity layer (ce, cepeak)."""
 import json, numpy as np, pandas as pd
+from decimal import Decimal, ROUND_HALF_UP
 WL, B, K1, KS, MPO, KPO = 0.35, 0.4, 3000, 9000, 2.0, 1000
 D = json.load(open("../site/data.json")); S = D["seasons"]; SI = {s: i for i, s in enumerate(S)}
 ids = [int(x) for x in D["ids"]]; kOf = {p: k for k, p in enumerate(ids)}
 M = pd.read_csv("margin_attr_od.csv"); LEAD = {(int(p), s): (n, v, o, dd) for p, s, n, v, o, dd in zip(M.p, M.season, M.lead_poss, M.lead, M.lead_off, M.lead_def)}
 PO = pd.read_csv("po_lead.csv"); POL = {(int(p), s): r for p, s, r in zip(PO.p, PO.season, PO.to_dict("records"))}
+# teammate adjustment (half strength): in his lead stints, subtract 0.5 x his four teammates' 3-year o and d, centred
+# on the season average, so a star carrying a thin roster isn't marked down for his teammates (load/tm_sums.py)
+BETA = 0.5
+_TM = pd.read_csv("tm_sums.csv"); _g = _TM.assign(wo=_TM.tmo * _TM.n, wd=_TM.tmd * _TM.n).groupby(["stype", "season"])
+_co = (_g.wo.sum() / _g.n.sum()).to_dict(); _cd = (_g.wd.sum() / _g.n.sum()).to_dict()
+TMA = {(int(p), s_, t): (o - _co[(t, s_)], d - _cd[(t, s_)]) for p, s_, t, o, d in zip(_TM.p, _TM.season, _TM.stype, _TM.tmo, _TM.tmd)}
+for k_, (n_, v_, o_, d_) in list(LEAD.items()):
+    ao, ad = TMA.get((k_[0], k_[1], "rs"), (0.0, 0.0)); LEAD[k_] = (n_, v_ - BETA * (ao + ad), o_ - BETA * ao, d_ - BETA * ad)
+for k_, q in POL.items():
+    if q["n"] > 0:
+        ao, ad = TMA.get((k_[0], k_[1], "po"), (0.0, 0.0)); q["lead_t"] -= BETA * (ao + ad); q["off_t"] -= BETA * ao; q["de_t"] -= BETA * ad
 C = pd.read_csv("comp_share.csv"); COMP = {(int(p), s): (a, b) for p, s, a, b in zip(C.p, C.season, C.comp, C.t_comp)}
 def comps(p, seas, K, po_seas=None):
     n = net = off = de = ca = cb = 0.0
@@ -42,6 +55,13 @@ def value(p, si, w, r, o, d):
         if x: ln, lo, ld = [(1 - B) * a + B * b for a, b in zip((ln, lo, ld), x[:3])]
     f = lambda cep, lead: ((1 - WL) * cep + WL * lead) * sh
     return f(r, ln), f(o, lo), f(d, ld)
+def split(r, o, d):
+    """Offense/defense scaled to add up to the total: the gap between the total fit and the split fit is shared in
+    proportion to |o| and |d|, then rounded so the 1-decimal numbers on the site add up exactly."""
+    gap = r - (o + d); a, b = abs(o), abs(d); t = a + b
+    o += gap * (a / t if t else 0.5); d += gap * (b / t if t else 0.5)
+    O1 = round(o, 1); R1 = float(Decimal(round(r, 2)).quantize(Decimal("0.1"), ROUND_HALF_UP))   # how the site shows the stored total (JS toFixed)
+    return O1, round(R1 - O1, 1)
 MINP = {2: 3000, 3: 4500, 4: 6000, 5: 7500}
 rw_rows, rw_n, best = [], {}, {}
 for w, d in disp.items():
@@ -59,20 +79,20 @@ for w, d in disp.items():
     R["rank"] = R.groupby("s").r.rank(ascending=False, method="min").astype(int)
     if w <= 3:
         for s_, gg in R.groupby("s"): rw_n[f"{s_}_{w}"] = int(len(gg))
-        rw_rows += [[int(a), int(b_), int(c_), round(o, 2), round(dd_, 2), round(r_, 2), int(rk), int(round(ps))] for a, b_, c_, o, dd_, r_, ps, rk in zip(R.k, R.s, R.w, R.o, R.d, R.r, R.poss, R["rank"])]
+        rw_rows += [[int(a), int(b_), int(c_), *split(r_, o, dd_), round(r_, 2), int(rk), int(round(ps))] for a, b_, c_, o, dd_, r_, ps, rk in zip(R.k, R.s, R.w, R.o, R.d, R.r, R.poss, R["rank"])]
 DS = D["peak"]["ds"]; prow, pn = [], []
 for j, name in enumerate(DS):
     if name.startswith("Peak"):
         w = int(name.split()[1][0]); items = sorted(((v[0], k, v) for (k, ww), v in best.items() if ww == w), reverse=True)
     else:
-        f = {"1990s CEPM": ("ddec1990.csv", "1996-97", "1999-00"), "2000s CEPM": ("ddec2000.csv", "2000-01", "2009-10"), "2010s CEPM": ("ddec2010.csv", "2010-11", "2019-20"), "2020s CEPM": ("ddec2020.csv", "2020-21", "2025-26")}[name]
+        f = {"1990s CEPM": ("ddec1990.csv", "1996-97", "1999-00"), "2000s CEPM": ("ddec2000.csv", "2000-01", "2009-10"), "2010s CEPM": ("ddec2010.csv", "2010-11", "2019-20"), "2020s CEPM": ("ddec2020.csv", "2020-21", S[-1])}[name]
         dd_ = pd.read_csv(f"../cepm/{f[0]}"); dd_ = dd_[dd_.poss >= 3000]; seas = [S[x] for x in range(SI[f[1]], SI[f[2]] + 1)]; items = []
         for p, r, o, de in zip(dd_.player, dd_.rapm, dd_.o_rapm, dd_.d_rapm):
             k = kOf.get(int(p)); c = comps(int(p), seas, K1) if k is not None else None
             if c: items.append((((1 - WL) * r + WL * c[0]) * c[3], k, (((1 - WL) * r + WL * c[0]) * c[3], ((1 - WL) * o + WL * c[1]) * c[3], ((1 - WL) * de + WL * c[2]) * c[3])))
         items.sort(reverse=True)
     pn.append(len(items))
-    for rk, (v, k, x) in enumerate(items, 1): prow.append([k, j, round(x[1], 2), round(x[2], 2), round(x[0], 2), rk])
+    for rk, (v, k, x) in enumerate(items, 1): prow.append([k, j, *split(x[0], x[1], x[2]), round(x[0], 2), rk])
 # playoff model: regular-season-only 3-year CEPM in the same formula
 rs3 = pd.read_csv("../cepm/cepm3_rs.csv"); cerm = []
 for p, r, we in zip(rs3.player, rs3.rapm, rs3.window_end):
@@ -87,7 +107,7 @@ for k, si, v, o, d, poss, rank, n in json.load(open("pcepm_raw.json")):   # play
     f = q["n"] / (q["n"] + KPO) if q else 0.0; L = (lambda x: q[x] * f) if q else (lambda x: 0.0)
     pc.append([k, si, ((1 - WL) * v + WL * L("lead_t")) * sh, ((1 - WL) * o + WL * L("off_t")) * sh, ((1 - WL) * d + WL * L("de_t")) * sh, poss, n])
 PC = pd.DataFrame(pc, columns=["k", "si", "v", "o", "d", "poss", "n"]); PC["rank"] = PC.groupby("si").v.rank(ascending=False, method="min").astype(int)
-D["pcepm"] = [[int(a), int(b), round(c, 2), round(e, 2), round(f_, 2), int(g_), int(h), int(i)] for a, b, c, e, f_, g_, h, i in zip(PC.k, PC.si, PC.v, PC.o, PC.d, PC.poss, PC["rank"], PC.n)]
+D["pcepm"] = [[int(a), int(b), round(c, 2), *split(c, e, f_), int(g_), int(h), int(i)] for a, b, c, e, f_, g_, h, i in zip(PC.k, PC.si, PC.v, PC.o, PC.d, PC.poss, PC["rank"], PC.n)]
 D["rw"] = {"rows": rw_rows, "n": rw_n, "src": "Chip Equity: 65% CEPM ridge regression + 35% lead margin, times share of competitive minutes"}
 D["peak"] = {"ds": DS, "n": pn, "rows": prow}; D["cerm"] = cerm; D["ce"] = {"rows": [], "n": {}}; D["cepeak"] = {"ds": [], "n": [], "rows": []}
 json.dump(D, open("../site/data.json", "w"), separators=(",", ":"), allow_nan=False)

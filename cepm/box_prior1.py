@@ -20,7 +20,9 @@ import numpy as np, pandas as pd
 F = pd.read_csv("../mymodel/features_rs.csv")
 FEATS = [c for c in F.columns if c.startswith(("o_", "d_"))] + ["mpg"]
 SEAS = sorted(set(F.Season))
-ALL = [f"{y}-{str(y + 1)[-2:]}" for y in range(1996, 2026)]
+import os
+ALL = [f"{y}-{str(y + 1)[-2:]}" for y in range(1996, int(max(SEAS)[:4]) + 1)]   # 1996-97 .. newest season with box data
+ONLY_END = os.environ.get("ONLY_END")   # set by update/run.py: priors for the windows ending that season only
 pos = {s: i for i, s in enumerate(ALL)}
 
 # one row per player-season (traded players: possession-weighted across teams)
@@ -94,6 +96,7 @@ print(f"chosen lambda {LAM}; box component explains {1 - best[1] / var0:.0%} of 
 
 # priors for every window the site uses: 2-5 year windows ending each season, plus decades
 specs = [(ALL[e], 1, e, e) for e in range(len(ALL))]      # single seasons (1-year CEPM)
+if ONLY_END: specs = [x for x in specs if x[0] == ONLY_END]
 players = sorted(set(agg.EntityId.astype(int)))
 out = []
 for end, w, lo, hi in specs:

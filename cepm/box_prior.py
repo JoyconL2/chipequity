@@ -20,7 +20,9 @@ import numpy as np, pandas as pd
 F = pd.read_csv("../mymodel/features_rs.csv")
 FEATS = [c for c in F.columns if c.startswith(("o_", "d_"))] + ["mpg"]
 SEAS = sorted(set(F.Season))
-ALL = [f"{y}-{str(y + 1)[-2:]}" for y in range(1996, 2026)]
+import os
+ALL = [f"{y}-{str(y + 1)[-2:]}" for y in range(1996, int(max(SEAS)[:4]) + 1)]   # 1996-97 .. newest season with box data
+ONLY_END = os.environ.get("ONLY_END")   # set by update/run.py: priors for the windows ending that season only
 pos = {s: i for i, s in enumerate(ALL)}
 
 # one row per player-season (traded players: possession-weighted across teams)
@@ -95,7 +97,8 @@ print(f"chosen lambda {LAM}; box component explains {1 - best[1] / var0:.0%} of 
 # priors for every window the site uses: 2-5 year windows ending each season, plus decades
 specs = [(ALL[e], w, e - w + 1, e) for w in (2, 3, 4, 5) for e in range(len(ALL))]
 specs += [("1999-00", 4, pos["1996-97"], pos["1999-00"]), ("2009-10", 10, pos["2000-01"], pos["2009-10"]), ("2019-20", 10, pos["2010-11"], pos["2019-20"]),
-          ("2025-26", 6, pos["2020-21"], pos["2025-26"])]
+          (ALL[-1], len(ALL) - pos["2020-21"], pos["2020-21"], len(ALL) - 1)]       # 2020s so far
+if ONLY_END: specs = [x for x in specs if x[0] == ONLY_END]
 players = sorted(set(agg.EntityId.astype(int)))
 out = []
 for end, w, lo, hi in specs:
@@ -105,6 +108,7 @@ for end, w, lo, hi in specs:
         out.append((end, w, p, round(float(x @ co + io), 3), round(float(x @ cd + idf), 3)))
 P = pd.DataFrame(out, columns=["window_end", "w", "player", "prior_o", "prior_d"])
 P.to_csv("priors.csv", index=False)
+if ONLY_END: print(f"priors for windows ending {ONLY_END}: {len(P)}"); raise SystemExit(0)
 co, io, cd, idf = fit(np.ones(len(T), bool), LAM)
 json.dump({"feats": FEATS, "off": co.tolist(), "def": cd.tolist(), "lambda": LAM}, open("box_coefs.json", "w"), indent=1)
 print("coefficients (per 100 poss, off / def):")

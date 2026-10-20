@@ -7,27 +7,14 @@
   po comp share = his non-garbage playoff seconds / his team's, in playoff games he played."""
 import sys, numpy as np, pandas as pd
 sys.argv = ["x"]; src = open("../rapm_engine.py").read(); exec(src[:src.index("def main(")])
-df = pd.read_pickle("../rapm_out/stints_all.pkl"); gt = garbage_time(df); df = df.assign(isgt=gt.values)
+df = pd.read_pickle(__import__("os").environ.get("STINTS_PKL", "../rapm_out/stints_all.pkl")); gt = garbage_time(df); df = df.assign(isgt=gt.values)
 rs = df[(df.season_type == "rs") & ~df.isgt]; po = df[df.season_type == "po"]
 C1 = pd.read_csv("../cepm/disp1.csv"); R1 = {(int(p), s): (r, o, d) for p, s, r, o, d in zip(C1.player, C1.window_end, C1.rapm, C1.o_rapm, C1.d_rapm)}
 
 import os
-_TAG = os.environ.get("LEADBY", "r3")   # lead = highest 3-year regression on the floor (r1 = 1-year, the old pick)
-def _lead_map():
-    d1 = pd.read_csv("../cepm/disp1.csv"); d3 = pd.read_csv("../cepm/disp3.csv")
-    m1 = {(int(p), s): r for p, s, r in zip(d1.player, d1.window_end, d1.rapm)}
-    if _TAG == "r1": return m1
-    m3 = {(int(p), s): r for p, s, r in zip(d3.player, d3.window_end, d3.rapm)}
-    SS = sorted(set(d1.window_end)); nxt = {SS[i]: SS[i + 1] for i in range(len(SS) - 1)}
-    out = {}
-    for (p, s), r in m1.items():
-        a = m3.get((p, s))
-        if _TAG == "r3": out[(p, s)] = a if a is not None else r
-        else:
-            b = m3.get((p, nxt.get(s))); v = [x for x in (a, b) if x is not None]
-            out[(p, s)] = sum(v) / len(v) if v else r
-    return out
-LEADV = _lead_map()
+_TAG = os.environ.get("LEADBY", "u2")   # lead = highest 3-year regression + 2 x (usage vs league - 1) on the floor (lead_map.py)
+from lead_map import lead_map as _lm
+LEADV = _lm(_TAG)
 
 # team regular-season strength per 100 vs league (non-garbage)
 TS = {}; LG = {}
@@ -66,5 +53,5 @@ for season, d in po.groupby("season"):
         out.append(dict(p=p, season=season, n=n, off=off, de=de, lead=off + de,
                         off_t=off + x[3] / n, de_t=de + x[4] / n, off_l=off + x[5] / n, de_l=de + x[6] / n, po_share=share, po_sec=sum(mine.values()), po_tsec=tot))
     print(season, len(acc), flush=True)
-R = pd.DataFrame(out); R["lead_t"] = R.off_t + R.de_t; R["lead_l"] = R.off_l + R.de_l
-R.to_csv("po_lead.csv" if _TAG == "r3" else f"po_lead_{_TAG}.csv", index=False); print(len(R)); print(R.describe().round(2).to_string())
+R = pd.DataFrame(out, columns=["p", "season", "n", "off", "de", "lead", "off_t", "de_t", "off_l", "de_l", "po_share", "po_sec", "po_tsec"]); R["lead_t"] = R.off_t + R.de_t; R["lead_l"] = R.off_l + R.de_l
+R.to_csv("po_lead.csv" if _TAG == "u2" else f"po_lead_{_TAG}.csv", index=False); print(len(R)); print(R.describe().round(2).to_string())
