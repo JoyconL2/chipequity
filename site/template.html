@@ -532,7 +532,9 @@ function syncCurTeams(){       // -> true if anything changed
   const m = new Map(); for (const [ab, t] of Object.entries(st.teams || {})) for (const q of (t.players || [])) if (q.k != null) m.set(q.k, ab);
   if (m.size < 300) return false;                       // partial load: keep the offseason rosters
   const changed = m.size !== CURTEAM.size || [...m].some(([k, ab]) => CURTEAM.get(k) !== ab);
-  CURTEAM.clear(); for (const [k, ab] of m) CURTEAM.set(k, ab); CURTEAM_SRC = "live"; return changed;
+  CURTEAM.clear(); for (const [k, ab] of m) CURTEAM.set(k, ab); CURTEAM_SRC = "live";
+  if (changed) for (let k = 0; k < DATA.names.length; k++) optionMap.set(norm(optLabel(k)), k);   // search labels with the new years
+  return changed;
 }
 const curTeamOf = k => CURTEAM.get(k) || null;
 // most-tenured team: the team he played the most regular-season games for (logo from his biggest season there)
@@ -554,7 +556,9 @@ function stintsNow(k){
   if (last && last.ab === ct && last.s1 === LATEST) return st.map((x, i) => i === st.length - 1 ? {...x, now: true} : x);
   return st.concat([{ab: ct, s0: LATEST + 1, s1: LATEST + 1, now: true}]);
 }
-const stintYrs = st => st.now ? `${st.s0 > LATEST ? CUR_SEASON.slice(0, 4) : S[st.s0].slice(0, 4)}–now` : yrSpan(st.s0, st.s1);
+// a current stint runs through the season being played: "2026-27" if it starts now, "2025–27" if it continues
+const stintYrs = st => { if (!st.now) return yrSpan(st.s0, st.s1); if (st.s0 > LATEST) return CUR_SEASON; return `${S[st.s0].slice(0, 4)}–${CUR_SEASON.slice(5)}`; };
+const playingNow = k => !!(curTeamOf(k) && CUR_SEASON && S[LATEST] !== CUR_SEASON);
 const curTeamName = ab => { try { const t = CUR && CUR.ready() && CUR.state().teams[ab]; if (t && t.name) return t.name; } catch(e){} return teamName(ab, LATEST); };
 // any player name can open his profile
 const pLink = (k, html) => k == null || k < 0 ? html : `<a href="#" class="plink" data-player="${k}">${html}</a>`;
@@ -568,7 +572,7 @@ const ONE_PK = (() => { const best = new Map();
   const list = [...best.values()]; M.tieRank(list).forEach(x => { x.n = list.length; }); return best; })();
 const peakGet = (k, name) => name === "Peak 1Y CEPM" ? (ONE_PK.get(k) || null) : M.peakOf(k, name);
 const normNames = DATA.names.map(norm);
-const optLabel = k => { const [lo,hi]=spanOf[k]; return `${DATA.names[k]} (${S[lo].slice(0,4)}–${S[hi].slice(0,4)})`; };
+const optLabel = k => { const [lo,hi]=spanOf[k]; return `${DATA.names[k]} (${S[lo].slice(0,4)}–${playingNow(k) ? CUR_SEASON.slice(0,4) : S[hi].slice(0,4)})`; };
 const optionMap = new Map();
 const BY_MINUTES = DATA.names.map((_,k)=>k).sort((a,b)=>minutesOf[b]-minutesOf[a]);
 for (const k of BY_MINUTES) optionMap.set(norm(optLabel(k)), k);
@@ -1036,7 +1040,7 @@ function renderPlayer(){
   plOut.innerHTML = `
     <div class="box"><div class="profile">${faceImg(k)}<div style="min-width:0">
       <h2 class="pname">${esc(DATA.names[k])}</h2>
-      <div class="teamline">${(h => h ? (h.now ? `${logoImg(h.ab, LATEST)}${esc(curTeamName(h.ab))}` : `${logoImg(h.ab, h.s)}${esc(teamName(h.ab, h.s))}`) : `${logoImg(ab, P.s[last])}${esc(teamName(ab,P.s[last]))}`)(homeTeamOf(k))} <span class="muted">· ${S[P.s[rows[0]]]} to ${S[P.s[last]]} · ${typeName()}${plMode==="p75"?" · per 75 possessions":""}</span></div>
+      <div class="teamline">${(h => h ? (h.now ? `${logoImg(h.ab, LATEST)}${esc(curTeamName(h.ab))}` : `${logoImg(h.ab, h.s)}${esc(teamName(h.ab, h.s))}`) : `${logoImg(ab, P.s[last])}${esc(teamName(ab,P.s[last]))}`)(homeTeamOf(k))} <span class="muted">· ${S[P.s[rows[0]]]} to ${playingNow(k) && TYPE === 0 ? CUR_SEASON : S[P.s[last]]} · ${typeName()}${plMode==="p75"?" · per 75 possessions":""}</span></div>
       <div class="stints"><span class="muted" style="margin-right:2px">Teams</span>${stintsNow(k).map(st => `<span class="stint${st.now ? " now" : ""}">${logoImg(st.ab, Math.min(st.s1, LATEST))}${esc(st.ab)} <span class="muted">${stintYrs(st)}</span></span>`).join("")}</div>
       <div class="tiles">${tiles}</div></div></div>
       <p class="note">${stars}${po}</p></div>
