@@ -109,10 +109,19 @@ function buildModel(DATA, PARAMS_IN){
   /* Peak + decade data (our Chip Equity: best 2- to 5-season windows and one fit per decade): career-level, no seasons attached.
      Peak windows are for career comparisons. Decade Chip Equity is only a stand-in for player strength in seasons
      without single-season Chip Equity; it is never shown as a season's value. */
+  // ranks on the number as shown (one decimal): equal shown values share a rank, the next one skips (1, 1, 3)
+  const shown = (v, dec = 1) => Number.isFinite(v) ? +v.toFixed(dec) : -Infinity;
+  function tieRank(items, key = x => x.r, field = "rank", dec = 1){
+    const a = items.slice().sort((x, y) => shown(key(y), dec) - shown(key(x), dec));
+    let prev = null, rk = 0; a.forEach((x, i) => { const v = shown(key(x), dec); if (v !== prev){ rk = i + 1; prev = v; } x[field] = rk; });
+    return a;
+  }
   const PEAK = DATA.peak || {ds:[], n:[], rows:[]};
   const peakMap = new Map();
   for (const [k,j,o,d,r,rank] of PEAK.rows){ let a = peakMap.get(k); if (!a){ a = []; peakMap.set(k, a); } a[j] = {o,d,r,rank,n:PEAK.n[j],ds:PEAK.ds[j]}; }
   const PEAK_DS = PEAK.ds;
+  { const lists = PEAK_DS.map(() => []); for (const a of peakMap.values()) a.forEach((v, j) => { if (v) lists[j].push(v); });
+    lists.forEach(l => { tieRank(l); l.forEach(v => v.n = l.length); }); }
   const peakOf = (k, name) => { const a = peakMap.get(k); const j = PEAK_DS.indexOf(name); return a && j>=0 ? (a[j] || null) : null; };
   // which decade lists a season belongs to (boundary seasons like 2009-10 appear in both)
   const decadesOf = s => { const y = +S[s].slice(0,4); const d = Math.floor(y/10)*10; return y%10===9 ? [`${d}s Chip Equity`, `${d+10}s Chip Equity`] : [`${d}s Chip Equity`]; };
@@ -128,6 +137,8 @@ function buildModel(DATA, PARAMS_IN){
   const RW = DATA.rw || {rows:[], n:{}};
   const rwMap = new Map();
   for (const [k,s,w,o,d,r,rank,poss] of RW.rows) rwMap.set((k*64+s)*4+w, {o,d,r,rank,poss,s,w,n:RW.n[s+"_"+w]||null});
+  { const g = new Map(); for (const v of rwMap.values()){ const key = v.s*4 + v.w; (g.get(key) || g.set(key, []).get(key)).push(v); }
+    for (const l of g.values()){ tieRank(l); l.forEach(v => v.n = l.length); } }
   const rwOf = (k, s, w) => rwMap.get((k*64+s)*4+w) || null;
   // regular-season-only 3-year Chip Equity used by the playoff model (the displayed numbers include playoff games)
   const rwmMap = new Map(); for (const [k,s,r] of (DATA.rwm||[])) rwmMap.set(k*64+s, r);
@@ -175,7 +186,7 @@ function buildModel(DATA, PARAMS_IN){
   /* ---------------- team strength + matchup ---------------- */
   // weights fit on all 390 playoff series 2001-2026 (log loss); wStar = points per 100 per point of top-2 Chip Equity gap, only when both seasons have Chip Equity
   const cerm = new Map(); for (const [k,s,v] of (DATA.cerm || [])) cerm.set(k*64+s, v);   // Chip Equity, regular-season-only 3-year Chip Equity
-  const PARAMS = Object.assign({ k:1.0, wNet:0.67, wAv:0.37, wRot:0, wStar:0.75, wDec:0.5, starSrc:"w2prev", starMode:"top3", wTop:0.36, wRapm:0, wLuck:0.32, starN:2, wPO:0.25, hca:2.5, sigma:12 }, PARAMS_IN||{});
+  const PARAMS = Object.assign({ k:1.0, wNet:0.66, wAv:0.38, wRot:0, wStar:0.75, wDec:0.5, starSrc:"w2prev", starMode:"top3", wTop:0.41, wRapm:0, wLuck:0.31, starN:2, wPO:0.25, hca:2.5, sigma:12 }, PARAMS_IN||{});
   const rosterIdx = new Map();
   for (let i=0;i<NP;i++){ const kk = P.tm[i]+"|"+P.s[i]+"|"+P.t[i]; (rosterIdx.get(kk) || rosterIdx.set(kk, []).get(kk)).push(i); }
   rosterIdx.forEach(v => v.sort((x,y)=>P.sec[y]-P.sec[x]));
@@ -421,7 +432,7 @@ function buildModel(DATA, PARAMS_IN){
             single:{neutral:Phi(m/PARAMS.sigma), homeA:Phi((m+PARAMS.hca)/PARAMS.sigma), homeB:Phi((m-PARAMS.hca)/PARAMS.sigma)}};
   }
 
-  return {S, P, T, tm, lg, LGA, leagueOf, rel, z, teamIdx, teamRow, MIN_SEC, possv, PEAK_DS, peakOf, decOf, decadesOf, rwOf, rwSeries,
+  return {tieRank, S, P, T, tm, lg, LGA, leagueOf, rel, z, teamIdx, teamRow, MIN_SEC, possv, PEAK_DS, peakOf, decOf, decadesOf, rwOf, rwSeries,
           rowsByPlayer, rowsOf, rsRowOf, sumRows, rapmOf, rapmRow, rapmPool, rapmSeasons, hasRapm, rapmSummary, RAPM_SRC: CEPM.src,
           roster, matchup, probs, backtest, homeFor, needFor, Phi, seriesDist, ordinal,
           SERIES, seriesIn, teamPath, findSeries, playoffResume, ROUND_NAME, PARAMS, lgTS};

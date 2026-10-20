@@ -3,7 +3,7 @@ divided by his team's non-garbage seconds in the games he played. Garbage time =
 big lead for the time left, 2 or fewer starters on the floor)."""
 import sys, numpy as np, pandas as pd
 sys.argv = ["x"]; src = open("../rapm_engine.py").read(); exec(src[:src.index("def main(")])
-df = pd.read_pickle("../rapm_out/stints_all.pkl"); df = df[df.season_type == "rs"].copy()
+df = pd.read_pickle(__import__("os").environ.get("STINTS_PKL", "../rapm_out/stints_all.pkl")); df = df[df.season_type == "rs"].copy()
 df["csecs"] = df.secs * (~garbage_time(df))
 rows = []
 for side in ("home", "away"):

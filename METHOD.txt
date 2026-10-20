@@ -1,6 +1,6 @@
-BASKETBALL DONE RIGHT: METHOD
-How every number on the site is made (Chip Equity)
-Exported 2026-10-17
+BASKETBALL DONE RIGHT: FULL TECHNICAL METHOD
+Every formula, weight and test behind the site (the site's Method page is the plain-English version)
+Exported 2026-10-18
 1. WHAT CHIP EQUITY IS
 ======================
 
@@ -11,7 +11,7 @@ Chip Equity is how many points per 100 possessions a player is worth to his team
 - LeadMargin: his team's scoring margin per 100 possessions in the stretches where he is the best player on the floor, garbage time left out. Playoff stretches count double and are adjusted for how good the opponent was (section 6).
 - CompShare: the share of his team's competitive minutes he played, in the games he played (section 6).
 
-Every part splits into offense and defense, so Chip Equity ≈ Off + Def. Positive is good on both ends.
+Every part splits into offense and defense, and Off + Def always adds up to the total. The total and the split come from two separate fits that agree very closely (the gap averages 0.05 points), and the small difference is shared between offense and defense in proportion to their size. Positive is good on both ends.
 
 2. DATA
 =======
@@ -111,12 +111,13 @@ The regression is a rate: how much a player helps per 100 possessions while he's
 
     Chip Equity = (0.65 × Regression + 0.35 × LeadMargin) × CompShare
 - LeadMargin: his team's scoring margin per 100 possessions in the stretches where he is the best player on the floor, garbage time left out, pulled toward zero for small samples (n / (n + 3,000) lead possessions). A player who blows teams out as the main man gets credit for the blowouts; a teammate riding along doesn't, because the star was the lead in those minutes. It is split into offense and defense against the league average.
-- Who counts as the lead: the player with the highest 3-year regression on the floor (the window ending that season). An earlier version used the single-season number, which let a role player having a hot year take the star's credit in the minutes they shared (Lamar Odom over Kobe Bryant in 2008-09). The steadier pick kept the same predictive accuracy.
+- Who counts as the lead: the player with the highest 3-year regression on the floor (the window ending that season). An earlier version used the single-season number, which let a role player having a hot year take the star's credit in the minutes they shared (Lamar Odom over Kobe Bryant in 2008-09). The steadier pick kept the same predictive accuracy. When two players are close, the one running the offense breaks the tie: the score is the 3-year rating plus 2 × (his usage rate ÷ the league's − 1). Without it, a co-star whose 3-year number lagged could take the lead from the player actually running the team (Kyrie Irving over Luka Dončić in 2023-24). Usage only decides who counts as the lead; it adds nothing to anyone's value.
+- Teammate adjustment: lead margin is the whole lineup's result, so a star on a deep team would get credit that belongs partly to his teammates, and a star carrying a thin roster would be marked down for them. In his lead stretches, half of his four teammates' 3-year offensive and defensive ratings (measured against the season's average lineup) is taken back out. A full adjustment overcorrected; half held up best on the playoff and next-season tests.
 - Playoffs and opponents: his playoff stretches as the lead count too, each playoff possession worth two regular-season ones, and the margin is adjusted for the opponent: the opponent team's regular-season offense and defense (against the league, garbage time out) are added back. Going +5 against a +6 team counts as +11; the same +5 against an average team counts as +5. Playoff opponents average about +4.8 per 100, so deep runs against good teams count for the most. Adjusting for the five opponents on the floor instead overcounted, so the team number is used.
 - CompShare: the share of his team's competitive minutes he played, in the games he played. Garbage time is left out, so a star who sits the fourth quarter of a 30-point win isn't penalized for it.
 - Single seasons are steadied: 40% of both the regression and the lead margin come from the three-season window ending that year (the first full window, 1996-99, for 1996-97 and 1997-98), so one hot season counts for less than a sustained peak. Single-season regressions use lighter shrinkage for players with fewer than 3,000 possessions.
 - Multi-year windows (2 to 5 years) and decades use the same formula with every input pooled over the window's seasons. The playoff model uses it too, with regular-season-only inputs (section 10).
-- How it was chosen. Versions were judged on prediction: playoff series and next season's team results. Load built from usage, stint length or on-ball share rewarded high-volume players whose teams didn't win more with them; plain on-court margin rewarded great teammates; lead margin fixed both. This version picks 75.6% of past playoff series (log loss 0.4952) and misses next season's team wins by 7.0 on average, the same as the plain regression. Counting opponent-adjusted playoff stretches raised the playoff picks from 75.1%.
+- How it was chosen. Versions were judged on prediction: playoff series and next season's team results. Load built from usage, stint length or on-ball share rewarded high-volume players whose teams didn't win more with them; plain on-court margin rewarded great teammates; lead margin fixed both. This version picks 76.2% of past playoff series (log loss 0.4941) and misses next season's team wins by 6.9 on average. Counting opponent-adjusted playoff stretches and the teammate adjustment raised the playoff picks from 75.1%.
 - The single-season leaderboard starts at 1997-98. 1996-97 is the first season in the data, with nothing earlier to check it against, and it ran noticeably high; its numbers still show everywhere else.
 - The headline all-time number is each player's best 5-year Chip Equity (best 3-year for shorter careers).
 
@@ -151,15 +152,22 @@ The playoff number uses the same recipe as the main stat: 0.65 × this playoff-o
 - Opponent-adjusted net (title runs) = the champion's playoff net rating + the games-weighted average regular-season net rating of the teams it beat.
 - Expected win% (used for "luck"): PTS^14 / (PTS^14 + OPP^14).
 
+On/off and WOWY (team pages). For every team-season (regular season and playoffs separately), from the stints with garbage time removed: team possessions P, points for F and against A in total; for each player i the same three sums with him on the floor; for each pair of the team's 12 most-used players the sums with both on (shown when they shared 25+ possessions).
+    On_i = (F_i, A_i, P_i)        Off_i = Total - On_i
+    Both = On_ij        i without j = On_i - On_ij        j without i = On_j - On_ij        Neither = Total - On_i - On_j + On_ij
+    Off rtg = 100 F / P        Def rtg = 100 A / P        Net = Off rtg - Def rtg
+These are raw on-court results (no adjustment for the other players on the floor).
+
+
 10. PLAYOFF MATCHUP MODEL
 =========================
 
 Each team gets a strength S in points per 100 possessions:
 
-    S = 0.67 × Net + 0.36 × Top3 + 0.37 × Avail + 0.32 × 100 × (W% − expected W%)
+    S = 0.66 × Net + 0.41 × Top3 + 0.38 × Avail + 0.31 × 100 × (W% − expected W%)
 
     Top3 = Σ(top 3) ChipEquity_i        Avail = 5 × Σ_i f_i × ChipEquity_i^rs / Σ_i f_i
-- Chip Equity^rs is the regular-season-only 3-year Chip Equity, and Top3 is the three biggest Chip Equity numbers on the roster (section 6), built from Chip Equity^rs, the same three regular seasons and only the earlier postseasons in that window, so nothing comes from the playoffs being predicted. Tested on all 450 series: 75.6% picked, log loss 0.4952.
+- Chip Equity^rs is the regular-season-only 3-year Chip Equity, and Top3 is the three biggest Chip Equity numbers on the roster (section 6), built from Chip Equity^rs, the same three regular seasons and only the earlier postseasons in that window, so nothing comes from the playoffs being predicted. Tested on all 450 series: 76.2% picked, log loss 0.4941.
 - f_i is floor time in the team's last 15 regular-season games, or in its earlier rounds of that postseason. Players without a Chip Equity count as −2.
 - For teams from different seasons, the playoff résumé is added: 0.25 × min(1, games/16) × (opponent-adjusted playoff net − Net).
 
@@ -167,14 +175,14 @@ Each game, with h_g = +1 / −1 / 0 for home / away / neutral (2-2-1-1-1), and t
 
     m = (S_A − S_B) × pace / 100        P(A wins game g) = Φ( (m + 2.5 × h_g) / 12 )
 
-The weights were fit leave-one-season-out on every playoff series from 1997 to 2026. It picks 75.8% of 450 series with a log loss of 0.485 (lower means better-calibrated odds); net rating alone picks 72.7% with a log loss of 0.547. Even knowing exactly who played in each series only reaches about 76%. Calibration (favorite's odds → how often favorites won):
+The weights were fit leave-one-season-out on every playoff series from 1997 to 2026. It picks 76.2% of 450 series with a log loss of 0.485 (lower means better-calibrated odds); net rating alone picks 72.7% with a log loss of 0.548. Even knowing exactly who played in each series only reaches about 76%. Calibration (favorite's odds → how often favorites won):
 
     Favorite's odds   Series   Favorites won
     ---------------   ------   -------------
-    50–60%            76       50%
-    60–75%            133      68%
-    75–90%            135      84%
-    90–100%           106      93%
+    50–60%            79       52%
+    60–75%            126      69%
+    75–90%            142      83%
+    90–100%           103      94%
 
 11. LIVE WIN PROBABILITY
 ========================
@@ -188,9 +196,9 @@ During a game, with lead L for the home team, pregame margin m and the share of 
 
 Current rosters, positions and injury status load from ESPN each time the page opens; if that fails, last season's rosters are shown and the page says so. Each player is matched to NBA.com data by name.
 - Stats are each player's 2025-26 regular season (all teams combined); his 2025-26 team is where he played the most minutes.
-- Chip Equity is the 3-year window ending 2025-26 (regular season + playoffs).
-- Top performers are ranked on the current roster by 3-year Chip Equity, so a player who changed teams counts for his new team.
-- Projected starting five = the five healthy top performers (same score as above), kept to a realistic lineup of guards, forwards and a center using ESPN's positions.
+- Chip Equity is the single season 2025-26 (regular season + playoffs; the season before for a player who missed it, and the 3-year window if there is no single-season number).
+- Top performers are ranked on the current roster by single-season Chip Equity, so a player who changed teams counts for his new team.
+- Projected starting five = before the season, the five healthy top performers (same score as above), kept to a realistic lineup of guards, forwards and a center using ESPN's positions. Once games are played it switches to the starting five the team has used most this season, from ESPN box scores (ties go to the most recent game, so after one game it is that game's five).
 - Team record, ratings and playoff result are from 2025-26.
 
 Projected net rating and record
@@ -228,7 +236,7 @@ How it was built: every season from 1999-00 to 2025-26 was predicted using only 
 Compared with ESPN BPI
 ----------------------
 
-ESPN's Basketball Power Index projected wins are shown beside the projection for comparison; they aren't blended in. How accurate BPI has been can't be checked here yet: ESPN publishes its preseason projections on pages this site can't archive, so there is no set of past preseason BPI numbers to test against final records. For reference, on the 180 past team-seasons with a preseason betting line, the line missed final wins by 7.1 on average and this site's model by 7.9.
+ESPN's Basketball Power Index projected wins are shown on each team's page for comparison; they aren't blended in. How accurate BPI has been can't be checked here yet: ESPN publishes its preseason projections on pages this site can't archive, so there is no set of past preseason BPI numbers to test against final records. For reference, on the 180 past team-seasons with a preseason betting line, the line missed final wins by 7.1 on average and this site's model by 7.9.
 
 Single-game and series odds for this season stay off until they've been tested the same way.
 
@@ -240,3 +248,28 @@ Single-game and series odds for this season stay off until they've been tested t
 - League TS% is points / (2 × (FGA + 0.44 FTA)) over all teams.
 - A few games the parser couldn't read are missing, and three 2019-20 bubble games are filled from official results.
 - Players with fewer than 100 minutes in a season are left out of season tables.
+
+14. PERCENTILES AND THE SEASON IN PROGRESS
+=========================================
+Percentile (the small badge next to each Chip Equity number) = round(100 x (n - rank) / (n - 1)), capped at 99, where n is the
+number of players on that list: everyone with 1,000+ possessions in the same window ending the same season (1-, 2- or
+3-year), or everyone on an all-time peak or decade list. Playoff-only Chip Equity ranks within the postseason shown, or
+within every career above the chosen playoff-possession minimum. Ranks use the number as shown (one decimal): equal numbers
+share a rank and the next rank skips (1, 1, 3). On leaderboards the badge follows the column the list is sorted by, and
+is measured against that list's whole pool (that season, every season for 'best' lists, or the all-time list), so it never
+rises going down a list.
+
+The season being played is added every week (Mondays) from NBA.com's play-by-play files. History is frozen and never
+refit: only the windows ending in the new season are computed, with the same box-score prior (trained only on windows
+that share no season with the one being fit), the same ridge penalty rule (cross-validated for the regular-season
+3-year and single-season fits; the other windows take the regular-season 3-year penalty), the same lead-margin,
+teammate and competitive-minutes rules, and the same 1,000-possession floor, so single-season numbers appear about
+three weeks in. The site labels that season "in progress" and keeps the last finished season as the headline until
+teams have played 20 games. Since 2025-26 an end-of-quarter heave is logged as its own action, not a shot; rebounds of
+heaves are dropped before the box-score parse. Playoff-only Chip Equity, playoff series lines and end-of-season
+availability for the new season wait for the full postseason refit.
+
+On/off and WOWY use every five-man lineup a team played (garbage time out; lineups/<season>.json): for a chosen group
+"on" and a group "off", the team's possessions, points for and against are summed over the lineups that contain every
+"on" player and none of the "off" players. About 1.5% of possessions (stretches the play-by-play logs with other than
+five players for a team) are in the team totals but not in any lineup.

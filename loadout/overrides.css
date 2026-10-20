@@ -89,3 +89,86 @@ a.n:hover{text-decoration:underline}
 @media (max-width:420px){.s5{gap:8px}.s5-card{padding:12px 6px}.s5-card .face{width:72px;height:72px}.s5-cepm{font-size:24px}}
 .s5-slot{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-top:2px}
 .tp-proj{font-size:12px;font-weight:700;color:var(--accent)}
+
+/* added: team bands on career charts, player links, teams row */
+.chart .band{fill:currentColor;opacity:.08}.chart .band.alt{opacity:.025}.chart .bandlab{font:600 10px var(--body);letter-spacing:.04em;opacity:.85}
+.plink{color:inherit;text-decoration:none;cursor:pointer}.plink:hover{text-decoration:underline;text-underline-offset:2px}
+.stints{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:6px;font-size:13px}.stints .stint{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}.stints .logo{width:18px;height:18px}
+
+/* (?) bubbles on the Method page: in-depth equations */
+.qbtn{margin-left:10px;width:22px;height:22px;border-radius:50%;border:1px solid currentColor;background:transparent;color:inherit;font:700 12px/20px var(--body, sans-serif);cursor:pointer;vertical-align:middle;opacity:.75;padding:0}
+.qbtn:hover,.qbtn:focus-visible{opacity:1;outline:none;box-shadow:0 0 0 2px rgba(255,255,255,.25)}
+#qmodal{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px}
+#qmodal[hidden]{display:none}
+#qmodal .qpanel{position:relative;max-width:860px;width:100%;max-height:85vh;overflow:auto;background:var(--panel, #1a0608);color:var(--ink, #f3ece4);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:20px 22px}
+#qmodal .qpanel h2{margin:0 0 10px;font-size:18px}#qmodal .qpanel h3{margin:16px 0 6px;font-size:14px}
+#qmodal pre{white-space:pre-wrap;word-wrap:break-word;font:12.5px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;margin:0;opacity:.95}
+#qmodal .qclose{position:absolute;top:8px;right:10px;background:transparent;border:0;color:inherit;font-size:24px;cursor:pointer;line-height:1}
+
+/* player name suggestions (custom, replaces the native datalist) */
+.sg-box{position:absolute;left:0;right:0;top:100%;z-index:50;margin-top:2px;background:var(--panel, #1a0608);border:1px solid rgba(255,255,255,.18);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.45);overflow:hidden;max-width:420px}
+.sg-it{padding:9px 12px;cursor:pointer;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sg-it .sub{opacity:.65;font-size:12px}
+.sg-it:hover,.sg-it.on{background:rgba(255,255,255,.09)}
+@media (max-width:700px){ input[type=text]{font-size:16px} }   /* stops iPhone from zooming in on the search box */
+
+/* loading screen until the app has read its data and drawn the first page */
+html:not(.ready) main.wrap > *:not(#boot){display:none!important}
+.ready #boot{display:none}
+.boot{min-height:40vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:6vh;gap:14px;text-align:center}
+.boot p{background:rgba(0,0,0,.45);padding:6px 12px;border-radius:4px}
+html:not(.ready) #season-type{visibility:hidden!important}
+.boot p{margin:0;font-size:14px;letter-spacing:.06em;text-transform:uppercase}
+.boot-ball{width:46px;height:46px;border-radius:50%;border:3px solid rgba(255,255,255,.18);border-top-color:var(--accent, #e8e23a);animation:bootspin .9s linear infinite}
+@keyframes bootspin{to{transform:rotate(360deg)}}
+
+/* phones: names never run into the stat columns. Tables keep their natural width and scroll sideways instead of
+   squeezing; the name cell has a fixed width and long names end in "…" (tap to open the player). */
+.tscroll{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+.tscroll > table{width:max-content;min-width:100%}
+td .who{min-width:0}
+td .who > img,td .who > .face,td .who > .logo,td .who > span.logo{flex:none}
+td .who > .n,td .who > a,td .who > span:not(.logo):not(.face),td .who > .plink{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+td.l{white-space:nowrap}
+.s5-card .nm,.pname{overflow-wrap:anywhere}
+@media (max-width:700px){
+  td.l{max-width:168px;overflow:hidden}
+  td.l .who{max-width:168px}
+  th,td{padding-left:7px;padding-right:7px}
+}
+
+/* season in progress (weekly update) */
+.ip-tag{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  background:rgba(255,196,64,.16);color:#ffcf5a;border:1px solid rgba(255,196,64,.45);vertical-align:middle;white-space:nowrap}
+.ip-banner{margin:10px auto 0;max-width:720px;font-size:13px;line-height:1.45;color:rgba(255,255,255,.82)}
+.ip-banner .ip-tag{margin:0 4px 0 0}
+
+/* Chip Equity percentiles */
+.pctl{display:inline-block;margin-left:5px;padding:0 5px;border-radius:6px;font-size:10px;font-weight:600;line-height:15px;vertical-align:1px;
+  background:rgba(255,255,255,.08);color:rgba(255,255,255,.72);font-variant-numeric:tabular-nums}
+/* green 90th+, yellow 70-89th, orange 50-69th, red under 50th */
+.pctl.p90{background:rgba(80,220,140,.17);color:#7fe0a8}
+.pctl.p70{background:rgba(255,220,70,.16);color:#ffe066}
+.pctl.p50{background:rgba(255,120,30,.24);color:#ff8f3d}
+.pctl.p0{background:rgba(255,100,100,.15);color:#ff9393}
+td.nw{white-space:nowrap}
+.tile .v .pctl{font-size:12px;line-height:18px;vertical-align:4px}
+td .ip-tag{display:block;width:max-content;margin:3px 0 0;font-size:9px;padding:0 6px}
+
+/* WOWY: any group of players */
+.wy-pick{display:flex;flex-direction:column;gap:8px;margin:0 0 12px}
+.wy-pick>div{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.wy-lab{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.6);min-width:96px}
+.wy-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 4px 3px 10px;border-radius:999px;background:rgba(56,232,255,.12);border:1px solid rgba(56,232,255,.4);font-size:13px;white-space:nowrap}
+.wy-chip button{border:0;background:transparent;color:inherit;font-size:16px;line-height:1;cursor:pointer;padding:0 6px;opacity:.75}
+.wy-chip button:hover{opacity:1}
+.wy-pick>div:last-child .wy-chip{background:rgba(255,100,100,.12);border-color:rgba(255,120,120,.45)}
+select.wy-add{width:auto;max-width:200px;font-size:13px;padding:4px 8px}
+@media (max-width:600px){ .wy-lab{min-width:100%} select.wy-add{font-size:16px} }
+/* WOWY descriptions wrap instead of truncating (they're sentences, not names) */
+table.wy-t td.l{max-width:none!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;min-width:170px;line-height:1.35}
+@media (max-width:600px){ table.wy-t{width:100%!important} table.wy-t td.l{min-width:150px} }
+
+/* this season so far (live, ESPN) */
+#pl-live details{margin-top:14px}
+#pl-live .tiles{margin-top:6px}

@@ -17,12 +17,12 @@ for blk in ['/* games */','/* game center (live play-by-play) */','/* front page
 extra_css='<style>\n/* added: games tab + live play-by-play, compact header */\n'+'\n'.join(need)+'\n'+open('overrides.css').read()+'\n</style>'
 body_main=P[P.find('</style>')+8:]
 body_main=body_main.replace('<h1 class="brand">Courtside <span>Stats</span></h1>','<h1 class="brand">Basketball <span>Done Right</span></h1>')
-scene=scene.replace('<div class="ghost">COURTSIDE</div>','<div class="ghost">DONE RIGHT</div>').replace('Courtside // loadout bay 07 // 2000-01 → 2025-26','Basketball Done Right // 1996-97 → 2025-26')
+scene=scene.replace('<div class="ghost">COURTSIDE</div>','<div class="ghost">DONE RIGHT</div>').replace('Courtside // loadout bay 07 // 2000-01 → 2025-26','Basketball Done Right // 1996-97 → ' + json.load(open('../site/data.json'))['seasons'][-1])
 headmeta=headmeta.replace('<title>Courtside Stats — Loadout</title>','<title>Basketball Done Right</title>')
 # link preview (iMessage, Discord, X, LinkedIn...): pass your site address as the 2nd argument
 SITE = (sys.argv[2] if len(sys.argv) > 2 else "https://YOUR-SITE.netlify.app").rstrip("/")
 DESC = ("Every NBA player and team since 1996-97. Chip Equity impact ratings built from every possession, "
-        "head-to-head comparisons, playoff series odds that pick 75% of winners, and live games with play-by-play.")
+        "head-to-head comparisons, playoff series odds that pick 76% of winners, and live games with play-by-play.")
 OG = f"""<meta name="description" content="{DESC}">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Basketball Done Right">

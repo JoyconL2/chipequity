@@ -7,10 +7,18 @@ import json, numpy as np, pandas as pd, itertools, sys
 from scipy.stats import spearmanr
 D = json.load(open("../site/data.json")); S = D["seasons"]; SI = {s: i for i, s in enumerate(S)}; ids = [int(x) for x in D["ids"]]
 nm = {p: D["names"][k] for k, p in enumerate(ids)}
-import os; _SUF = "" if os.environ.get("LEADBY", "r3") == "r3" else "_" + os.environ["LEADBY"]
+import os; _SUF = "" if os.environ.get("LEADBY", "u2") == "u2" else "_" + os.environ["LEADBY"]
 M = pd.read_csv(f"margin_attr_od{_SUF}.csv"); LEAD = {(int(p), s): (n, v) for p, s, n, v in zip(M.p, M.season, M.lead_poss, M.lead)}
 C = pd.read_csv("comp_share.csv"); COMP = {(int(p), s): (a, b) for p, s, a, b in zip(C.p, C.season, C.comp, C.t_comp)}
 PO = pd.read_csv(f"po_lead{_SUF}.csv"); POL = {(int(p), s): r for p, s, r in zip(PO.p, PO.season, PO.to_dict("records"))}
+BETA = float(os.environ.get("BETA", "0"))     # teammate adjustment of lead margin (tm_sums.csv); 0 = off
+if BETA:
+    _TM = pd.read_csv(f"tm_sums{_SUF}.csv"); _TM["tm"] = _TM.tmo + _TM.tmd
+    _cen = (_TM.assign(w=_TM.tm * _TM.n).groupby(["stype", "season"]).w.sum() / _TM.groupby(["stype", "season"]).n.sum()).to_dict()
+    _TMD = {(int(p), s_, t): v - _cen[(t, s_)] for p, s_, t, v in zip(_TM.p, _TM.season, _TM.stype, _TM.tm)}
+    LEAD = {k: (n, v - BETA * _TMD.get((k[0], k[1], "rs"), 0.0)) for k, (n, v) in LEAD.items()}
+    for (p_, s_), q in POL.items():
+        if q["n"] > 0: q["lead_t"] = q["lead_t"] - BETA * _TMD.get((p_, s_, "po"), 0.0)
 import json as _j, os as _o; _EV = next((_j.load(open(_f)) for _f in ("eval_list.json", "../load/eval_list.json") if _o.path.exists(_f)), {}); T = _EV.get("T", [])   # private evaluation list, kept out of the repo
 def comps(p, seas, K, m, adj, sh, po_seas=None):
     n = net = ca = cb = 0.0

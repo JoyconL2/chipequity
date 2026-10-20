@@ -259,6 +259,9 @@ details.how p,details.how li{color:var(--ink-2);max-width:76ch}
 /* chart */
 .chart{position:relative}
 .chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart .band{fill:currentColor;opacity:.08}.chart .band.alt{opacity:.025}.chart .bandlab{font:600 10px var(--body);letter-spacing:.04em;opacity:.85}
+.plink{color:inherit;text-decoration:none;cursor:pointer}.plink:hover{text-decoration:underline;text-underline-offset:2px}
+.stints{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:6px;font-size:13px}.stints .stint{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}.stints .logo{width:18px;height:18px}
 .chart text{fill:var(--ink-3);font:12px var(--body)}
 .chart .lab{fill:var(--ink-2);font-weight:600}
 .chart .grid{stroke:var(--line);stroke-width:1}
@@ -337,13 +340,14 @@ td.sub{color:var(--ink-3);font-size:12px}
 </header>
 
 <main class="wrap">
-  <datalist id="plist"></datalist>
+<div id="boot" class="boot" role="status"><div class="boot-ball" aria-hidden="true"></div><p>Loading 30 seasons of NBA data…</p></div>
+  
 
   <section class="panel" id="p-home"><div id="hm-out"></div></section>
 
   <section class="panel" id="p-players" hidden>
     <div class="controls">
-      <div class="field"><label for="pl-q">Player</label><input type="text" id="pl-q" list="plist" placeholder="Type a name, e.g. Curry" autocomplete="off"></div>
+      <div class="field"><label for="pl-q">Player</label><input type="text" id="pl-q" placeholder="Type a name, e.g. Curry" autocomplete="off"></div>
       <div class="field"><label for="pl-stat">Chart stat</label><select id="pl-stat"></select></div>
       <div class="field"><span class="lbl-sm" id="pl-mode-lbl">Stats</span>
         <div class="seg sm" role="group" aria-labelledby="pl-mode-lbl"><button id="pl-pg" aria-pressed="true">Per game</button><button id="pl-75" aria-pressed="false">Per 75 poss.</button></div></div>
@@ -355,10 +359,10 @@ td.sub{color:var(--ink-3);font-size:12px}
 
   <section class="panel" id="p-compare" hidden>
     <div class="controls">
-      <div class="field"><label for="cm-1">Player 1</label><input type="text" id="cm-1" list="plist" autocomplete="off"><select id="cm-s1" class="cm-season" aria-label="Season for player 1" hidden></select></div>
-      <div class="field"><label for="cm-2">Player 2</label><input type="text" id="cm-2" list="plist" autocomplete="off"><select id="cm-s2" class="cm-season" aria-label="Season for player 2" hidden></select></div>
-      <div class="field"><label for="cm-3">Player 3</label><input type="text" id="cm-3" list="plist" autocomplete="off" placeholder="Optional"><select id="cm-s3" class="cm-season" aria-label="Season for player 3" hidden></select></div>
-      <div class="field"><label for="cm-4">Player 4</label><input type="text" id="cm-4" list="plist" autocomplete="off" placeholder="Optional"><select id="cm-s4" class="cm-season" aria-label="Season for player 4" hidden></select></div>
+      <div class="field"><label for="cm-1">Player 1</label><input type="text" id="cm-1" autocomplete="off"><select id="cm-s1" class="cm-season" aria-label="Season for player 1" hidden></select></div>
+      <div class="field"><label for="cm-2">Player 2</label><input type="text" id="cm-2" autocomplete="off"><select id="cm-s2" class="cm-season" aria-label="Season for player 2" hidden></select></div>
+      <div class="field"><label for="cm-3">Player 3</label><input type="text" id="cm-3" autocomplete="off" placeholder="Optional"><select id="cm-s3" class="cm-season" aria-label="Season for player 3" hidden></select></div>
+      <div class="field"><label for="cm-4">Player 4</label><input type="text" id="cm-4" autocomplete="off" placeholder="Optional"><select id="cm-s4" class="cm-season" aria-label="Season for player 4" hidden></select></div>
       <div class="field"><label for="cm-scope">Compare</label><select id="cm-scope"></select></div>
       <div class="field"><label for="cm-stat">Chart stat</label><select id="cm-stat"></select></div>
       <div class="field"><span class="lbl-sm" id="cm-mode-lbl">Stats</span>
@@ -444,6 +448,18 @@ const M = buildModel(DATA);
 const S = DATA.seasons, P = DATA.P;
 const NP = P.p.length;
 const LATEST = S.length - 1;
+// the season being played (weekly update, update/run.py): labeled "in progress"; the headline season (home page,
+// leaderboard and team defaults) stays on the last finished season until teams have played 20 games
+const INPROG = DATA.inprog && !DATA.inprog.done && DATA.inprog.season === S[LATEST] ? DATA.inprog : null;
+const HEAD = INPROG && INPROG.team_games < 20 ? LATEST - 1 : LATEST;
+const ipDate = () => INPROG && INPROG.through ? new Date(INPROG.through + "T12:00:00").toLocaleDateString(undefined, {month:"short", day:"numeric"}) : "";
+const ipNote = () => INPROG ? `${S[LATEST]} in progress · through ${ipDate()} · ${Math.round(INPROG.team_games)} games per team` : "";
+const ipTag = si => INPROG && si === LATEST ? ` <span class="ip-tag" title="${esc(ipNote())}">in progress</span>` : "";
+const sOpt = (si, txt) => INPROG && si === LATEST ? `${txt} (in progress)` : txt;
+// percentile of a Chip Equity value within its list: share of the players in that list (same season and window, or
+// all-time for peaks) he is ahead of. Rank 1 -> 99th, the median -> 50th.
+const pctOf = v => v && v.rank && v.n ? (v.n === 1 ? 99 : Math.max(0, Math.min(99, Math.round(100 * (v.n - v.rank) / (v.n - 1))))) : null;   // #1 -> 99th, median -> 50th, last -> 0
+const pctl = (v, scope) => { const q = pctOf(v); return q == null ? "" : ` <span class="pctl ${q >= 90 ? "p90" : q >= 70 ? "p70" : q >= 50 ? "p50" : "p0"}" title="${ord(q)} percentile: ahead of ${q}% of the ${v.n.toLocaleString()} players ${scope || (v.w ? `with a ${v.w}-year window ending ${S[v.s]}` : "on this list")}">${ord(q)}</span>`; };
 
 /* ---------------- helpers ---------------- */
 const norm = s => String(s).normalize("NFKD").replace(/[̀-ͯ]/g,"").toLowerCase();
@@ -492,19 +508,59 @@ function logoImg(ab, s, cls=""){
   return `<img class="logo ${cls}" src="https://cdn.nba.com/logos/nba/${tid}/global/L/logo.svg" data-kind="logo" data-fb="${esc(ab)}" title="${esc(teamName(ab,s))}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="__imgFail(this)">`;
 }
 
+// teams per player-season: traded players list every team, in the order he played for them (data.json ptm)
+const PTM = new Map(); for (const [k,s,list] of (DATA.ptm || [])) PTM.set(k*64+s, list.map(([a,n]) => [DATA.abbrs[a], n]));
+const playerTeams = (k, s, ab) => PTM.get(k*64+s) || [[ab, null]];
+const yrSpan = (s0, s1) => { const a = +S[s0].slice(0,4), b = +S[s1].slice(0,4) + 1; return s0 === s1 ? S[s0] : `${a}–${String(b).slice(2)}`; };
+function careerStints(k){                       // [{ab, s0, s1}] in order; same team again after a gap continues the stint
+  const out = [];
+  for (const i of playerRows(k, 0)) for (const [ab] of playerTeams(k, P.s[i], AB(P.tm[i]))){
+    const last = out[out.length-1];
+    if (last && last.ab === ab) last.s1 = P.s[i]; else out.push({ab, s0: P.s[i], s1: P.s[i]}); }
+  return out;
+}
+// any player name can open his profile
+const pLink = (k, html) => k == null || k < 0 ? html : `<a href="#" class="plink" data-player="${k}">${html}</a>`;
+
 /* ---------------- players index + search ---------------- */
 const rowsByPlayer = M.rowsByPlayer;
 const minutesOf = rowsByPlayer.map(r => r.reduce((a,i)=>a+P.sec[i],0));
 const spanOf = rowsByPlayer.map(r => { let lo=99,hi=0; r.forEach(i=>{lo=Math.min(lo,P.s[i]);hi=Math.max(hi,P.s[i]);}); return [lo,hi]; });
 const ONE_PK = (() => { const best = new Map();
   for (const v of (DATA.rw || {rows:[]}).rows){ const [k,s,w,o,d,r,rank,poss] = v; if (w !== 1 || poss < 1500 || s === 0) continue; const b = best.get(k); if (!b || r > b.r) best.set(k, {o, d, r, s, ds:"Peak 1Y CEPM"}); }
-  const list = [...best.values()].sort((a,b)=>b.r-a.r); list.forEach((x,i)=>{ x.rank = i+1; x.n = list.length; }); return best; })();
+  const list = [...best.values()]; M.tieRank(list).forEach(x => { x.n = list.length; }); return best; })();
 const peakGet = (k, name) => name === "Peak 1Y CEPM" ? (ONE_PK.get(k) || null) : M.peakOf(k, name);
 const normNames = DATA.names.map(norm);
 const optLabel = k => { const [lo,hi]=spanOf[k]; return `${DATA.names[k]} (${S[lo].slice(0,4)}–${S[hi].slice(0,4)})`; };
 const optionMap = new Map();
-document.getElementById("plist").innerHTML = DATA.names.map((_,k)=>k).sort((a,b)=>minutesOf[b]-minutesOf[a])
-  .map(k => { const l = optLabel(k); optionMap.set(norm(l), k); return `<option value="${esc(l)}">`; }).join("");
+const BY_MINUTES = DATA.names.map((_,k)=>k).sort((a,b)=>minutesOf[b]-minutesOf[a]);
+for (const k of BY_MINUTES) optionMap.set(norm(optLabel(k)), k);
+/* lightweight name suggestions (replaces a 2,400-option <datalist>, which crashes iPhone Safari) */
+function attachSuggest(inp){
+  if (!inp || inp.dataset.sg) return; inp.dataset.sg = "1"; inp.removeAttribute("list");
+  inp.setAttribute("autocomplete", "off"); inp.setAttribute("autocorrect", "off"); inp.setAttribute("autocapitalize", "off"); inp.setAttribute("spellcheck", "false");
+  const box = document.createElement("div"); box.className = "sg-box"; box.hidden = true; box.setAttribute("role", "listbox");
+  (inp.parentElement || document.body).style.position = (inp.parentElement && getComputedStyle(inp.parentElement).position === "static") ? "relative" : (inp.parentElement ? inp.parentElement.style.position : "");
+  inp.insertAdjacentElement("afterend", box);
+  let items = [], sel = -1;
+  const close = () => { box.hidden = true; sel = -1; };
+  const pick = k => { inp.value = optLabel(k); close(); inp.dispatchEvent(new Event("change", {bubbles: true})); inp.blur(); };
+  const draw = () => { box.innerHTML = items.map((k, i) => `<div class="sg-it${i === sel ? " on" : ""}" role="option" data-k="${k}">${esc(DATA.names[k])} <span class="sub">${esc(optLabel(k).slice(DATA.names[k].length + 1))}</span></div>`).join(""); box.hidden = !items.length; };
+  inp.addEventListener("input", () => {
+    const q = norm(inp.value).replace(/\s*\(.*$/, "").trim(); if (q.length < 2){ items = []; draw(); return; }
+    const starts = [], has = [];
+    for (const k of BY_MINUTES){ const n = normNames[k]; if (n.startsWith(q) || n.split(" ").some(w => w.startsWith(q))) starts.push(k); else if (n.includes(q)) has.push(k); if (starts.length >= 8) break; }
+    items = starts.concat(has).slice(0, 8); sel = -1; draw(); });
+  inp.addEventListener("keydown", e => {
+    if (box.hidden) return;
+    if (e.key === "ArrowDown"){ sel = Math.min(items.length - 1, sel + 1); draw(); e.preventDefault(); }
+    else if (e.key === "ArrowUp"){ sel = Math.max(0, sel - 1); draw(); e.preventDefault(); }
+    else if (e.key === "Enter" && sel >= 0){ e.preventDefault(); e.stopImmediatePropagation(); pick(items[sel]); }
+    else if (e.key === "Escape") close(); });
+  box.addEventListener("pointerdown", e => { const it = e.target.closest(".sg-it"); if (!it) return; e.preventDefault(); pick(+it.dataset.k); });
+  inp.addEventListener("blur", () => setTimeout(close, 150));
+}
+["pl-q","cm-1","cm-2","cm-3","cm-4"].forEach(id => attachSuggest(document.getElementById(id)));
 function findPlayer(q){
   q = norm(q||"").trim(); if (!q) return -1;
   if (optionMap.has(q)) return optionMap.get(q);
@@ -531,6 +587,7 @@ const p75 = (a,v) => a.pos ? v/a.pos*75 : NaN;
 const STATS = {
   RW2:{label:"2-year Chip Equity (window ending that season)", rw:2, fmt:"pm"}, RW3:{label:"3-year Chip Equity (window ending that season)", rw:3, fmt:"pm"},
   RW1:{label:"Single-season Chip Equity (1-year)", rw:1, fmt:"pm"},
+  PCE:{label:"Playoff Chip Equity (that postseason)", po:true, fmt:"pm"},
   O3:{label:"3-year offensive Chip Equity (offensive Chip Equity)", rw:3, part:"o", fmt:"pm"}, D3:{label:"3-year defensive Chip Equity (defensive Chip Equity)", rw:3, part:"d", fmt:"pm"},
   O2:{label:"2-year offensive Chip Equity (offensive Chip Equity)", rw:2, part:"o", fmt:"pm"}, D2:{label:"2-year defensive Chip Equity (defensive Chip Equity)", rw:2, part:"d", fmt:"pm"},
   PPG:{label:"Points per game", f:a=>a.pts/a.gp, fmt:1}, RPG:{label:"Rebounds per game", f:a=>a.reb/a.gp, fmt:1},
@@ -546,10 +603,10 @@ const STATS = {
   USG:{label:"Usage rate", f:a=>a.usg, fmt:1},
 };
 const val = (a,k) => a.gp && STATS[k].f ? STATS[k].f(a) : NaN;
-const rowVal = (i,k) => { const st = STATS[k]; if (st && st.rw){ const v = M.rwOf(P.p[i], P.s[i], st.rw); return v ? v[st.part || "r"] : NaN; } return val(agg([i]),k); };
+const rowVal = (i,k) => { const st = STATS[k]; if (st && st.po){ const v = POC.get(P.p[i]*64 + P.s[i]); return v ? v.r : NaN; } if (st && st.rw){ const v = M.rwOf(P.p[i], P.s[i], st.rw); return v ? v[st.part || "r"] : NaN; } return val(agg([i]),k); };
 /* sorting: Chip Equity leaderboards re-rank the whole pool by Total / Off / Def (LD_SORT); every other table sorts its rows in place */
 let LD_SORT = "r";
-const SORT_NAME = {r:"total Chip Equity", o:"offense", d:"defense"};
+const SORT_NAME = {r:"total Chip Equity", o:"offense", d:"defense", p:"playoff possessions", n:"postseasons played", b:"best single postseason"};
 const sth = (key, label, title="") => `<th data-ldsort="${key}" class="sortable${LD_SORT===key?" sorted":""}" title="${title || "Rank everyone by "+SORT_NAME[key]}">${label}</th>`;
 const sb = (key, html) => LD_SORT===key ? `<strong>${html}</strong>` : html;
 function cellNum(td){
@@ -612,7 +669,7 @@ function playerResume(k){
 /* ---------------- line chart ---------------- */
 const SERIES = ["var(--s1)","var(--s2)","var(--s3)","var(--s4)"];
 function niceStep(raw){ const p=Math.pow(10,Math.floor(Math.log10(raw))), n=raw/p; return (n<=1?1:n<=2?2:n<=2.5?2.5:n<=5?5:10)*p; }
-function lineChart(el, series, st){
+function lineChart(el, series, st, opts={}){
   const all = series.flatMap(s=>s.pts).filter(p=>!Number.isNaN(p.y));
   if (!all.length){ el.innerHTML = `<div class="msg">No data to chart.</div>`; return; }
   const W=Math.max(340, Math.round(el.clientWidth||900)), narrow=W<600, H=narrow?260:320, m={l:46,r:narrow?96:150,t:14,b:40};
@@ -621,11 +678,23 @@ function lineChart(el, series, st){
   if (y0===y1){ y0-=1; y1+=1; }
   const pad=(y1-y0)*0.08; y0 = (y0>=0 ? Math.max(0,y0-pad) : y0-pad); y1+=pad;
   let step = niceStep((y1-y0)/5); y0=Math.floor(y0/step)*step; y1=Math.ceil(y1/step)*step;
-  const X = x => m.l + (x1===x0 ? (W-m.l-m.r)/2 : (x-x0)/(x1-x0)*(W-m.l-m.r));
+  const pd = (opts.bands && opts.bands.length) ? 0.5 : 0, dx0 = x0 - pd, dx1 = x1 + pd;   // team bands need each season's full width
+  const X = x => m.l + (dx1===dx0 ? (W-m.l-m.r)/2 : (x-dx0)/(dx1-dx0)*(W-m.l-m.r));
   const Y = y => m.t + (1-(y-y0)/(y1-y0))*(H-m.t-m.b);
   const decOf = s => Math.abs(s - Math.round(s)) > 1e-9 ? 1 : 0;
   const yf = v => st.fmt==="pct" ? (v*100).toFixed(decOf(step*100))+"%" : st.fmt==="rel" ? (v>=0?"+":"")+(v*100).toFixed(decOf(step*100)) : st.fmt==="pm" ? (v>0?"+":"")+v.toFixed(decOf(step)) : v.toFixed(decOf(step));
   let g = "";
+  // team bands (player chart): one shaded strip per stint, with the team's logo (or abbreviation) at the top
+  let logoRight = -Infinity;
+  (opts.bands || []).forEach((b, bi) => {
+    const L = Math.max(m.l, X(b.x0 != null ? b.x0 : b.s0 - 0.5)), R = Math.min(W - m.r, X(b.x1 != null ? b.x1 : b.s1 + 0.5)); if (R - L < 2) return;
+    g += `<rect class="band${bi % 2 ? " alt" : ""}" x="${L}" y="${m.t}" width="${R - L}" height="${H - m.t - m.b}"/>`;
+    if (bi) g += `<line class="grid" x1="${L}" x2="${L}" y1="${m.t}" y2="${H - m.b}" stroke-dasharray="3 3"/>`;
+    const cx = (L + R) / 2, ai = DATA.abbrs.indexOf(b.ab);
+    if (cx - 10 >= logoRight){ logoRight = cx + 10;
+      if (ai >= 0 && !isDefunct(b.ab, b.s1)) g += `<image href="https://cdn.nba.com/logos/nba/${DATA.teamIds[ai]}/global/L/logo.svg" x="${cx - 9}" y="${m.t + 3}" width="18" height="18" opacity=".95"><title>${esc(teamName(b.ab, b.s1))}</title></image><text class="bandlab" x="${cx}" y="${m.t + 32}" text-anchor="middle">${esc(b.ab)}</text>`;
+      else g += `<text class="bandlab" x="${cx}" y="${m.t + 15}" text-anchor="middle">${esc(b.ab)}</text>`; }
+  });
   for (let v=y0; v<=y1+1e-9; v+=step) g += `<line class="grid" x1="${m.l}" x2="${W-m.r}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${m.l-8}" y="${Y(v)+4}" text-anchor="end">${yf(v)}</text>`;
   const span = x1-x0, every = narrow ? (span>12?6: span>6?3:1) : (span>16?3: span>9?2:1);
   for (let x=x0; x<=x1; x++) if ((x-x0)%every===0) g += `<text x="${X(x)}" y="${H-m.b+20}" text-anchor="middle">${S[x].slice(2)}</text>`;
@@ -648,7 +717,7 @@ function lineChart(el, series, st){
   const hide = () => { tip.hidden=true; xh.setAttribute("visibility","hidden"); };
   hit.addEventListener("pointermove", ev => {
     const r = svg.getBoundingClientRect(), sx = (ev.clientX - r.left) * W / r.width;
-    const xi = Math.round(x0 + (sx - m.l)/(W-m.l-m.r)*(x1-x0));
+    const xi = Math.round(dx0 + (sx - m.l)/(W-m.l-m.r)*(dx1-dx0));
     if (xi<x0||xi>x1) return hide();
     const lines = series.map((s,i)=>{ const p=s.pts.find(q=>q.x===xi); return p && !Number.isNaN(p.y) ? `<div><span class="dot" style="background:${SERIES[i]}"></span>${esc(s.name)}: <strong>${fmt(p.y, st.fmt)}</strong>${p.sub?` <span class="muted">${esc(p.sub)}</span>`:""}</div>` : ""; }).join("");
     if (!lines) return hide();
@@ -674,17 +743,17 @@ const PEAK_LABEL = {"Peak 2Y CEPM":"Best 2-year Chip Equity","Peak 3Y CEPM":"Bes
 const PEAK_HEAD = "Peak 3Y CEPM";   // the headline peak used for career comparisons
 function rwTable(k){
   const by = new Map();
-  for (const w of [2,3]) for (const v of M.rwSeries(k, w)) { const e = by.get(v.s) || {}; e[w] = v; by.set(v.s, e); }
-  if (!by.size) return `<p class="muted">No 2-year or 3-year Chip Equity for this player.</p>`;
-  const cell = v => v ? `<td>${pm(v.o)}</td><td>${pm(v.d)}</td><td><strong>${pm(v.r)}</strong></td><td class="sub">${v.rank?ord(v.rank):"–"}</td>` : `<td>–</td><td>–</td><td>–</td><td></td>`;
-  const rows = [...by.entries()].sort((a,b)=>b[0]-a[0]).map(([s,e]) => `<tr><td>${S[s]}</td><td class="sub">${rwSpan(s,2)}</td>${cell(e[2])}<td class="sub">${rwSpan(s,3)}</td>${cell(e[3])}</tr>`).join("");
-  return `<div class="tscroll"><table><thead><tr><th>Ending</th><th>2-yr span</th><th>Off</th><th>Def</th><th>2-yr Chip Equity</th><th>Rank</th><th>3-yr span</th><th>Off</th><th>Def</th><th>3-yr Chip Equity</th><th>Rank</th></tr></thead><tbody>${rows}</tbody></table></div>
+  for (const w of [1,2,3]) for (const v of M.rwSeries(k, w)) { const e = by.get(v.s) || {}; e[w] = v; by.set(v.s, e); }
+  if (!by.size) return `<p class="muted">No Chip Equity windows for this player.</p>`;
+  const cell = v => v ? `<td>${pm(v.o)}</td><td>${pm(v.d)}</td><td class="nw"><strong>${pm(v.r)}</strong>${pctl(v)}</td><td class="sub">${v.rank?ord(v.rank):"–"}</td>` : `<td>–</td><td>–</td><td>–</td><td></td>`;
+  const rows = [...by.entries()].sort((a,b)=>b[0]-a[0]).map(([s,e]) => `<tr><td>${S[s]}${ipTag(s)}</td>${cell(e[1])}<td class="sub">${rwSpan(s,2)}</td>${cell(e[2])}<td class="sub">${rwSpan(s,3)}</td>${cell(e[3])}</tr>`).join("");
+  return `<div class="tscroll"><table><thead><tr><th>Season</th><th>Off</th><th>Def</th><th title="Chip Equity for that season alone (steadied 40% toward the 3-year window)">1-yr</th><th>Rank</th><th>Span</th><th>Off</th><th>Def</th><th>2-yr</th><th>Rank</th><th>Span</th><th>Off</th><th>Def</th><th>3-yr</th><th>Rank</th></tr></thead><tbody>${rows}</tbody></table></div>
     <p class="mlink"><a href="#" data-method="windows">How it's calculated ›</a></p>`;
 }
 function peakTable(k){
-  const rows = M.PEAK_DS.map(n=>({n, v:M.peakOf(k,n)})).filter(x=>x.v);
+  const rows = ["Peak 1Y CEPM"].concat(M.PEAK_DS).map(n=>({n, v:peakGet(k,n)})).filter(x=>x.v);
   if (!rows.length) return `<p class="muted">No peak or decade data for this player.</p>`;
-  const tr = x => `<tr><td class="l">${esc(PEAK_LABEL[x.n])}</td><td><strong>${pm(x.v.r)}</strong></td><td>${pm(x.v.o)}</td><td>${pm(x.v.d)}</td><td class="sub">${ord(x.v.rank)} of ${x.v.n.toLocaleString()}</td></tr>`;
+  const tr = x => `<tr><td class="l">${x.n === "Peak 1Y CEPM" ? `Best single season <span class="muted">(${S[x.v.s]})</span>` : esc(PEAK_LABEL[x.n])}</td><td class="nw"><strong>${pm(x.v.r)}</strong>${pctl(x.v, "on this all-time list")}</td><td>${pm(x.v.o)}</td><td>${pm(x.v.d)}</td><td class="sub">${ord(x.v.rank)} of ${x.v.n.toLocaleString()}</td></tr>`;
   const grp = (title, f) => { const g = rows.filter(f); return g.length ? `<tr><td class="l sub" colspan="5" style="padding-top:12px">${title}</td></tr>${g.map(tr).join("")}` : ""; };
   return `<div class="tscroll"><table><thead><tr><th class="l">Metric</th><th>Total</th><th>Off</th><th>Def</th><th>All-time rank</th></tr></thead><tbody>
     ${grp("Peak Chip Equity", x=>/^Peak \dY/.test(x.n))}${grp("Decade Chip Equity", x=>/0s Chip Equity$/.test(x.n))}</tbody></table></div>`;
@@ -705,6 +774,16 @@ segToggle(document.getElementById("pl-pg"), document.getElementById("pl-75"), m 
 /* ---------------- PLAYOFF SERIES LINES + TITLE RUNS ---------------- */
 // psl row: [k, series, gp, sec, pts, reb, ast, stl, blk, tov, fga, fta, poss, onOffPoss, onPts, team]
 const PSL = DATA.psl || [], PCTX = DATA.pctx || [], PCEPM = DATA.pcepm || [];
+// playoff-only Chip Equity per player-postseason (rank among that postseason's 300+ possession players) and per career
+const POC = (() => { const m = new Map(), nS = new Map(); for (const r of PCEPM) nS.set(r[1], (nS.get(r[1]) || 0) + 1);
+  for (const r of PCEPM) m.set(r[0]*64 + r[1], {r:r[2], o:r[3], d:r[4], p:r[5], rank:r[6], n:nS.get(r[1]), s:r[1]});
+  const g = new Map(); for (const v of m.values()) (g.get(v.s) || g.set(v.s, []).get(v.s)).push(v); for (const l of g.values()) M.tieRank(l);
+  return m; })();
+const POC_CAREER = (() => { const by = new Map();
+  for (const r of PCEPM){ const e = by.get(r[0]) || {w:0, o:0, p:0, seasons:0, best:null}; e.w += r[2]*r[5]; e.o += r[3]*r[5]; e.p += r[5]; e.seasons++; if (!e.best || r[2] > e.best.r) e.best = {r:r[2], s:r[1]}; by.set(r[0], e); }
+  for (const e of by.values()){ e.r = e.w/e.p; e.o = +(e.o/e.p).toFixed(1); e.d = +(+e.r.toFixed(1) - e.o).toFixed(1); }
+  const q = [...by.values()].filter(e => e.p >= 2000); M.tieRank(q).forEach(e => { e.n = q.length; });
+  return by; })();
 const pslByPlayer = new Map(), pslBySeries = new Map();
 for (const r of PSL){ (pslByPlayer.get(r[0]) || pslByPlayer.set(r[0], []).get(r[0])).push(r); (pslBySeries.get(r[1]) || pslBySeries.set(r[1], []).get(r[1])).push(r); }
 const pcepmMap = new Map(); for (const r of PCEPM) pcepmMap.set(r[0]*64 + r[1], {v:r[2], o:r[3], d:r[4], poss:r[5], rank:r[6], n:r[7]});
@@ -795,31 +874,33 @@ function titleRuns(){
 let CEPM_VIEW = "cum";
 const pcepmTeam = new Map(); for (const r of PSL){ const key = r[0]*64 + M.SERIES[r[1]].s; if (!pcepmTeam.has(key)) pcepmTeam.set(key, r[15]); }
 function renderPoCepm(m){
-  const n = +ldN.value, rows = [];
-  if (m === "peak"){            // career: possession-weighted playoff Chip Equity across every postseason (2,000+ playoff possessions)
-    const by = new Map(); for (const r of PCEPM){ const e = by.get(r[0]) || {k:r[0], w:0, p:0, o:0, d:0, n:0, best:null}; e.w += r[2]*r[5]; e.o += r[3]*r[5]; e.d += r[4]*r[5]; e.p += r[5]; e.n++;
+  // playoffs-only view: one postseason, best single postseasons, or career (possession-weighted across every postseason)
+  const n = +ldN.value, min = +ldMin.value || 0, career = m === "peak";
+  const K = (career ? ["r","o","d","p","n","b"] : ["r","o","d","p"]).includes(LD_SORT) ? LD_SORT : "r";
+  let list;
+  if (career){
+    const by = new Map(); for (const r of PCEPM){ const e = by.get(r[0]) || {k:r[0], w:0, p:0, o:0, n:0, best:null}; e.w += r[2]*r[5]; e.o += r[3]*r[5]; e.p += r[5]; e.n++;
       if (!e.best || r[2] > e.best[2]) e.best = r; by.set(r[0], e); }
-    const kf = {r:"v", o:"ov", d:"dv", ce:"v"}[LD_SORT];
-    const list = [...by.values()].filter(e => e.p >= 2000).map(e => ({...e, v:e.w/e.p, ov:e.o/e.p, dv:e.d/e.p})).sort((a,b)=>b[kf]-a[kf]).slice(0, n);
-    ldOut.innerHTML = `<div class="box"><h2>Career playoff Chip Equity${LD_SORT!=="r"?` · ranked by ${SORT_NAME[LD_SORT]}`:""} <small>playoff possessions only · weighted across every postseason · 2,000+ playoff possessions</small></h2><div class="tscroll"><table>
-      <thead><tr><th>#</th><th class="l">Player</th><th>Postseasons</th><th>Playoff poss.</th>${sth("r","Playoff Chip Equity")}${sth("o","Off")}${sth("d","Def")}<th class="l">Best run</th></tr></thead><tbody>
-      ${list.map((e,i)=>`<tr><td>${i+1}</td><td class="l"><div class="who">${faceImg(e.k,"sm")}${esc(DATA.names[e.k])}</div></td><td>${e.n}</td><td>${e.p.toLocaleString()}</td><td>${sb("r",pm(e.v))}</td><td>${sb("o",pm(e.ov))}</td><td>${sb("d",pm(e.dv))}</td><td class="l sub">${S[e.best[1]]} ${pm(e.best[2])}</td></tr>`).join("")}</tbody></table></div>
-      <p class="mlink"><a href="#" data-method="po">How it's calculated ›</a></p></div>`;
-    return;
+    list = [...by.values()].map(e => { const r = e.w/e.p, o = +(e.o/e.p).toFixed(1); return {k:e.k, r, o, d: +(+r.toFixed(1) - o).toFixed(1), p:e.p, n:e.n, b:e.best[2], best:e.best}; });   // offense + defense add up to the total shown
+  } else {
+    list = PCEPM.filter(r => m === "season" ? r[1] === +ldSeason.value : true).map(r => ({k:r[0], s:r[1], r:r[2], o:r[3], d:r[4], p:r[5], row:r}));
   }
-  const ci = {r:2, o:3, d:4, ce:2}[LD_SORT];
-  const pool = PCEPM.filter(r => m === "season" ? r[1] === +ldSeason.value : true);
-  // rank that postseason on the chosen side of the ball
-  const yrRank = new Map(); { const byS = new Map(); for (const r of PCEPM) (byS.get(r[1]) || byS.set(r[1], []).get(r[1])).push(r);
-    for (const g of byS.values()) g.slice().sort((a,b)=>b[ci]-a[ci]).forEach((r,j)=>yrRank.set(r, j+1)); }
-  const list = pool.slice().sort((a,b)=>b[ci]-a[ci]).slice(0, n);
-  const head = (m === "season" ? `Playoff Chip Equity, ${S[+ldSeason.value]} playoffs` : "Best single postseasons: playoff Chip Equity") + (LD_SORT!=="r" ? ` · ranked by ${SORT_NAME[LD_SORT]}` : "");
-  ldOut.innerHTML = list.length ? `<div class="box"><h2>${head} <small>playoff possessions only · 300+ possessions</small></h2><div class="tscroll"><table>
-    <thead><tr><th>#</th><th class="l">Player</th><th class="l">Team</th>${m==="best"?"<th>Season</th>":""}<th>Playoff poss.</th>${sth("r","Playoff Chip Equity")}${sth("o","Off")}${sth("d","Def")}<th>Rank that year${LD_SORT!=="r"?(LD_SORT==="o"?" (off)":" (def)"):""}</th></tr></thead><tbody>
-    ${list.map((r,i)=>{ const t = pcepmTeam.get(r[0]*64 + r[1]), ab = t!=null ? AB(t) : "";
-      return `<tr><td>${i+1}</td><td class="l"><div class="who">${faceImg(r[0],"sm")}${esc(DATA.names[r[0]])}</div></td><td class="l"><div class="who">${ab ? logoImg(ab, r[1]) : ""}${ab}</div></td>${m==="best"?`<td>${S[r[1]]}</td>`:""}<td>${r[5].toLocaleString()}</td><td>${sb("r",pm(r[2]))}</td><td>${sb("o",pm(r[3]))}</td><td>${sb("d",pm(r[4]))}</td><td class="sub">${ord(yrRank.get(r))} of ${r[7]}</td></tr>`; }).join("")}</tbody></table></div>
-    <p class="mlink"><a href="#" data-method="po">How it's calculated ›</a></p></div>`
-    : `<div class="msg">No playoff Chip Equity for ${S[+ldSeason.value]} (players need 300+ playoff possessions).</div>`;
+  const dK = K === "p" || K === "n" ? 0 : 1;          // ranks on the number as shown; equal numbers share a rank (1, 1, 3)
+  // percentile pool: every qualifying career / that postseason / every postseason since 1997
+  const pool = career ? list.filter(e => e.p >= min) : list; M.tieRank(pool, e => e[K], "prk", dK);
+  if (!career){ const byS = new Map(); for (const e of list) (byS.get(e.s) || byS.set(e.s, []).get(e.s)).push(e); for (const g of byS.values()) M.tieRank(g, e => e[K], "yrk", dK); }
+  const shown = M.tieRank(list.filter(e => e.p >= min), e => e[K], "pos", dK).slice(0, n);
+  const yrN = new Map(); if (!career) for (const e of list) yrN.set(e.s, (yrN.get(e.s) || 0) + 1);
+  const scopeTxt = career ? "with " + min.toLocaleString() + "+ career playoff possessions" : m === "season" ? `with 300+ possessions in the ${S[+ldSeason.value]} playoffs` : "among every postseason (300+ possessions) since 1997";
+  const pc = (key, e) => key === K ? pctl({rank: e.prk, n: pool.length}, scopeTxt) : "";
+  const head = (career ? "Career playoff Chip Equity" : m === "season" ? `Playoff Chip Equity, ${S[+ldSeason.value]} playoffs` : "Best single postseasons: playoff Chip Equity") + (K !== "r" ? ` · ranked by ${SORT_NAME[K]}` : "");
+  const sub = career ? `playoff possessions only · weighted across every postseason · ${min.toLocaleString()}+ playoff possessions` : `playoff possessions only · ${Math.max(300, min).toLocaleString()}+ possessions`;
+  if (!shown.length){ ldOut.innerHTML = `<div class="msg">${m === "season" ? `No playoff Chip Equity for ${S[+ldSeason.value]} at that minimum (players need 300+ playoff possessions).` : "Nobody qualifies. Try a lower minimum."}</div>`; return; }
+  const teamCell = e => { const t = pcepmTeam.get(e.k*64 + e.s), ab = t!=null ? AB(t) : ""; return `<td class="l"><div class="who">${ab ? logoImg(ab, e.s) : ""}${ab}</div></td>`; };
+  ldOut.innerHTML = `<div class="box"><h2>${head} <small>${sub}</small></h2><div class="tscroll"><table>
+    <thead><tr><th>#</th><th class="l">Player</th>${career ? sth("n","Postseasons") : `<th class="l">Team</th>${m==="best"?"<th>Season</th>":""}`}${sth("p","Playoff poss.")}${sth("r","Playoff Chip Equity")}${sth("o","Off")}${sth("d","Def")}${career ? sth("b","Best run") : `<th>Rank that year${K!=="r" ? ` (${SORT_NAME[K]})` : ""}</th>`}</tr></thead><tbody>
+    ${shown.map((e,i)=>`<tr><td>${e.pos}</td><td class="l"><div class="who">${faceImg(e.k,"sm")}${pLink(e.k, esc(DATA.names[e.k]))}</div></td>${career ? `<td class="nw">${sb("n", e.n)}${pc("n", e)}</td>` : teamCell(e) + (m==="best" ? `<td>${S[e.s]}</td>` : "")}<td class="nw">${sb("p", e.p.toLocaleString())}${pc("p", e)}</td><td class="nw">${sb("r",pm(e.r))}${pc("r", e)}</td><td class="nw">${sb("o",pm(e.o))}${pc("o", e)}</td><td class="nw">${sb("d",pm(e.d))}${pc("d", e)}</td>${career ? `<td class="l sub nw">${sb("b", `${S[e.best[1]]} ${pm(e.best[2])}`)}${pc("b", e)}</td>` : `<td class="sub">${ord(e.yrk)} of ${yrN.get(e.s).toLocaleString()}</td>`}</tr>`).join("")}</tbody></table></div>
+    <p class="note">Click any column with an arrow to rank by it.</p><p class="mlink"><a href="#" data-method="po">How it's calculated ›</a></p></div>`;
 }
 let TITLE_RUNS = null;
 function renderTitles(){
@@ -840,7 +921,7 @@ function renderTitles(){
         <div class="tile"><div class="v">${sgn1(r.fieldSrs)}</div><div class="k">Avg opponent SRS</div></div>
         <div class="tile"><div class="v">${sgn1(r.fieldDef)}</div><div class="k">Opp DRtg vs league</div></div></div>
       ${r.partial ? `<p class="note" style="margin:6px 0 0">Play-by-play covers ${r.gamesWithLines} of their ${r.w + r.l} playoff games${S[r.s]==="2025-26" ? " (the archive ends May 10, 2026)" : ""}, so the leading-player line and series nets use those games. Team totals and the ranking use every game.</p>` : ""}
-      ${r.lead ? `<div class="tr-lead">${faceImg(r.lead.k, "sm")}<div><strong>${esc(DATA.names[r.lead.k])}</strong> <span class="muted">· Playoff Chip Equity</span> <strong>${pm(r.lead.pc.v)}</strong> <span class="muted">(${ord(r.lead.pc.rank)} of ${r.lead.pc.n} that postseason; offensive Chip Equity ${pm(r.lead.pc.o)}, defensive Chip Equity ${pm(r.lead.pc.d)}) ·${L.pts75.toFixed(1)} pts, ${L.reb75.toFixed(1)} reb, ${L.ast75.toFixed(1)} ast per 75 · TS ${(L.ts*100).toFixed(1)}% · opp-adj rTS ${sgn1(L.rtsOpp)} · roRTG ${sgn1(L.roRtg)}</span></div></div>` : ""}
+      ${r.lead ? `<div class="tr-lead">${faceImg(r.lead.k, "sm")}<div><strong>${pLink(r.lead.k, esc(DATA.names[r.lead.k]))}</strong> <span class="muted">· Playoff Chip Equity</span> <strong>${pm(r.lead.pc.v)}</strong> <span class="muted">(${ord(r.lead.pc.rank)} of ${r.lead.pc.n} that postseason; offensive Chip Equity ${pm(r.lead.pc.o)}, defensive Chip Equity ${pm(r.lead.pc.d)}) ·${L.pts75.toFixed(1)} pts, ${L.reb75.toFixed(1)} reb, ${L.ast75.toFixed(1)} ast per 75 · TS ${(L.ts*100).toFixed(1)}% · opp-adj rTS ${sgn1(L.rtsOpp)} · roRTG ${sgn1(L.roRtg)}</span></div></div>` : ""}
       <details class="how"><summary>Who they beat</summary><div class="tscroll"><table>
         <thead><tr><th>Round</th><th class="l">Opponent</th><th class="l">Result</th><th>ORtg</th><th>DRtg</th><th>Net</th><th>SRS</th><th>Series net</th></tr></thead>
         <tbody>${oppRows}</tbody></table></div></details></div>`; };
@@ -849,7 +930,48 @@ function renderTitles(){
     ${list.map(card).join("")}`;
 }
 
+function syncPlStat(){
+  const has = [...plStat.options].some(o => o.value === "PCE");
+  if (TYPE === 1 && !has){ statOptions(plStat, ["PCE"].concat(CHART_KEYS), "PCE"); }
+  else if (TYPE === 0 && has){ const v = plStat.value; statOptions(plStat, CHART_KEYS, "RW2"); if (v !== "PCE" && CHART_KEYS.includes(v)) plStat.value = v; }
+}
+// playoffs: playoff-only Chip Equity, postseason by postseason
+function poTable(k){
+  const rows = PCEPM.filter(r => r[0] === k).sort((a,b) => b[1] - a[1]);
+  if (!rows.length) return `<p class="muted">No playoff Chip Equity for this player (a postseason needs 300+ playoff possessions).</p>`;
+  const tr = r => { const v = POC.get(k*64 + r[1]), t = pcepmTeam.get(k*64 + r[1]), ab = t != null ? AB(t) : "", sr = t != null ? seasonResult(t, r[1]) : {txt:"", cls:""};
+    return `<tr><td>${S[r[1]]}</td><td class="l"><div class="who">${ab ? logoImg(ab, r[1]) : ""}${ab}</div></td><td class="l"><span class="res ${sr.cls}">${sr.txt}</span></td><td>${r[5].toLocaleString()}</td><td>${pm(v.o)}</td><td>${pm(v.d)}</td><td class="nw"><strong>${pm(v.r)}</strong>${pctl(v, `with 300+ possessions in the ${S[r[1]]} playoffs`)}</td><td class="sub">${ord(v.rank)} of ${v.n}</td></tr>`; };
+  return `<div class="tscroll"><table><thead><tr><th>Postseason</th><th class="l">Team</th><th class="l">Result</th><th>Playoff poss.</th><th>Off</th><th>Def</th><th>Playoff Chip Equity</th><th>Rank that year</th></tr></thead><tbody>${rows.map(tr).join("")}</tbody></table></div>
+    <p class="mlink"><a href="#" data-method="po">How it's calculated ›</a></p>`;
+}
+// this season so far, for players on a current roster: averages + game log from ESPN box scores (live, in the browser)
+let PL_LIVE_TOKEN = 0;
+async function playerLive(k){
+  const tok = ++PL_LIVE_TOKEN, slot = document.getElementById("pl-live"); if (!slot) return;
+  const gone = () => tok !== PL_LIVE_TOKEN || !document.getElementById("pl-live");
+  try {
+    if (!CUR.ready()) await CUR.ensure(); if (gone()) return;
+    const T = CUR.state().teams; let ab = null, pl = null;
+    for (const [a, t] of Object.entries(T)){ const q = (t.players || []).find(x => x.k === k); if (q){ ab = a; pl = q; break; } }
+    if (!ab || pl.espnId == null){ slot.remove(); return; }
+    let BX = CUR.boxOf(ab);
+    if (!BX || !(CUR.__plLiveDone || {})[ab]){ slot.innerHTML = `<div class="box"><h2>${esc(CUR.C.season)} so far</h2><div class="msg">Loading this season's games from ESPN…</div></div>`;
+      await CUR.seasonStarters(ab); (CUR.__plLiveDone = CUR.__plLiveDone || {})[ab] = 1; if (gone()) return; BX = CUR.boxOf(ab); }
+    const e = BX && BX.players.get(String(pl.espnId)), L = CUR.lineOf(e);
+    if (!L){ slot.innerHTML = `<div class="box"><h2>${esc(CUR.C.season)} so far <small>${esc(ab)}</small></h2><div class="msg">${BX ? `No games yet this season${pl.status ? ` (${esc(pl.status)})` : ""}.` : "Couldn't load this season's games from ESPN right now."}</div></div>`; return; }
+    const tile = (v, lab) => `<div class="tile"><div class="v">${v}</div><div class="k">${lab}</div></div>`, pct = v => Number.isFinite(v) ? (v*100).toFixed(1) + "%" : "–";
+    const day = t => new Date(t).toLocaleDateString(undefined, {month: "short", day: "numeric"});
+    const rows = e.log.slice().reverse().map(g => { const x = g.x, w = g.us > g.them;
+      return `<tr><td class="l">${day(g.t)}</td><td class="l">${g.home === false ? "@ " : "vs "}${esc(g.opp || "")}</td><td class="l">${Number.isFinite(g.us) && Number.isFinite(g.them) ? `<span class="res ${w ? "won" : ""}">${w ? "W" : "L"} ${g.us}-${g.them}</span>` : ""}</td>
+        <td>${Math.round(x[0])}</td><td><strong>${x[1]}</strong></td><td>${x[2]}</td><td>${x[3]}</td><td>${x[4]}</td><td>${x[5]}</td><td>${x[6]}</td><td>${x[7]}-${x[8]}</td><td>${x[9]}-${x[10]}</td><td>${x[11]}-${x[12]}</td><td>${x[15] > 0 ? "+" : ""}${x[15]}</td></tr>`; }).join("");
+    slot.innerHTML = `<div class="box"><h2>${esc(CUR.C.season)} so far <small>${esc(ab)} · live from ESPN box scores · ${L.gp} game${L.gp === 1 ? "" : "s"} · through ${day(e.log[e.log.length - 1].t)}</small></h2>
+      <div class="tiles">${tile(L.gp, "Games")}${tile(L.mpg.toFixed(1), "MPG")}${tile(L.pts.toFixed(1), "PTS")}${tile(L.reb.toFixed(1), "REB")}${tile(L.ast.toFixed(1), "AST")}${tile(L.stl.toFixed(1), "STL")}${tile(L.blk.toFixed(1), "BLK")}${tile(pct(L.ts), "True shooting")}${tile(pct(L.tp), "3P% · " + L.tpm.toFixed(1) + " made")}</div>
+      <details class="how"><summary>Game log</summary><div class="tscroll"><table><thead><tr><th class="l">Date</th><th class="l">Opp</th><th class="l">Result</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>TO</th><th>FG</th><th>3PT</th><th>FT</th><th>+/-</th></tr></thead><tbody>${rows}</tbody></table></div></details>
+      <p class="note">Box-score stats only, updated after every game. Chip Equity, on/off and the rest of ${esc(CUR.C.season)} come with the play-by-play update.</p></div>`;
+  } catch(err){ if (!gone()) slot.remove(); }
+}
 function renderPlayer(){
+  syncPlStat();
   const k = findPlayer(plQ.value);
   if (k<0){ plOut.innerHTML = `<div class="msg">No player matches “${esc(plQ.value)}”. Try a last name, like Curry or Jokic.</div>`; return; }
   const rows = playerRows(k);
@@ -859,19 +981,25 @@ function renderPlayer(){
   const tile = (v,k,cls="") => `<div class="tile ${cls}"><div class="v">${v}</div><div class="k">${k}</div></div>`;
   // headline: best 5-year Chip Equity; falls back to 3-year for short careers
   const pk5 = M.peakOf(k, "Peak 5Y CEPM"), pkH = pk5 || pk, pkW = pk5 ? 5 : 3;
-  const tiles = (pkH ? tile(pm(pkH.r), `Best ${pkW}-yr Chip Equity · ${ord(pkH.rank)} all-time`, "hero") + tile(`${pm(pkH.o)} / ${pm(pkH.d)}`,"Offense / defense") + (pk5 && pk ? tile(pm(pk.r), `Best 3-yr Chip Equity · ${ord(pk.rank)} all-time`) : "") : tile("–","Peak Chip Equity","hero"))
+  const PC = POC_CAREER.get(k);
+  const poTiles = PC ? tile(pm(PC.r) + (PC.rank ? pctl(PC, "with 2,000+ career playoff possessions") : ""), `Career playoff Chip Equity · ${PC.rank ? ord(PC.rank) + " all-time" : "under 2,000 playoff poss., not ranked"}`, "hero")
+      + tile(`${pm(PC.o)} / ${pm(PC.d)}`, "Offense / defense") + tile(`${pm(PC.best.r)}`, `Best postseason · ${S[PC.best.s]}`)
+    : tile("–", "Playoff Chip Equity (300+ playoff poss. in a postseason)", "hero");
+  const tiles = TYPE === 1 ? poTiles + keys.slice(0,3).map((s,j)=>tile(fmt(val(a,s),1), heads[j])).join("") + tile(fmt(val(a,"TS"),"pct"),"True shooting") + tile(a.gp.toLocaleString(),"Playoff games") + (res.titles ? tile(res.titles,"Titles") : "") : (pkH ? tile(pm(pkH.r) + pctl(pkH, "on this all-time list"), `Best ${pkW}-yr Chip Equity · ${ord(pkH.rank)} all-time`, "hero") + tile(`${pm(pkH.o)} / ${pm(pkH.d)}`,"Offense / defense") + (pk5 && pk ? tile(pm(pk.r) + pctl(pk, "on this all-time list"), `Best 3-yr Chip Equity · ${ord(pk.rank)} all-time`) : "") : tile("–","Peak Chip Equity","hero"))
     + keys.slice(0,3).map((s,j)=>tile(fmt(val(a,s),1), heads[j])).join("")
     + tile(fmt(val(a,"TS"),"pct"),"True shooting") + tile(fmt(val(a,"RTS"),"rel"),"rTS vs. league")
     + tile(a.gp.toLocaleString(),"Games") + (res.titles ? tile(res.titles,"Titles") : "");
   const body = rows.map(i=>{ const r=agg([i]); const tab = AB(P.tm[i]), sr = seasonResult(P.tm[i], P.s[i]);
-    return `<tr><td>${S[P.s[i]]}</td><td class="l"><div class="who">${logoImg(tab, P.s[i])}${tab||""}</div></td><td class="sub">${recTxt(tab,P.s[i])}</td><td class="l"><span class="res ${sr.cls}">${sr.txt}</span></td><td>${r.gp}</td>
-    <td>${fmt(val(r,"MPG"),1)}</td>${keys.map(s=>`<td>${fmt(val(r,s),1)}</td>`).join("")}<td>${fmt(val(r,"TS"),"pct")}</td><td>${fmt(val(r,"RTS"),"rel")}</td><td>${fmt(val(r,"USG"),1)}</td><td>${pm(rowVal(i,"RW1"))}</td><td><strong>${pm(rowVal(i,"RW2"))}</strong></td><td>${pm(rowVal(i,"RW3"))}</td><td>${pm(rowVal(i,"O3"))}</td><td>${pm(rowVal(i,"D3"))}</td></tr>`; }).join("");
-  const stars = pk ? `Best 3-year Chip Equity ${pm(pk.r)} (offensive Chip Equity ${pm(pk.o)}, defensive Chip Equity ${pm(pk.d)}), ${ord(pk.rank)} of ${pk.n.toLocaleString()} all-time.` : "No peak Chip Equity for this player.";
+    return `<tr><td>${S[P.s[i]]}${ipTag(P.s[i])}</td><td class="l"><div class="who">${playerTeams(k, P.s[i], tab).map(([a,n]) => `${logoImg(a, P.s[i])}<span title="${n ? n + " games" : ""}">${a||""}</span>`).join(" ")}</div></td><td class="sub">${recTxt(tab,P.s[i])}</td><td class="l"><span class="res ${sr.cls}">${sr.txt}</span></td><td>${r.gp}</td>
+    <td>${fmt(val(r,"MPG"),1)}</td>${keys.map(s=>`<td>${fmt(val(r,s),1)}</td>`).join("")}<td>${fmt(val(r,"TS"),"pct")}</td><td>${fmt(val(r,"RTS"),"rel")}</td><td>${fmt(val(r,"USG"),1)}</td>${TYPE === 1 ? (v => v ? `<td class="nw"><strong>${pm(v.r)}</strong>${pctl(v, `with 300+ possessions in the ${S[P.s[i]]} playoffs`)}</td><td>${pm(v.o)}</td><td>${pm(v.d)}</td>` : `<td>–</td><td>–</td><td>–</td>`)(POC.get(k*64 + P.s[i])) : `<td class="nw">${pm(rowVal(i,"RW1"))}${pctl(M.rwOf(P.p[i], P.s[i], 1))}</td><td class="nw"><strong>${pm(rowVal(i,"RW2"))}</strong>${pctl(M.rwOf(P.p[i], P.s[i], 2))}</td><td class="nw">${pm(rowVal(i,"RW3"))}${pctl(M.rwOf(P.p[i], P.s[i], 3))}</td><td>${pm(rowVal(i,"O3"))}</td><td>${pm(rowVal(i,"D3"))}</td>`}</tr>`; }).join("");
+  const stars = TYPE === 1 ? (PC ? `Career playoff Chip Equity ${pm(PC.r)} (offense ${pm(PC.o)}, defense ${pm(PC.d)}) over ${PC.seasons} postseason${PC.seasons > 1 ? "s" : ""} and ${Math.round(PC.p).toLocaleString()} playoff possessions${PC.rank ? `, ${ord(PC.rank)} of ${PC.n.toLocaleString()} players with 2,000+` : ""}. Best postseason: ${S[PC.best.s]}, ${pm(PC.best.r)}.` : "No playoff Chip Equity for this player (a postseason needs 300+ playoff possessions).")
+    : pk ? `Best 3-year Chip Equity ${pm(pk.r)} (offensive Chip Equity ${pm(pk.o)}, defensive Chip Equity ${pm(pk.d)}), ${ord(pk.rank)} of ${pk.n.toLocaleString()} all-time.` : "No peak Chip Equity for this player.";
   const po = res.apps ? ` Playoffs: ${res.apps} trip${res.apps>1?"s":""}, ${res.series} series won, ${res.finals} Finals${res.titles?`, ${res.titles} title${res.titles>1?"s":""}`:""}.` : "";
   plOut.innerHTML = `
     <div class="box"><div class="profile">${faceImg(k)}<div style="min-width:0">
       <h2 class="pname">${esc(DATA.names[k])}</h2>
       <div class="teamline">${logoImg(ab, P.s[last])}${esc(teamName(ab,P.s[last]))} <span class="muted">· ${S[P.s[rows[0]]]} to ${S[P.s[last]]} · ${typeName()}${plMode==="p75"?" · per 75 possessions":""}</span></div>
+      <div class="stints"><span class="muted" style="margin-right:2px">Teams</span>${careerStints(k).map(st => `<span class="stint">${logoImg(st.ab, st.s1)}${esc(st.ab)} <span class="muted">${yrSpan(st.s0, st.s1)}</span></span>`).join("")}</div>
       <div class="tiles">${tiles}</div></div></div>
       <p class="note">${stars}${po}</p></div>
     <div class="grid2">
@@ -879,11 +1007,18 @@ function renderPlayer(){
         <p class="mlink"><a href="#" data-method="what">What Chip Equity is and how it's calculated ›</a></p></div>
       <div class="box"><h2>${esc(STATS[plStat.value].label)}</h2><div id="pl-chart"></div></div>
     </div>
-    <div class="box" style="margin-top:16px"><h2>Chip Equity by window <small>our 2-year and 3-year Chip Equity · regular season + playoffs · points per 100 possessions</small></h2>${rwTable(k)}</div>
+    ${TYPE === 1 ? `<div class="box" style="margin-top:16px"><h2>Playoff Chip Equity by postseason <small>playoff possessions only · opponent-adjusted lead margin · points per 100 possessions</small></h2>${poTable(k)}</div>`
+      : `<div class="box" style="margin-top:16px"><h2>Chip Equity by window <small>single-season (1-yr), 2-year and 3-year Chip Equity ending each season · regular season + playoffs · points per 100 possessions</small></h2>${rwTable(k)}</div>`}
     <div class="box"><h2>Season by season <small>${plMode==="p75"?"per 75 possessions":"per game"} · rTS = true shooting minus that season's league average</small></h2><div class="tscroll"><table>
-      <thead><tr><th>Season</th><th class="l">Team</th><th>Team W-L</th><th class="l">Playoffs</th><th>GP</th><th>MPG</th>${heads.map(h=>`<th>${h}</th>`).join("")}<th>TS%</th><th>rTS</th><th>USG</th><th title="Chip Equity fit on that season alone">1-yr Chip Equity</th><th>2-yr Chip Equity</th><th>3-yr Chip Equity</th><th title="3-year offensive Chip Equity">3-yr offensive Chip Equity</th><th title="3-year defensive Chip Equity">3-yr defensive Chip Equity</th></tr></thead>
+      <thead><tr><th>Season</th><th class="l">Team</th><th>Team W-L</th><th class="l">Playoffs</th><th>GP</th><th>MPG</th>${heads.map(h=>`<th>${h}</th>`).join("")}<th>TS%</th><th>rTS</th><th>USG</th>${TYPE === 1 ? `<th title="Chip Equity on that postseason's playoff possessions only">Playoff Chip Equity</th><th>Off</th><th>Def</th>` : `<th title="Chip Equity fit on that season alone">1-yr Chip Equity</th><th>2-yr Chip Equity</th><th>3-yr Chip Equity</th><th title="3-year offensive Chip Equity">3-yr offensive Chip Equity</th><th title="3-year defensive Chip Equity">3-yr defensive Chip Equity</th>`}</tr></thead>
       <tbody>${body}</tbody></table></div></div>${TYPE===1 ? playoffSeriesBox(k) : ""}`;
-  lineChart(document.getElementById("pl-chart"), [{name:DATA.names[k], pts: rows.map(i=>({x:P.s[i], y:rowVal(i,plStat.value), sub:AB(P.tm[i])}))}], STATS[plStat.value]);
+  // team bands: each season's width is split by games played for each team, so a mid-season trade shows mid-season
+  const bands = []; for (const i of rows){ const s0 = P.s[i], tl = playerTeams(k, s0, AB(P.tm[i])), tot = tl.reduce((a,t)=>a+(t[1]||0),0) || 1;
+    let x = s0 - 0.5; for (const [ab, n] of tl){ const x1 = x + (tl.length > 1 ? (n||0)/tot : 1), last = bands[bands.length-1];
+      if (last && last.ab === ab && Math.abs(last.x1 - x) < 1e-6) { last.x1 = x1; last.s1 = s0; } else bands.push({ab, x0: x, x1, s0, s1: s0}); x = x1; } }
+  lineChart(document.getElementById("pl-chart"), [{name:DATA.names[k], pts: rows.map(i=>({x:P.s[i], y:rowVal(i,plStat.value), sub:playerTeams(k, P.s[i], AB(P.tm[i])).map(t=>t[0]).join("/")}))}], STATS[plStat.value], {bands});
+  if (TYPE === 0 && typeof CUR !== "undefined" && CUR && Date.now() >= +CUR.seasonStart){
+    const prof = plOut.querySelector(".box"); if (prof){ prof.insertAdjacentHTML("afterend", `<div id="pl-live"></div>`); playerLive(k); } }
 }
 plQ.addEventListener("change", renderPlayer);
 plQ.addEventListener("keydown", e=>{ if(e.key==="Enter") renderPlayer(); });
@@ -894,7 +1029,7 @@ const cmIn = [1,2,3,4].map(i=>document.getElementById("cm-"+i)), cmSeas = [1,2,3
 const cmScope = document.getElementById("cm-scope"), cmStat = document.getElementById("cm-stat"), cmOut = document.getElementById("cm-out");
 let cmMode = "p75";
 cmScope.innerHTML = `<option value="career">Whole careers</option><option value="pick">Different seasons (pick one per player)</option>`
-  + S.map((s,i)=>`<option value="${i}">${s} season (everyone)</option>`).reverse().join("");
+  + S.map((s,i)=>`<option value="${i}">${sOpt(i, s + " season")} (everyone)</option>`).reverse().join("");
 statOptions(cmStat, CHART_KEYS, "RW3");
 segToggle(document.getElementById("cm-pg"), document.getElementById("cm-75"), m => { cmMode = m; renderCompare(); });
 // each player's own season picker: only seasons he played, defaulting to his best 3-year Chip Equity window
@@ -972,7 +1107,7 @@ function renderCompare(){
   const keys = MODE_KEYS[cmMode], labels = ["Points","Rebounds","Assists","Steals","Blocks","3-pointers made"];
   const heads = ok.map(it=>{ const last=it.rows[it.rows.length-1], ab=AB(P.tm[last]);
     const yrs = career ? `${S[P.s[it.rows[0]]]} to ${S[P.s[last]]}` : S[it.s];
-    return `<td>${faceImg(it.k)}<div class="nm">${esc(DATA.names[it.k])}</div><div class="tl">${logoImg(ab,P.s[last])}${esc(teamName(ab,P.s[last]))}</div><div class="yr">${yrs}</div></td>`; }).join("");
+    return `<td>${faceImg(it.k)}<div class="nm">${pLink(it.k, esc(DATA.names[it.k]))}</div><div class="tl">${career ? careerStints(it.k).map(st => `<span title="${esc(teamName(st.ab, st.s1))} ${yrSpan(st.s0, st.s1)}">${logoImg(st.ab, st.s1)}</span>`).join("") : playerTeams(it.k, it.s, ab).map(([a]) => logoImg(a, it.s) + esc(teamName(a, it.s))).join(" / ")}</div><div class="yr">${yrs}</div></td>`; }).join("");
   const pkv = (n,f="r") => it => { const v = M.peakOf(it.k,n); return v ? v[f] : NaN; };
   const decRow = n => [PEAK_LABEL[n], it => { const v = M.peakOf(it.k,n); return v ? `${pm(v.r)} (${ord(v.rank)})` : "–"; }, null, true];
   const rowDefs = career
@@ -1009,7 +1144,7 @@ cmSeas.forEach(el=>el.addEventListener("change", renderCompare));
 const muSA=document.getElementById("mu-sa"), muTA=document.getElementById("mu-ta"), muSB=document.getElementById("mu-sb"), muTB=document.getElementById("mu-tb"), muOut=document.getElementById("mu-out");
 const muH = {A:document.getElementById("mu-hA"), B:document.getElementById("mu-hB"), N:document.getElementById("mu-hN")};
 let muHome = "auto";
-const seasonOpts = S.map((s,i)=>`<option value="${i}">${s}</option>`).reverse().join("");
+const seasonOpts = S.map((s,i)=>`<option value="${i}">${sOpt(i, s)}</option>`).reverse().join("");
 muSA.innerHTML = seasonOpts; muSB.innerHTML = seasonOpts;
 const rsTeams = s => M.tm.filter(r=>r.s===s && r.t===0);
 function fillTeams(sel, s, keep){
@@ -1058,8 +1193,8 @@ function renderMatchup(){
   const tape = r.tape.map(t=>`<tr><td class="${t.better==="A"?"best":""}" style="text-align:right">${t.a}${t.ra?` <span class="muted">${ord(t.ra)}</span>`:""}</td>
       <td style="text-align:center;color:var(--ink-2);white-space:normal">${t.label}</td><td class="${t.better==="B"?"best":""}" style="text-align:left">${t.b}${t.rb?` <span class="muted">${ord(t.rb)}</span>`:""}</td></tr>`).join("");
   const top3Rows = ro => ro.top3Info.length ? ro.top3Info.map(p=>{ const i=p.i, k=P.p[i], a=agg([i]);
-    return `<tr><td class="l"><div class="who">${faceImg(k,"sm")}<span class="n">${esc(DATA.names[k])}</span></div></td>
-      <td>${fmt(val(a,"MPG"),1)}</td><td>${fmt(val(a,"PPG"),1)}</td><td>${fmt(val(a,"RPG"),1)}</td><td>${fmt(val(a,"APG"),1)}</td><td>${fmt(val(a,"TS"),"pct")}</td>${(c => `<td><strong>${pm(c?c.r:NaN)}</strong></td><td>${pm(c?c.o:NaN)}</td><td>${pm(c?c.d:NaN)}</td>`)(M.rwOf(k, P.s[i], 3))}<td class="sub">${pm(p.r3)}</td></tr>`; }).join("")
+    return `<tr><td class="l"><div class="who">${faceImg(k,"sm")}<span class="n">${pLink(k, esc(DATA.names[k]))}</span></div></td>
+      <td>${fmt(val(a,"MPG"),1)}</td><td>${fmt(val(a,"PPG"),1)}</td><td>${fmt(val(a,"RPG"),1)}</td><td>${fmt(val(a,"APG"),1)}</td><td>${fmt(val(a,"TS"),"pct")}</td>${(c => `<td class="nw"><strong>${pm(c?c.r:NaN)}</strong>${pctl(c)}</td><td>${pm(c?c.o:NaN)}</td><td>${pm(c?c.d:NaN)}</td>`)(M.rwOf(k, P.s[i], 3))}<td class="sub">${pm(p.r3)}</td></tr>`; }).join("")
     : `<tr><td colspan="10" class="muted">No data for this team.</td></tr>`;
   const keyBox = x => { const ro = x==="A"?r.rA:r.rB;
     return `<div class="box"><h2><span class="dot" style="background:${col[x]}"></span>${esc(nm[x])} top performers <small>regular season</small></h2><div class="tscroll"><table>
@@ -1112,10 +1247,24 @@ function openMatchup(abA, sa, abB, sb){ muSA.value=String(sa); fillTeams(muTA, s
 /* ---------------- LEADERS ---------------- */
 const ldMode=document.getElementById("ld-mode"), ldStat=document.getElementById("ld-stat"), ldSeason=document.getElementById("ld-season"),
       ldMin=document.getElementById("ld-min"), ldN=document.getElementById("ld-n"), ldOut=document.getElementById("ld-out"), ldSeasonF=document.getElementById("ld-season-f");
-ldSeason.innerHTML = seasonOpts;
+ldSeason.innerHTML = seasonOpts; ldSeason.value = String(HEAD);
 const TOTALS = {pts:"Points", reb:"Rebounds", ast:"Assists", stl:"Steals", blk:"Blocks", fg3m:"3-pointers made", gp:"Games"};
 const LEADER_KEYS = ["RW1","RW2","RW3","PTS75","PPG","AST75","APG","REB75","RPG","SPG","BPG","3PM","TS","RTS","MPG","USG"];
+const LD_MODES_ALL = ldMode.innerHTML;
+const LD_MODES_PO = `<option value="season">One postseason</option><option value="best">Best single postseasons</option><option value="peak">Career playoffs (every postseason)</option>`;
+// "Playoffs only" Chip Equity has no stat or window to choose, so only the controls that change it are shown
+function ldSyncView(){
+  const po = CEPM_VIEW === "po", want = po ? LD_MODES_PO : LD_MODES_ALL;
+  if (ldMode.dataset.view !== (po ? "po" : "all")){
+    const prev = ldMode.value; ldMode.innerHTML = want; ldMode.dataset.view = po ? "po" : "all";
+    ldMode.value = [...ldMode.options].some(o => o.value === prev) ? prev : (po ? "peak" : "peak");
+  }
+  ldStat.closest(".field").hidden = po;
+  ldMin.closest(".field").querySelector("label").textContent = po ? "Min. playoff poss." : "Min. games";
+  ldMin.step = po ? 100 : 5;
+}
 function ldStatOptions(){
+  ldSyncView();
   const m = ldMode.value, prev = ldStat.value;
   if (m==="career") ldStat.innerHTML = Object.entries(TOTALS).map(([k,l])=>`<option value="${k}">${l}</option>`).join("");
   else if (m==="titles") ldStat.innerHTML = `<option value="adj">Opponent-adjusted net</option><option value="field">Toughest field (opponent SRS)</option><option value="lead">Leading player's playoff Chip Equity</option><option value="net">Raw playoff net rating</option>`;
@@ -1123,7 +1272,8 @@ function ldStatOptions(){
   else statOptions(ldStat, m==="careeravg" ? LEADER_KEYS.filter(k=>!STATS[k].rw) : LEADER_KEYS, m==="careeravg" ? "PTS75" : "RW3");
   if ([...ldStat.options].some(o=>o.value===prev)) ldStat.value = prev;
   ldSeasonF.hidden = m!=="season";
-  ldMin.value = {season: TYPE?4:40, best: TYPE?10:50, career: TYPE?40:300, careeravg: TYPE?40:300, peak: 0, titles: 0}[m];
+  ldMin.value = CEPM_VIEW === "po" ? (m === "peak" ? 2000 : 300) : {season: TYPE?4:40, best: TYPE?10:50, career: TYPE?40:300, careeravg: TYPE?40:300, peak: 0, titles: 0}[m];
+  if (CEPM_VIEW === "po" && (m === "season" || m === "best") && !(STATS[ldStat.value] && STATS[ldStat.value].rw)) ldStat.value = "RW3";
   ldMin.closest(".field").hidden = m==="titles";
 }
 function renderLeaders(){
@@ -1141,24 +1291,34 @@ function renderLeaders(){
       const g = rows.reduce((a,i)=>a+P.gp[i],0); if (g<min) continue; const last = rows.length ? rows[rows.length-1] : rowsByPlayer[k][rowsByPlayer[k].length-1];
       list.push({k, v, gp:g, s:P.s[last], tm:AB(P.tm[last])}); }
     // all-time rank on the chosen side of the ball (offense / defense ranks are among the same pool as the total rank)
-    const PK = LD_SORT==="ce" ? "r" : LD_SORT; const rankOf = new Map(); allV.slice().sort((a,b)=>b[PK]-a[PK]).forEach((v,j)=>rankOf.set(v, j+1));
-    list.sort((x,y)=>y.v[PK]-x.v[PK]); list = list.slice(0,n);
+    const PK = ["r","o","d"].includes(LD_SORT) ? LD_SORT : "r"; const rankOf = new Map(); M.tieRank(allV.map(v => ({v})), x => x.v[PK], "rk").forEach(x => rankOf.set(x.v, x.rk));
+    list = M.tieRank(list, x => x.v[PK], "pos").slice(0,n);
+    const bp = (key, r) => key === PK ? pctl({rank: rankOf.get(r.v), n: allV.length}, "on this all-time list") : "";
     if (!list.length){ ldOut.innerHTML = `<div class="msg">Nobody qualifies. Try a lower minimum number of games.</div>`; return; }
     ldOut.innerHTML = `<div class="box"><h2>${esc(PEAK_LABEL[stat])}${LD_SORT!=="r"?` · ranked by ${SORT_NAME[LD_SORT]}`:""} <small>all-time · regular season + playoffs</small></h2><div class="tscroll"><table>
       <thead><tr><th>#</th><th class="l">Player</th><th class="l">Last team</th><th>GP since 1996-97</th>${sth("r","Total")}${sth("o","Off")}${sth("d","Def")}<th>All-time rank${LD_SORT!=="r"?(LD_SORT==="o"?" (off)":" (def)"):""}</th></tr></thead>
-      <tbody>${list.map((r,i)=>`<tr><td>${i+1}</td><td class="l"><div class="who">${faceImg(r.k,"sm")}<span class="n">${esc(DATA.names[r.k])}</span></div></td>
-        <td class="l"><div class="who">${logoImg(r.tm, r.s)}${r.tm||""}</div></td><td>${r.gp.toLocaleString()}</td><td>${sb("r",pm(r.v.r))}</td><td>${sb("o",pm(r.v.o))}</td><td>${sb("d",pm(r.v.d))}</td><td class="sub">${ord(rankOf.get(r.v))} of ${r.v.n.toLocaleString()}</td></tr>`).join("")}</tbody>
+      <tbody>${list.map((r,i)=>`<tr><td>${r.pos}</td><td class="l"><div class="who">${faceImg(r.k,"sm")}<span class="n">${pLink(r.k, esc(DATA.names[r.k]))}</span></div></td>
+        <td class="l"><div class="who">${logoImg(r.tm, r.s)}${r.tm||""}</div></td><td>${r.gp.toLocaleString()}</td><td class="nw">${sb("r",pm(r.v.r))}${bp("r", r)}</td><td class="nw">${sb("o",pm(r.v.o))}${bp("o", r)}</td><td class="nw">${sb("d",pm(r.v.d))}${bp("d", r)}</td><td class="sub">${ord(rankOf.get(r.v))} of ${r.v.n.toLocaleString()}</td></tr>`).join("")}</tbody>
       </table></div><p class="note">Click Total, Off or Def to rank by that number.</p><p class="mlink"><a href="#" data-method="windows">How it's calculated ›</a></p></div>`;
     return;
   }
   const rwW = STATS[stat] && STATS[stat].rw;
+  let pool = null;            // Chip Equity boards: every window in scope (all games), for percentiles
+  const K = ["r","o","d"].includes(LD_SORT) ? LD_SORT : "r";
   if (m==="season" || m==="best"){
+    const byKS = new Map();
     for (let i=0;i<NP;i++){ if (P.t[i]!==TT) continue; if (m==="season" && P.s[i]!==+ldSeason.value) continue;
-      if (P.gp[i]<min) continue;
       if (m==="best" && STATS[stat] && STATS[stat].rw===1 && P.s[i]===0) continue;     // single-season board starts at 1997-98
-      if (rwW){ const rv0 = M.rwOf(P.p[i], P.s[i], rwW); if (!rv0) continue; const rv = rv0; list.push({k:P.p[i], v:rv.r, rv, sortv: Number.isFinite(rv[LD_SORT]) ? rv[LD_SORT] : -99, gp:P.gp[i], s:P.s[i], tm:AB(P.tm[i])}); continue; }
+      if (rwW){ const rv = M.rwOf(P.p[i], P.s[i], rwW); if (!rv) continue;
+        // one row per player-season: a traded player's teams are combined (games summed, team = where he played most)
+        const key = P.p[i]*64 + P.s[i], e = byKS.get(key);
+        if (e){ e.gp += P.gp[i]; if (P.gp[i] > e.g1){ e.g1 = P.gp[i]; e.tm = AB(P.tm[i]); } }
+        else byKS.set(key, {k:P.p[i], v:rv.r, rv, sortv: Number.isFinite(rv[K]) ? rv[K] : -99, gp:P.gp[i], g1:P.gp[i], s:P.s[i], tm:AB(P.tm[i])});
+        continue; }
+      if (P.gp[i]<min) continue;
       const v = rowVal(i,stat); if (Number.isNaN(v)) continue;
       list.push({k:P.p[i], v, sortv: v, gp:P.gp[i], s:P.s[i], tm:AB(P.tm[i])}); }
+    if (rwW){ pool = [...byKS.values()]; list = pool.filter(x => x.gp >= min); M.tieRank(pool, x => x.rv[K], "prk"); }
   } else {
     for (let k=0;k<rowsByPlayer.length;k++){ const rows = playerRows(k); if (!rows.length) continue; const a = agg(rows); if (a.gp<min) continue;
       let v; if (m==="career") v = a[stat];
@@ -1167,17 +1327,20 @@ function renderLeaders(){
       const last = rows[rows.length-1];
       list.push({k, v, sortv:v, gp:a.gp, s:P.s[last], tm:AB(P.tm[last]), span:`${S[P.s[rows[0]]].slice(0,4)}–${S[P.s[last]].slice(0,4)}`}); }
   }
-  list.sort((x,y)=>y.sortv-x.sortv); list = list.slice(0,n);
+  const dec = rwW ? 1 : (STATS[stat] && STATS[stat].fmt === "pct") ? 3 : (m === "career" ? 0 : 1);
+  list = M.tieRank(list, x => x.sortv, "pos", dec).slice(0,n);
+  const scope = m === "season" ? `with a ${rwW}-year window ending ${S[+ldSeason.value]}` : `with a ${rwW}-year window, any season`;
+  const bpl = (key, r) => key === K && pool ? pctl({rank: r.prk, n: pool.length}, scope) : "";
   const isR = false;
   const label = m==="career" ? TOTALS[stat] : STATS[stat].rw ? `${STATS[stat].rw}-year Chip Equity` : STATS[stat].label.replace(" (regular season)","");
   const f = m==="career" ? "int" : STATS[stat].fmt;
   const head = m==="career" ? label : STATS[stat].rw ? `${STATS[stat].rw}-yr Chip Equity` : (stat==="CEPM" ? "Chip Equity" : stat==="ORAPM" ? "Off Chip Equity" : stat==="DRAPM" ? "Def Chip Equity" : stat==="TS" ? "TS%" : stat==="RTS" ? "rTS" : stat.replace("75","/75"));
   const title = {season:`${label}, ${S[+ldSeason.value]}`, best:`${STATS[stat]&&STATS[stat].rw>1?"Best windows":"Best single seasons"}: ${label.charAt(0)==="R"||label.charAt(1)==="-"?label:label.toLowerCase()}`, career:`Career ${label.toLowerCase()}`, careeravg: isR ? `Career ${label} (minutes-weighted, 3+ Chip Equity seasons)` : `Career ${label.toLowerCase()}`}[m];
   if (!list.length){ ldOut.innerHTML = `<div class="msg">${isR && m==="season" && !M.hasRapm(+ldSeason.value) ? `No Chip Equity for ${S[+ldSeason.value]}. The Chip Equity dataset covers ${RAPM_SPAN}.` : "Nobody qualifies. Try a lower minimum number of games."}</div>`; return; }
-  const valCells = r => rwW ? `<td>${sb("r",pm(r.rv.r))}</td><td>${sb("o",pm(r.rv.o))}</td><td>${sb("d",pm(r.rv.d))}</td>` : `<td><strong>${fmt(r.v,f)}</strong></td>`;
+  const valCells = r => rwW ? `<td class="nw">${sb("r",pm(r.rv.r))}${bpl("r", r)}</td><td class="nw">${sb("o",pm(r.rv.o))}${bpl("o", r)}</td><td class="nw">${sb("d",pm(r.rv.d))}${bpl("d", r)}</td>` : `<td><strong>${fmt(r.v,f)}</strong></td>`;
   ldOut.innerHTML = `<div class="box"><h2>${esc(title)}${rwW && LD_SORT!=="r"?` · ranked by ${SORT_NAME[LD_SORT]}`:""} <small>${isC ? "regular season + playoffs" : typeName()}</small></h2><div class="tscroll"><table>
     <thead><tr><th>#</th><th class="l">Player</th><th class="l">Team</th><th class="l">${m==="season"||m==="best"?(rwW?"Window":"Season"):"Years"}</th><th>GP</th>${rwW ? sth("r",esc(head))+sth("o","Off")+sth("d","Def") : `<th>${esc(head)}</th>`}</tr></thead>
-    <tbody>${list.map((r,i)=>`<tr><td>${i+1}</td><td class="l"><div class="who">${faceImg(r.k,"sm")}<span class="n">${esc(DATA.names[r.k])}</span></div></td>
+    <tbody>${list.map((r,i)=>`<tr><td>${r.pos}</td><td class="l"><div class="who">${faceImg(r.k,"sm")}<span class="n">${pLink(r.k, esc(DATA.names[r.k]))}</span></div></td>
       <td class="l"><div class="who">${logoImg(r.tm, r.s)}${r.tm||""}</div></td><td class="l">${m==="season"||m==="best"?(rwW?rwSpan(r.s,rwW):S[r.s]):r.span}</td><td>${r.gp.toLocaleString()}</td>${valCells(r)}</tr>`).join("")}</tbody>
     </table></div><p class="note">${rwW ? "Click a column to rank by it." : "Click a column to sort."}</p>${rwW ? `<p class="mlink"><a href="#" data-method="windows">How it's calculated ›</a></p>` : ""}</div>`;
 }
@@ -1194,14 +1357,118 @@ function fillTeamSelects(){
     sel.innerHTML = (j>1?`<option value="">None</option>`:"") + list.map(t=>`<option value="${AB(t.a)}">${esc(teamName(AB(t.a),s))}</option>`).join("");
     if ([...sel.options].some(o=>o.value===prev)) sel.value = prev; });
 }
+/* ---- full rosters + on/off + WOWY (team pages; data in wowy.json, loaded the first time a team is opened) ---- */
+let tmRoster = null, WOWY = null, WOWY_ERR = null, WOWY_LOADING = null;
+function loadWowy(){
+  if (WOWY || WOWY_LOADING) return WOWY_LOADING || Promise.resolve(WOWY);
+  WOWY_LOADING = fetch("wowy.json", {cache: "force-cache"}).then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+    .then(j => { WOWY = j; return j; }).catch(e => { WOWY_ERR = e.message || "failed"; return null; }).finally(() => { WOWY_LOADING = null; });
+  return WOWY_LOADING;
+}
+const rtg = (poss, pts) => poss > 0 ? 100 * pts / poss : NaN;
+const netOf = v => v && v[0] > 0 ? 100 * (v[1] - v[2]) / v[0] : NaN;
+const sgnf = (v, d=1) => Number.isFinite(v) ? (v >= 0 ? "+" : "") + v.toFixed(d) : "–";
+let WY = {on: null, off: [], size: 3, sort: "p", min: null};
+// every five-man unit per team-season (wowy/wowy_build.py -> lineups/<season>.json), loaded when a team page opens
+const LU = new Map(), LU_ERR = new Map();
+function loadLineups(s){
+  if (LU.has(s)) return Promise.resolve(LU.get(s));
+  return fetch(`lineups/${S[s]}.json`, {cache: "force-cache"}).then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+    .then(j => { LU.set(s, j); return j; }).catch(e => { LU_ERR.set(s, e.message || "failed"); return null; });
+}
+const luSum = (L, on, off) => { const t = [0, 0, 0];
+  for (const r of L){ let ok = true; for (const k of on){ if (r[0]!==k && r[1]!==k && r[2]!==k && r[3]!==k && r[4]!==k){ ok = false; break; } }
+    if (ok) for (const k of off){ if (r[0]===k || r[1]===k || r[2]===k || r[3]===k || r[4]===k){ ok = false; break; } }
+    if (ok){ t[0] += r[5]; t[1] += r[6]; t[2] += r[7]; } }
+  return t; };
+function luCombos(L, size){
+  const m = new Map(), idx = [[0,1],[0,2],[0,3],[0,4],[1,2],[1,3],[1,4],[2,3],[2,4],[3,4]];
+  const sets = size === 2 ? idx : size === 3 ? idx.map(([a,b]) => [0,1,2,3,4].filter(x => x !== a && x !== b)) : size === 4 ? [0,1,2,3,4].map(x => [0,1,2,3,4].filter(y => y !== x)) : [[0,1,2,3,4]];
+  for (const r of L) for (const c of sets){ const key = c.map(j => r[j]).join("."); const v = m.get(key) || m.set(key, [0,0,0]).get(key); v[0] += r[5]; v[1] += r[6]; v[2] += r[7]; }
+  return m; }
+function renderRoster(ab, s){
+  const ai = DATA.abbrs.indexOf(ab), name = teamName(ab, s), rr = teamRec(ab, s), sr = ai >= 0 ? seasonResult(ai, s) : {txt: "", cls: ""};
+  const head = `<p><a href="#" id="tm-back">‹ All teams, ${S[s]}</a></p><div class="box"><div class="profile">${logoImg(ab, s, "lg")}<div><h2 class="pname">${esc(name)}</h2>
+    <div class="teamline">${S[s]} · ${typeName()}${rr && rr.w != null ? ` · ${rr.w}-${rr.l}` : ""} ${sr.txt ? `· <span class="res ${sr.cls}">${sr.txt}</span>` : ""}</div></div></div></div>`;
+  if (!WOWY){
+    tmOut.innerHTML = head + `<div class="msg">${WOWY_ERR ? `Couldn't load the on/off data (${esc(WOWY_ERR)}). It comes from the file wowy.json next to this page: open the site from its Netlify link (not the file on your computer), and make sure wowy.json was uploaded with index.html.` : "Loading rosters and on/off data…"}</div>`;
+    bindRosterBack(s); if (!WOWY_ERR) loadWowy().then(() => { if (tmRoster === ab) renderRoster(ab, s); });
+    return;
+  }
+  const e = WOWY[`${s}|${ai}|${TYPE}`];
+  if (!e){ tmOut.innerHTML = head + `<div class="msg">No ${typeName().toLowerCase()} play-by-play for ${esc(name)} in ${S[s]}.</div>`; bindRosterBack(s); return; }
+  const [tot, pl, pairs] = e, PL = new Map(pl.map(x => [x[0], x]));
+  const off = x => [tot[0] - x[1], tot[1] - x[2], tot[2] - x[3]];
+  const rows = pl.map(x => { const k = x[0], i = (rowsByPlayer[k] || []).find(j => P.s[j] === s && P.t[j] === TYPE), a = i != null ? agg([i]) : null;
+    const tl = playerTeams(k, s, i != null ? AB(P.tm[i]) : ab), traded = tl.length > 1, gpHere = traded ? (tl.find(t => t[0] === ab) || [])[1] : null;
+    const c = M.rwOf(k, s, 1), onN = netOf(x.slice(1)), offN = netOf(off(x));
+    return `<tr><td class="l"><div class="who">${faceImg(k, "sm")}<span class="n">${pLink(k, esc(DATA.names[k]))}</span></div></td>
+      <td>${a ? (traded && gpHere ? gpHere : a.gp) : "–"}</td><td>${a ? fmt(val(a, "MPG"), 1) : "–"}${traded ? `<sup title="Season totals across all his ${S[s]} teams">†</sup>` : ""}</td><td>${a ? fmt(val(a, "PPG"), 1) : "–"}</td><td>${a ? fmt(val(a, "RPG"), 1) : "–"}</td><td>${a ? fmt(val(a, "APG"), 1) : "–"}</td><td>${a ? fmt(val(a, "TS"), "pct") : "–"}</td>
+      <td><strong>${pm(c ? c.r : NaN)}</strong></td><td>${Math.round(x[1]).toLocaleString()}</td><td>${sgnf(onN)}</td><td>${sgnf(offN)}</td><td><strong>${sgnf(onN - offN)}</strong></td></tr>`; }).join("");
+  // ---- WOWY for any group: these players on the floor together, those sitting ----
+  const L = (LU.get(s) || {})[`${ai}|${TYPE}`], luState = LU.has(s) ? (L ? "ok" : "none") : LU_ERR.has(s) ? "err" : "loading";
+  if (luState === "loading") loadLineups(s).then(() => { if (tmRoster === ab && +tmSeason.value === s) renderRoster(ab, s); });
+  if (!WY.on || WY.on.some(k => !PL.has(k))) WY.on = [pl[0][0]];
+  WY.off = WY.off.filter(k => PL.has(k) && !WY.on.includes(k));
+  const nm = k => esc(DATA.names[k]), list = ks => ks.map(nm).join(", ").replace(/, ([^,]*)$/, " and $1");
+  const lineRow = (lab, v, note) => `<tr><td class="l">${lab}</td><td>${v && v[0] > 0 ? Math.round(v[0]).toLocaleString() : "–"}</td><td>${fmt(rtg(v[0], v[1]), 1)}</td><td>${fmt(rtg(v[0], v[2]), 1)}</td><td><strong>${sgnf(netOf(v))}</strong></td></tr>`;
+  const offTxt = "", offNote = WY.off.length ? `<p class="note" style="margin:0 0 6px">Every row: ${list(WY.off)} off the floor.</p>` : "";
+  let wy = "";
+  if (L){
+    const on = WY.on, off = WY.off;
+    wy += lineRow(on.length > 1 ? `<b>${list(on)}</b> together${offTxt}` : `<b>${nm(on[0])}</b> on the floor${offTxt}`, luSum(L, on, off));
+    if (on.length > 1) for (const k of on) wy += lineRow(`${list(on.filter(x => x !== k))} <b>without</b> ${nm(k)}${offTxt}`, luSum(L, on.filter(x => x !== k), off.concat([k])));
+    wy += lineRow(on.length > 1 ? `<b>None</b> of them${offTxt}` : `${nm(on[0])} <b>off</b> the floor${offTxt}`, luSum(L, [], off.concat(on)));
+  } else {      // lineup file not loaded (yet): plain on/off for the first player
+    const A = PL.get(WY.on[0]); wy = lineRow(`${nm(WY.on[0])} on the floor`, A.slice(1, 4)) + lineRow(`${nm(WY.on[0])} off the floor`, off(A));
+  }
+  const chip = (k, grp) => `<span class="wy-chip">${nm(k)}<button data-wyx="${grp}|${k}" aria-label="Remove ${nm(k)}">×</button></span>`;
+  const addSel = (id, grp, lab, full) => full ? "" : `<select id="${id}" class="wy-add" aria-label="${lab}"><option value="">+ ${lab}</option>${pl.filter(x => !WY.on.includes(x[0]) && !WY.off.includes(x[0])).map(x => `<option value="${x[0]}">${nm(x[0])}</option>`).join("")}</select>`;
+  // best units of a size
+  const size = WY.size, minP = WY.min != null ? WY.min : Math.round((TYPE ? 0.25 : 1) * ({2: 300, 3: 200, 4: 120, 5: 60}[size]));
+  let combos = "";
+  if (L){
+    const C = [...luCombos(L, size).entries()].filter(([, v]) => v[0] >= minP).map(([k, v]) => ({ks: k.split(".").map(Number), v, p: v[0], o: rtg(v[0], v[1]), d: -rtg(v[0], v[2]), n: netOf(v)}));
+    const K = WY.sort; C.sort((x, y) => (y[K] - x[K]));
+    const th = (k, lab) => `<th data-wys="${k}" class="sortable${K === k ? " sorted" : ""}" title="Sort by ${lab.toLowerCase()}">${lab}</th>`;
+    combos = C.length ? `<div class="tscroll"><table><thead><tr><th>#</th><th class="l">${size === 5 ? "Lineup" : size + "-man unit"}</th>${th("p", "Poss")}${th("o", "Off rtg")}${th("d", "Def rtg")}${th("n", "Net")}</tr></thead><tbody>
+      ${C.slice(0, 15).map((c, i) => `<tr><td>${i + 1}</td><td class="l"><a href="#" data-wyset="${c.ks.join(".")}">${c.ks.map(nm).join(" · ")}</a></td><td>${Math.round(c.p).toLocaleString()}</td><td>${fmt(c.o, 1)}</td><td>${fmt(-c.d, 1)}</td><td><strong>${sgnf(c.n)}</strong></td></tr>`).join("")}</tbody></table></div>
+      <p class="note">${C.length.toLocaleString()} ${size === 5 ? "lineups" : size + "-man units"} with ${minP.toLocaleString()}+ possessions. Click one to load it above.</p>`
+      : `<div class="msg">No ${size}-man unit reached ${minP.toLocaleString()} possessions. Try a lower minimum.</div>`;
+  }
+  tmOut.innerHTML = head + `
+    <div class="box"><h2>With or without you <small>any group of players · team results per 100 possessions · garbage time out</small></h2>
+      <div class="wy-pick"><div><span class="wy-lab">On the floor</span>${WY.on.map(k => chip(k, "on")).join("")}${addSel("wy-on", "on", "add player", WY.on.length >= 5)}</div>
+        <div><span class="wy-lab">Off the floor</span>${WY.off.map(k => chip(k, "off")).join("")}${addSel("wy-off", "off", "add player", WY.off.length >= 5)}</div></div>
+      ${offNote}<div class="tscroll"><table class="wy-t"><thead><tr><th class="l">Lineups</th><th>Poss</th><th title="Points scored per 100 possessions">Off rtg</th><th title="Points allowed per 100 possessions">Def rtg</th><th>Net</th></tr></thead><tbody>${wy}</tbody></table></div>
+      ${luState === "loading" ? `<p class="note">Loading lineups…</p>` : luState === "err" ? `<p class="note">Couldn't load lineups/${S[s]}.json (${esc(LU_ERR.get(s))}), so only plain on/off is shown. It must be deployed next to index.html.</p>` : ""}
+      <p class="note">Raw on-court results: they include the teammates and opponents each player shared the floor with. Chip Equity is the version that separates them.</p></div>
+    ${L ? `<div class="box"><h2>Best units <small>most-used groups that played together · ${typeName().toLowerCase()} · click a column to sort</small></h2>
+      <div class="controls" style="margin:0 0 10px"><div class="field"><label for="wy-size">Group</label><select id="wy-size">${[2,3,4,5].map(n => `<option value="${n}" ${n === size ? "selected" : ""}>${n === 5 ? "5-man lineups" : n + "-man units"}</option>`).join("")}</select></div>
+        <div class="field"><label for="wy-min">Min. possessions</label><input type="number" id="wy-min" min="0" step="25" value="${minP}"></div></div>${combos}</div>` : ""}
+    <div class="box"><h2>Full roster <small>${S[s]} ${typeName().toLowerCase()} · on/off = team net rating per 100 with him on vs. off the floor</small></h2><div class="tscroll"><table>
+      <thead><tr><th class="l">Player</th><th>GP</th><th>MPG</th><th>PTS</th><th>REB</th><th>AST</th><th>TS%</th><th title="Single-season Chip Equity">Chip Equity</th><th title="Possessions on the floor for this team">Poss</th><th>On</th><th>Off</th><th>On − off</th></tr></thead>
+      <tbody>${rows}</tbody></table></div><p class="note">† traded that season: per-game stats are his season totals across teams; GP and on/off are for this team only.</p></div>`;
+  bindRosterBack(s);
+  const re = () => renderRoster(ab, s);
+  for (const [id, grp] of [["wy-on", "on"], ["wy-off", "off"]]){ const el = document.getElementById(id); if (el) el.onchange = ev => { if (ev.target.value !== "") { WY[grp].push(+ev.target.value); re(); } }; }
+  tmOut.querySelectorAll("[data-wyx]").forEach(b => b.onclick = () => { const [g, k] = b.dataset.wyx.split("|"); WY[g] = WY[g].filter(x => x !== +k); if (!WY.on.length) WY.on = null; re(); });
+  tmOut.querySelectorAll("[data-wys]").forEach(t => t.onclick = () => { WY.sort = t.dataset.wys; re(); });
+  tmOut.querySelectorAll("[data-wyset]").forEach(a => a.onclick = ev => { ev.preventDefault(); WY.on = a.dataset.wyset.split(".").map(Number); WY.off = []; re(); tmOut.querySelector(".wy-pick").scrollIntoView({block: "center"}); });
+  const sz = document.getElementById("wy-size"); if (sz) sz.onchange = ev => { WY.size = +ev.target.value; WY.min = null; re(); };
+  const mn = document.getElementById("wy-min"); if (mn) mn.onchange = ev => { WY.min = Math.max(0, +ev.target.value || 0); re(); };
+}
+function bindRosterBack(s){ const bk = document.getElementById("tm-back"); if (bk) bk.onclick = ev => { ev.preventDefault(); tmRoster = null; renderTeams(); window.scrollTo({top: 0}); }; }
 function renderTeams(){
   const s = +tmSeason.value, all = teamsIn(s);
+  tmSel.forEach(x => { const f = x.closest(".field"); if (f) f.hidden = !!tmRoster; });     // team pickers hide on a team's own page
+  if (tmRoster){ renderRoster(tmRoster, s); return; }
   if (!all.length){ tmOut.innerHTML = `<div class="msg">No ${typeName().toLowerCase()} team data for ${S[s]}.</div>`; return; }
   const picks = [...new Set(tmSel.map(x=>x.value).filter(Boolean))].map(ab=>all.find(t=>AB(t.a)===ab)).filter(Boolean);
   const recOf = t => { const rr = teamRec(AB(t.a), s); return rr && rr.w!=null ? `${rr.w}-${rr.l}` : "–"; };
   let html = "";
   if (picks.length){
-    const heads = picks.map(t=>{ const ab=AB(t.a); return `<td>${logoImg(ab,s,"lg")}<div class="nm">${esc(teamName(ab,s))}</div><div class="yr">${S[s]} · ${recOf(t)}</div></td>`; }).join("");
+    const heads = picks.map(t=>{ const ab=AB(t.a); return `<td>${logoImg(ab,s,"lg")}<div class="nm"><a href="#" data-roster="${ab}" class="plink">${esc(teamName(ab,s))}</a></div><div class="yr">${S[s]} · ${recOf(t)}</div></td>`; }).join("");
     const defs = [["Record",t=>recOf(t),null,null],["Win %",t=>{const rr=teamRec(AB(t.a),s); return rr? rr.wpct : NaN;},"pct",true],["Playoff result",t=>seasonResult(t.a, s).txt,null,null],
       ["Points scored",t=>t.ppg,1,true],["Points allowed",t=>t.oppg,1,false],["Offensive rating",t=>t.off,1,true],["Defensive rating",t=>t.def,1,false],["Net rating",t=>t.net,1,true],
       ["Pace",t=>t.pace,1,null],["True shooting",t=>t.ts,"pct",true],["rTS (vs. league)",t=>t.ts - M.lgTS(s),"rel",true],["Effective FG%",t=>t.efg,"pct",true],
@@ -1216,21 +1483,23 @@ function renderTeams(){
     html += `<div class="box"><h2>Top performers <small>${S[s]} regular season</small></h2><div class="tscroll"><table>
       <thead><tr><th class="l">Team</th><th class="l">Player</th><th>MPG</th><th>PTS</th><th>REB</th><th>AST</th><th>TS%</th><th>3-yr Chip Equity</th><th>Off</th><th>Def</th></tr></thead><tbody>
       ${t3.map(({ab, ro}) => (ro && ro.top3Info.length ? ro.top3Info : []).map((p,j)=>{ const k=P.p[p.i], a=agg([p.i]), c = M.rwOf(k, s, 3);
-        return `<tr><td class="l"><div class="who">${logoImg(ab,s)}${ab}</div></td><td class="l"><div class="who">${faceImg(k,"sm")}<span class="n">${esc(DATA.names[k])}</span></div></td>
-          <td>${fmt(val(a,"MPG"),1)}</td><td>${fmt(val(a,"PPG"),1)}</td><td>${fmt(val(a,"RPG"),1)}</td><td>${fmt(val(a,"APG"),1)}</td><td>${fmt(val(a,"TS"),"pct")}</td><td><strong>${pm(c?c.r:NaN)}</strong></td><td>${pm(c?c.o:NaN)}</td><td>${pm(c?c.d:NaN)}</td></tr>`; }).join("")).join("")}
+        return `<tr><td class="l"><div class="who">${logoImg(ab,s)}${ab}</div></td><td class="l"><div class="who">${faceImg(k,"sm")}<span class="n">${pLink(k, esc(DATA.names[k]))}</span></div></td>
+          <td>${fmt(val(a,"MPG"),1)}</td><td>${fmt(val(a,"PPG"),1)}</td><td>${fmt(val(a,"RPG"),1)}</td><td>${fmt(val(a,"APG"),1)}</td><td>${fmt(val(a,"TS"),"pct")}</td><td class="nw"><strong>${pm(c?c.r:NaN)}</strong>${pctl(c)}</td><td>${pm(c?c.o:NaN)}</td><td>${pm(c?c.d:NaN)}</td></tr>`; }).join("")).join("")}
       </tbody></table></div></div>`;
   }
   const sorted = all.slice().sort((a,b)=>b.net-a.net);
   html += `<div class="box"><h2>All teams by net rating, ${S[s]} <small>${typeName()}</small></h2><div class="tscroll"><table>
     <thead><tr><th>#</th><th class="l">Team</th><th>W-L</th><th class="l">Playoffs</th><th>Off</th><th>Def</th><th>Net</th><th>Pace</th><th>TS%</th><th>rTS</th><th>PPG</th><th>Opp PPG</th></tr></thead>
-    <tbody>${sorted.map((t,i)=>{ const ab=AB(t.a), sr=seasonResult(t.a, s); return `<tr><td>${i+1}</td><td class="l"><div class="who">${logoImg(ab,s)}<span class="n">${esc(teamName(ab,s))}</span></div></td><td>${recOf(t)}</td>
+    <tbody>${sorted.map((t,i)=>{ const ab=AB(t.a), sr=seasonResult(t.a, s); return `<tr><td>${i+1}</td><td class="l"><a href="#" class="who n" data-roster="${ab}">${logoImg(ab,s)}<span class="n">${esc(teamName(ab,s))}</span></a></td><td>${recOf(t)}</td>
       <td class="l"><span class="res ${sr.cls}">${sr.txt}</span></td><td>${fmt(t.off,1)}</td><td>${fmt(t.def,1)}</td><td><strong>${t.net>0?"+":""}${fmt(t.net,1)}</strong></td><td>${fmt(t.pace,1)}</td><td>${fmt(t.ts,"pct")}</td><td>${fmt(t.ts-M.lgTS(s),"rel")}</td><td>${fmt(t.ppg,1)}</td><td>${fmt(t.oppg,1)}</td></tr>`; }).join("")}</tbody></table></div>
     </div>`;
+  html = html.replace(`All teams by net rating, ${S[s]} <small>`, `All teams by net rating, ${S[s]} <small>click a team for its full roster, on/off and WOWY · `);
   tmOut.innerHTML = html;
+  tmOut.querySelectorAll("[data-roster]").forEach(a => a.addEventListener("click", ev => { ev.preventDefault(); tmRoster = a.dataset.roster; WY = {on: null, off: [], size: 3, sort: "p", min: null}; renderTeams(); window.scrollTo({top: 0}); loadWowy(); }));
   const sim = document.getElementById("tm-sim");
   if (sim) sim.addEventListener("click", ()=> openMatchup(AB(picks[0].a), s, AB(picks[1].a), s));
 }
-tmSeason.addEventListener("change", ()=>{ fillTeamSelects(); renderTeams(); });
+tmSeason.addEventListener("change", ()=>{ fillTeamSelects(); WY = {on: null, off: [], size: 3, sort: "p", min: null}; renderTeams(); });
 tmSel.forEach(x=>x.addEventListener("change", renderTeams));
 
 /* ---------------- LEAGUE ---------------- */
@@ -1350,6 +1619,7 @@ const perName = p => p <= 4 ? `Q${p}` : p === 5 ? "OT" : `${p-4}OT`;
 
 // face from a direct URL (live feeds), falling back to NBA.com by name match, then initials
 const nameIdx = new Map(DATA.names.map((n,k)=>[norm(n), k]));
+const KOF_PID = new Map(DATA.ids.map((id,k)=>[+id, k]));
 function liveFace(url, name, nbaId){
   if (!url && nbaId) url = `https://cdn.nba.com/headshots/nba/latest/260x190/${nbaId}.png`;
   const k = nameIdx.get(norm(name||"")), alt = k!=null ? `https://cdn.nba.com/headshots/nba/latest/260x190/${DATA.ids[k]}.png` : "";
@@ -1474,7 +1744,7 @@ async function renderGameCenter(useCache){
   const boxTable = (side, t) => { const rows = (d.box[side] || []); if (!rows.length) return "";
     const sorted = rows.slice().sort((a,b) => (b.starter - a.starter) || ((+b.pts||0) - (+a.pts||0)));
     return `<div class="box"><h2>${esc(t.name)} <small>box score</small></h2><div class="tscroll"><table class="bx"><thead><tr><th class="l">Player</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>FG</th><th>3PT</th><th>FT</th><th>STL</th><th>BLK</th><th>TO</th><th>+/-</th></tr></thead><tbody>
-      ${sorted.map(p => `<tr class="${p.starter ? "" : "bench"}"><td class="l"><div class="who">${liveFace(p.img, p.nbaName || p.name, p.pid)}<span>${esc(p.name)}</span></div></td><td>${esc(p.min)}</td><td><strong>${esc(p.pts)}</strong></td><td>${esc(p.reb)}</td><td>${esc(p.ast)}</td><td>${esc(p.fg)}</td><td>${esc(p.tp)}</td><td>${esc(p.ft)}</td><td>${esc(p.stl)}</td><td>${esc(p.blk)}</td><td>${esc(p.tov)}</td><td>${esc(p.pm)}</td></tr>`).join("")}</tbody></table></div></div>`; };
+      ${sorted.map(p => `<tr class="${p.starter ? "" : "bench"}"><td class="l"><div class="who">${liveFace(p.img, p.nbaName || p.name, p.pid)}<span>${pLink(p.pid != null && KOF_PID.has(+p.pid) ? KOF_PID.get(+p.pid) : nameIdx.get(norm(p.nbaName || p.name || "")), esc(p.name))}</span></div></td><td>${esc(p.min)}</td><td><strong>${esc(p.pts)}</strong></td><td>${esc(p.reb)}</td><td>${esc(p.ast)}</td><td>${esc(p.fg)}</td><td>${esc(p.tp)}</td><td>${esc(p.ft)}</td><td>${esc(p.stl)}</td><td>${esc(p.blk)}</td><td>${esc(p.tov)}</td><td>${esc(p.pm)}</td></tr>`).join("")}</tbody></table></div></div>`; };
   const boxes = (d.box.away.length || d.box.home.length) ? `<div class="grid2">${boxTable("away", g.away)}${boxTable("home", g.home)}</div>` : "";
 
   // play-by-play list (newest first)
@@ -1519,12 +1789,13 @@ gmDate.addEventListener("change", ()=>{ if (!gmDate.value) return; gcGame = null
 const hmOut = document.getElementById("hm-out");
 let hmGamesLoaded = false;
 function renderHome(){
-  const s = LATEST;
+  const s = HEAD, minGp = s === LATEST && INPROG ? Math.max(5, Math.floor(INPROG.team_games / 2)) : 40;
   // leaders: single-season Chip Equity, latest season
   const cand = []; const seen = new Set();
-  for (let i=0;i<NP;i++){ if (P.s[i]!==s || P.t[i]!==0 || seen.has(P.p[i])) continue; seen.add(P.p[i]); const v = M.rwOf(P.p[i], s, 1); if (v && P.gp[i] >= 40) cand.push({k:P.p[i], v:v.r, o:v.o, d:v.d, tm:AB(P.tm[i])}); }
+  for (let i=0;i<NP;i++){ if (P.s[i]!==s || P.t[i]!==0 || seen.has(P.p[i])) continue; seen.add(P.p[i]); const v = M.rwOf(P.p[i], s, 1); if (v && P.gp[i] >= minGp) cand.push({rv:v, k:P.p[i], v:v.r, o:v.o, d:v.d, tm:AB(P.tm[i])}); }
   cand.sort((a,b)=>b.v-a.v);
-  const lead = cand.slice(0,5).map((r,j)=>`<div class="hrow"><span class="n">${j+1}</span>${faceImg(r.k,"sm")}<span>${esc(DATA.names[r.k])} <span class="muted">${esc(r.tm)} · o ${pm(r.o)} · d ${pm(r.d)}</span></span><span class="v">${pm(r.v)}</span></div>`).join("");
+  M.tieRank(cand, x => x.v, "pos");
+  const lead = cand.slice(0,5).map((r,j)=>`<div class="hrow"><span class="n">${r.pos}</span>${faceImg(r.k,"sm")}<span>${pLink(r.k, esc(DATA.names[r.k]))} <span class="muted">${esc(r.tm)} · o ${pm(r.o)} · d ${pm(r.d)}</span></span><span class="v">${pm(r.v)}${pctl(r.rv)}</span></div>`).join("");
   // teams: best net rating
   const teams = M.tm.filter(r=>r.s===s && r.t===0).sort((a,b)=>b.net-a.net);
   const tms = teams.slice(0,5).map((r,j)=>`<div class="hrow"><span class="n">${j+1}</span>${logoImg(AB(r.a), s)}<span>${esc(teamName(AB(r.a), s))} <span class="muted">${r.w}-${r.l}</span></span><span class="v">${r.net>=0?"+":""}${r.net.toFixed(1)}</span></div>`).join("");
@@ -1539,12 +1810,12 @@ function renderHome(){
     if (!BT) BT = { full: M.backtest(), base: M.backtest({wTop:0, wLuck:0, wRot:0, k:1, hca:4}), dOff: M.backtest({wTop:0}) };
     mu = `<div class="hsplit"><div>${logoImg(W, ss, "lg")}<div class="hbig">${pctTxt(pW)}</div><div class="muted">${esc(teamNick(W, ss))}</div></div><div class="muted">vs</div><div>${logoImg(Lz, ss, "lg")}<div class="hbig">${pctTxt(1-pW)}</div><div class="muted">${esc(teamNick(Lz, ss))}</div></div></div>
       <p style="margin:0 0 6px"><b>✓ ${esc(teamNick(W, ss))} won ${x.ww}-${x.lw}</b> <span class="muted">in the ${S[ss]} ${RN[x.round]}</span></p>
-      <p class="muted" style="margin:0">The model's pregame odds next to what really happened. Across all ${BT.full.n} playoff series since 1997 it picked the winner 75% of the time.</p>`;
+      <p class="muted" style="margin:0">The model's pregame odds next to what really happened. Across all ${BT.full.n} playoff series since 1997 it picked the winner 76% of the time (each season tested by a model that never saw it).</p>`;
     hmMu = [W, Lz, ss]; }
-  // compare teaser: best 3-year Chip Equity ever
+  // compare teaser: best single-season Chip Equity ever
   const lbK = findPlayer("LeBron James"), mjK = findPlayer("Michael Jordan"), cuK = findPlayer("Stephen Curry");
-  const pk = k => { const v = k>=0 ? M.peakOf(k, PEAK_HEAD) : null; return v ? v.r : NaN; };
-  const cmp = [lbK, cuK].filter(k=>k>=0).map(k=>`<div class="hrow"><span class="n"></span>${faceImg(k,"sm")}<span>${esc(DATA.names[k])}</span><span class="v">${pm(pk(k))}</span></div>`).join("");
+  const pk = k => { const v = k>=0 ? peakGet(k, "Peak 1Y CEPM") : null; return v ? v.r : NaN; };
+  const cmp = [lbK, cuK].filter(k=>k>=0).map(k=>`<div class="hrow"><span class="n"></span>${faceImg(k,"sm")}<span>${pLink(k, esc(DATA.names[k]))}</span><span class="v">${pm(pk(k))}</span></div>`).join("");
   // league trend
   const L = DATA.league || [];
   // league trends: first season vs. latest, with a small line of every season in between
@@ -1567,16 +1838,16 @@ function renderHome(){
   const lg = L.length ? `<div class="muted" style="font-size:.85em;margin-bottom:2px">${S[0]} → ${S[L.length-1]}, league average per team per game</div>${TR.map(trendRow).join("")}` : "";
   const card = (tab, title, sub, body, cta) => `<div class="box hcard" tabindex="0" role="link" data-go="${tab}"><h2>${title} <small>${sub}</small></h2>${body}<div class="go">${cta} ›</div></div>`;
   hmOut.innerHTML = `<div class="home-hero">
-      <div class="home-kicker">1996-97 → ${S[s]} · Chip Equity · playoff odds · live games</div>
+      <div class="home-kicker">1996-97 → ${S[LATEST]} · Chip Equity · playoff odds · live games</div>${INPROG ? `<div class="ip-banner"><span class="ip-tag">in progress</span> ${esc(ipNote())}. Chip Equity updates every week; a player gets a single-season number once he passes 1,000 possessions${HEAD !== LATEST ? `, and the headline numbers stay on ${S[HEAD]} until 20 games in` : ""}.</div>` : ""}
       <h2 class="home-title">Basketball <span>Done Right</span></h2>
       <p class="home-sub">Every player and team since 1996-97: real impact numbers, head-to-head comparisons, playoff series odds, and live games with play-by-play.</p>
-      <div class="home-search"><input type="text" id="hm-q" list="plist" placeholder="Search any player, e.g. Jokic" autocomplete="off"><button class="btn" id="hm-go">Go</button></div></div>
+      <div class="home-search"><input type="text" id="hm-q" placeholder="Search any player, e.g. Jokic" autocomplete="off"><button class="btn" id="hm-go">Go</button></div></div>
     <div class="home-grid">
       ${card("games", "Live Feed", "today", `<div id="hm-games"><div class="muted">Loading today's games…</div></div>`, "Scores & play-by-play")}
       ${card("matchup", "Playoff Matchup", "model vs. reality", mu, "Simulate any series")}
       ${card("leaders", "Leaders", `Single-season Chip Equity, ${S[s]}`, lead, "All leaderboards")}
       ${card("teams", "Teams", `net rating, ${S[s]}`, tms, "Compare teams")}
-      ${card("compare", "Compare", "best 3-year Chip Equity ever", cmp, "Compare players")}
+      ${card("compare", "Compare", "best single-season Chip Equity ever", cmp, "Compare players")}
       ${card("league", "League", "how the game changed", lg, "League trends")}
     </div>`;
   hmOut.querySelectorAll(".hcard").forEach(c => { const go = () => { const tab = c.dataset.go;
@@ -1586,6 +1857,7 @@ function renderHome(){
       show(tab); window.scrollTo({top:0}); };
     c.addEventListener("click", e => { if (e.target.closest("input,button,a")) return; go(); });
     c.addEventListener("keydown", e => { if (e.key==="Enter"){ e.preventDefault(); go(); } }); });
+  attachSuggest(document.getElementById("hm-q"));
   const q = document.getElementById("hm-q"), goP = () => { if (findPlayer(q.value) < 0) return; plQ.value = q.value; show("players"); window.scrollTo({top:0}); };
   document.getElementById("hm-go").onclick = goP; q.addEventListener("keydown", e => { if (e.key==="Enter") goP(); }); q.addEventListener("change", goP);
   loadHomeGames();
@@ -1750,11 +2022,76 @@ const CUR = (() => {
     })();
     return pending;
   }
-  return {C, prm, ensure, state: () => st, ready: () => st.status === "ready", gameProb, seriesProb, seasonStart, norm};
+  // ---- this season's starters, from ESPN box scores: the most-used starting five so far (ties: the most recent) ----
+  // Finished games never change, so each game's starters are kept in the browser and only new games are fetched.
+  const S5 = {}, S5_BUSY = {};
+  const s5Key = ab => `bdr-starters:${C.season}:${ab}`;
+  const S5_MEM = {};                                    // in-memory copy, in case browser storage is full or blocked
+  const s5Load = ab => { if (S5_MEM[ab]) return S5_MEM[ab]; try { return JSON.parse(localStorage.getItem(s5Key(ab)) || "{}"); } catch(e){ return {}; } };
+  const s5Save = (ab, games) => { S5_MEM[ab] = games; try { localStorage.setItem(s5Key(ab), JSON.stringify(games)); } catch(e){} };
+  function s5Summary(games){
+    const list = Object.entries(games).filter(([,g]) => g.ids && g.ids.length === 5).sort((a,b) => a[1].t - b[1].t);
+    if (!list.length) return null;
+    const by = new Map(), starts = new Map();
+    list.forEach(([id, g], i) => { const key = g.ids.slice().sort().join("-"); const e = by.get(key) || {ids: g.ids, n: 0, last: -1}; e.n++; e.last = i; by.set(key, e);
+      g.ids.forEach(x => starts.set(x, (starts.get(x) || 0) + 1)); });
+    const top = [...by.values()].sort((a,b) => (b.n - a.n) || (b.last - a.last))[0];
+    return {ids: top.ids, n: top.n, games: list.length, starts};
+  }
+  async function seasonStarters(ab){
+    if (S5_BUSY[ab]) return S5_BUSY[ab];
+    const tid = Object.keys(ESPN_TEAMS).find(id => ESPN_TEAMS[id] === ab); if (!tid) return null;
+    S5_BUSY[ab] = (async () => {
+      const games = s5Load(ab), yr = +C.season.slice(0, 4) + 1;
+      let sched = null;
+      for (const h of HOSTS){ try { sched = await getT(`${h}/site/v2/sports/basketball/nba/teams/${tid}/schedule?season=${yr}&seasontype=2`, 8000); break; } catch(e){} }
+      const done = ((sched && sched.events) || []).filter(e => { const c = e.competitions && e.competitions[0], st = c && c.status && c.status.type;
+        return st && (st.completed || st.state === "post") && new Date(e.date) >= seasonStart; });
+      const todo = done.filter(e => !games[e.id] || !games[e.id].box);
+      await pool(todo, 4, async e => {
+        for (const h of HOSTS){ try {
+          const d = await getT(`${h}/site/v2/sports/basketball/nba/summary?event=${encodeURIComponent(e.id)}`, 9000);
+          const tp = ((d.boxscore && d.boxscore.players) || []).find(x => x.team && String(x.team.id) === String(tid)); if (!tp) return;
+          const ids = []; for (const st of (tp.statistics || [])) for (const a of (st.athletes || [])) if (a.starter && a.athlete && a.athlete.id && !ids.includes(String(a.athlete.id))) ids.push(String(a.athlete.id));
+          // every player's box line: [min, pts, reb, ast, stl, blk, tov, fgm, fga, 3pm, 3pa, ftm, fta, oreb, pf, +/-]
+          const box = {}, st0 = (tp.statistics || [])[0];
+          if (st0){ const lab = (st0.labels || st0.names || []).map(x => String(x).toUpperCase()), key = (st0.keys || []).map(String);
+            const at = (L, K) => { let i = lab.indexOf(L); if (i < 0 && K) i = key.findIndex(x => x === K || x.startsWith(K)); return i; };
+            const I = {min: at("MIN", "minutes"), pts: at("PTS", "points"), reb: at("REB", "rebounds"), ast: at("AST", "assists"), stl: at("STL", "steals"), blk: at("BLK", "blocks"),
+              tov: at("TO", "turnovers"), fg: at("FG", "fieldGoalsMade"), tp: at("3PT", "threePointFieldGoalsMade"), ft: at("FT", "freeThrowsMade"), oreb: at("OREB", "offensiveRebounds"), pf: at("PF", "fouls"), pm: at("+/-", "plusMinus")};
+            const num = (a, i) => { const v = i >= 0 ? parseFloat(String(a[i]).replace("+", "")) : NaN; return Number.isFinite(v) ? v : 0; };
+            const pair = (a, i) => { const m = i >= 0 ? String(a[i]).match(/(\d+)\s*-\s*(\d+)/) : null; return m ? [+m[1], +m[2]] : [0, 0]; };
+            for (const a of (st0.athletes || [])){ if (!a.athlete || !a.athlete.id || a.didNotPlay || !a.stats || !a.stats.length) continue;
+              const x = a.stats, m = num(x, I.min); if (m <= 0) continue;
+              box[String(a.athlete.id)] = [m, num(x, I.pts), num(x, I.reb), num(x, I.ast), num(x, I.stl), num(x, I.blk), num(x, I.tov), ...pair(x, I.fg), ...pair(x, I.tp), ...pair(x, I.ft), num(x, I.oreb), num(x, I.pf), num(x, I.pm)]; } }
+          const cs = (e.competitions && e.competitions[0] && e.competitions[0].competitors) || [], me = cs.find(c => String(c.team && c.team.id) === String(tid)), op = cs.find(c => c !== me);
+          const sc = c => c && c.score != null ? +(typeof c.score === "object" ? (c.score.value != null ? c.score.value : c.score.displayValue) : c.score) : NaN;
+          const opp = op && op.team ? (ESPN_TEAMS[String(op.team.id)] || op.team.abbreviation || "") : "";
+          games[e.id] = {t: +new Date(e.date), ids, box, opp, home: me ? me.homeAway === "home" : null, us: sc(me), them: sc(op)};
+          return; } catch(err){} }
+      });
+      s5Save(ab, games); S5[ab] = s5Summary(games); return S5[ab];
+    })();
+    try { return await S5_BUSY[ab]; } finally { delete S5_BUSY[ab]; }
+  }
+  const startersOf = ab => S5[ab] || null;
+  // this season's box scores for a team (filled by seasonStarters, from ESPN): per player totals and game logs
+  function boxOf(ab){
+    const games = Object.entries(s5Load(ab)).filter(([, g]) => g.box).sort((a, b) => a[1].t - b[1].t); if (!games.length) return null;
+    const pl = new Map();
+    for (const [gid, g] of games) for (const [id, x] of Object.entries(g.box)){
+      const e = pl.get(id) || pl.set(id, {gp: 0, tot: new Array(16).fill(0), log: []}).get(id);
+      e.gp++; x.forEach((v, i) => e.tot[i] += v); e.log.push({gid, t: g.t, opp: g.opp, home: g.home, us: g.us, them: g.them, x}); }
+    return {games: games.length, players: pl};
+  }
+  const lineOf = e => { if (!e || !e.gp) return null; const t = e.tot, g = e.gp, tsa = 2 * (t[8] + 0.44 * t[12]);
+    return {gp: g, mpg: t[0]/g, pts: t[1]/g, reb: t[2]/g, ast: t[3]/g, stl: t[4]/g, blk: t[5]/g, tov: t[6]/g, ts: tsa ? t[1]/tsa : NaN, fg: t[8] ? t[7]/t[8] : NaN, tp: t[10] ? t[9]/t[10] : NaN, tpm: t[9]/g, ft: t[12] ? t[11]/t[12] : NaN}; };
+  return {C, prm, ensure, state: () => st, ready: () => st.status === "ready", gameProb, seriesProb, seasonStart, norm, seasonStarters, startersOf, boxOf, lineOf};
 })();
 
 const MLINK_HTML = sec => `<p class="mlink"><a href="#" data-method="${sec}">How it's calculated ›</a></p>`;
 const seOut = document.getElementById("se-out");
+let SE_VIEW = "cur";                                   // roster stats: this season (live, ESPN box scores) or last season
 let seTeam = null;                                     // abbreviation of the open team profile, or null for the team list
 document.getElementById("se-refresh").addEventListener("click", async ()=>{ seOut.innerHTML = `<div class="msg">Refreshing rosters…</div>`; await CUR.ensure(true); renderSeason(); });
 const STARTS = (CUR && CUR.C.starts) || {};
@@ -1770,7 +2107,7 @@ function teamPlayers(ab){
   const T = CUR.state().teams[ab]; if (!T) return [];
   return T.players.map(p => {
     // a player who missed last season (e.g. injury) is shown with his last season that has games
-    const k = p.k, ls = lastSeasonOf(k) || lastSeasonOf(k, LATEST - 1), c = k != null ? M.rwOf(k, LATEST, 3) : null;
+    const k = p.k, ls = lastSeasonOf(k) || lastSeasonOf(k, LATEST - 1), c = k != null ? (M.rwOf(k, LATEST, 1) || M.rwOf(k, LATEST - 1, 1) || M.rwOf(k, LATEST, 3)) : null;   // single-season Chip Equity (last season played; 3-year if none)
     const pid = p.rec ? p.rec[0] : null;
     return {...p, k, ls, cepm: c, starts: pid != null ? (STARTS[pid] || 0) : 0,
             impact: c ? c.r : -Infinity};      // Chip Equity already counts minutes
@@ -1913,16 +2250,24 @@ async function loadEspnBpi(){
 }
 const rangeStr = r => r.band >= 0.5 ? `${Math.max(0, Math.round(r.wins - r.band))}–${Math.min(82, Math.round(r.wins + r.band))} wins` : "final";
 function standingsBox(){
-  loadEspnBpi();
+  loadEspnBpi();                                   // ESPN BPI wins show on each team page for comparison
   const PR = projectAll(); if (!PR) return "";
   const sg = v => (v>=0?"+":"") + v.toFixed(1);
   const started = Object.values(PR).some(r => r.T.gp > 0);
-  const table = conf => { const list = CONF[conf].filter(ab => PR[ab]).sort((a,b)=>PR[b].wins-PR[a].wins);
-    return `<div class="box"><h2>${conf} <small>projected</small></h2><div class="tscroll"><table>
-      <thead><tr><th>#</th><th class="l">Team</th><th>Proj. W-L</th><th class="l">80% range</th><th>Proj. net</th>${ESPN_BPI ? `<th title="${esc(ESPN_BPI.source)}${ESPN_LIVE ? ", live" : ", " + ESPN_BPI.date}">ESPN BPI</th><th title="This site's projection minus ESPN's, in wins">vs ESPN</th>` : ""}${started ? "<th>Now</th>" : ""}</tr></thead><tbody>
-      ${list.map((ab,i)=>{ const r = PR[ab]; return `<tr><td>${i+1}</td><td class="l"><a href="#" class="who n" data-team="${ab}">${logoImg(ab, LATEST)}<span class="n">${esc(r.T.name)}</span></a></td>
-        <td><strong>${recStr(r)}</strong></td><td class="l sub">${rangeStr(r)}</td><td>${sg(r.net)}</td>${ESPN_BPI ? (m => m == null ? `<td class="sub">–</td><td class="sub">–</td>` : `<td class="sub">${m.toFixed(1)}</td><td class="sub">${(r.wins - m >= 0 ? "+" : "") + (r.wins - m).toFixed(1)}</td>`)(espnOf(ab)) : ""}${started ? `<td>${r.T.gp ? `${r.T.w}-${r.T.l}` : "–"}</td>` : ""}</tr>`; }).join("")}</tbody></table></div></div>`; };
-  return `<div class="grid2">${table("East")}${table("West")}</div>${ESPN_BPI ? `<p class="note">Projected record = this site's model. ESPN BPI is shown for comparison only (${ESPN_LIVE ? "loaded live from ESPN" : `published top 10, ${ESPN_BPI.date}, via ${esc(ESPN_BPI.via || "ESPN")}; the full list loads when ESPN's feed answers`}).</p>` : ""}${MLINK_HTML("cur")}`;
+  const pct = r => r.T.gp ? r.T.w / r.T.gp : 0;
+  const table = conf => {
+    const teams = CONF[conf].filter(ab => PR[ab]);
+    // real standings: win% (ties: projected finish); before any games everyone is 0-0, so the projection orders them
+    const list = teams.slice().sort((a,b) => (pct(PR[b]) - pct(PR[a])) || ((PR[b].T.w||0) - (PR[a].T.w||0)) || (PR[b].wins - PR[a].wins));
+    const seed = new Map(teams.slice().sort((a,b) => PR[b].wins - PR[a].wins).map((ab,i) => [ab, i+1]));
+    const lead = PR[list[0]].T, gb = T => { const g = (((lead.w||0) - (T.w||0)) + ((T.l||0) - (lead.l||0))) / 2; return g <= 0 ? "–" : (g % 1 ? g.toFixed(1) : String(g)); };
+    return `<div class="box"><h2>${conf} <small>standings · projected finish updates after every game</small></h2><div class="tscroll"><table>
+      <thead><tr><th>#</th><th class="l">Team</th><th>W-L</th><th>Pct</th><th>GB</th><th title="Average point margin per game">Diff</th><th title="Projected final record: games already played plus the model's projection for the rest, with its 80% range">Proj. finish</th><th title="Where the projected record would finish in the conference">Proj. seed</th></tr></thead><tbody>
+      ${list.map((ab,i)=>{ const r = PR[ab], T = r.T, gp = T.gp || 0;
+        return `<tr><td>${i+1}</td><td class="l"><a href="#" class="who n" data-team="${ab}">${logoImg(ab, LATEST)}<span class="n">${esc(T.name)}</span></a></td>
+        <td><strong>${T.w||0}-${T.l||0}</strong></td><td>${gp ? pct(r).toFixed(3).replace(/^0/,"") : "–"}</td><td>${gp ? gb(T) : "–"}</td><td>${gp && Number.isFinite(T.mov) ? sg(T.mov) : "–"}</td>
+        <td title="${esc(rangeStr(r))}">${recStr(r)}</td><td>${seed.get(ab)}</td></tr>`; }).join("")}</tbody></table></div></div>`; };
+  return `<div class="grid2">${table("East")}${table("West")}</div><p class="note">${started ? "W-L, Pct, GB and Diff are the real standings from ESPN." : "No games yet, so everyone is 0-0 and teams are listed by projected finish."} Projected finish = the record so far plus this site's projection for the games left, which leans more on real results as the season goes; hover it for the 80% range.</p>${MLINK_HTML("cur")}`;
 }
 function teamCard(ab){
   const ai = DATA.abbrs.indexOf(ab), ti = M.teamRow(ai, LATEST, 0), r = ti >= 0 ? M.tm[ti] : null, res = ai >= 0 ? seasonResult(ai, LATEST) : {txt:""};
@@ -1937,11 +2282,12 @@ async function renderSeason(){
   const status = `<div class="msg" style="text-align:left">${esc(src)}</div>`;
   if (!seTeam || !T[seTeam]){
     const abs = Object.keys(T).sort((a,b)=>T[a].name.localeCompare(T[b].name));
-    seOut.innerHTML = status + `<h2 class="lf-h" style="font-size:16px">Projected standings</h2>${standingsBox()}<div class="box"><h2>${CUR.C.season} teams <small>pick a team for its roster, starting five and top performers</small></h2>
+    seOut.innerHTML = status + `<h2 class="lf-h" style="font-size:16px">Standings</h2>${standingsBox()}<div class="box"><h2>${CUR.C.season} teams <small>pick a team for its roster, starting five and top performers</small></h2>
       <div class="tp-grid">${abs.map(teamCard).join("")}</div></div>`;
   } else seOut.innerHTML = status + teamProfile(seTeam);
   seOut.querySelectorAll("[data-team]").forEach(b => b.addEventListener("click", () => { seTeam = b.dataset.team; renderSeason(); document.getElementById("se-wrap").scrollIntoView({block:"start"}); }));
   const back = document.getElementById("tp-back"); if (back) back.onclick = e => { e.preventDefault(); seTeam = null; renderSeason(); };
+  for (const [id, v] of [["se-v-cur", "cur"], ["se-v-last", "last"]]){ const b = document.getElementById(id); if (b) b.onclick = () => { SE_VIEW = v; const y = window.scrollY; renderSeason().then(() => window.scrollTo({top: y})); }; }
   seOut.querySelectorAll("[data-player]").forEach(a => a.addEventListener("click", e => { e.preventDefault(); plQ.value = optLabel(+a.dataset.player); show("players"); window.scrollTo({top:0}); }));
 }
 // projected starting five: the healthy players with the most starts last season (ties: minutes) whose positions
@@ -1951,10 +2297,10 @@ const posOpts = pos => { const out = new Set();
   for (const part of String(pos || "").toUpperCase().replace(/\s/g, "").split(/[-\/]/)){
     if (/^(PG|SG|G)$/.test(part)) out.add("G"); else if (/^(SF|PF|F)$/.test(part)) out.add("F"); else if (part === "C") out.add("C"); }
   return [...out]; };
-function fitShape(group){                         // -> slots (one letter per player) or null
-  let best = null;
-  const walk = (i, slots) => { if (best) return;
-    if (i === group.length){ const key = slots.slice().sort((a,b)=>"GFC".indexOf(a)-"GFC".indexOf(b)).join(""); if (LINEUP_SHAPES.includes(key)) best = slots.slice(); return; }
+function fitShape(group){                         // -> slots (one letter per player) or null; GGFFC first, then the other shapes in order
+  let best = null, bestI = 99;
+  const walk = (i, slots) => { if (bestI === 0) return;
+    if (i === group.length){ const key = slots.slice().sort((a,b)=>"GFC".indexOf(a)-"GFC".indexOf(b)).join(""), j = LINEUP_SHAPES.indexOf(key); if (j >= 0 && j < bestI){ bestI = j; best = slots.slice(); } return; }
     for (const o of group[i].opts){ slots.push(o); walk(i+1, slots); slots.pop(); } };
   walk(0, []); return best;
 }
@@ -1981,26 +2327,40 @@ function teamProfile(ab){
   const face = p => p.k != null ? faceImg(p.k, "sm") : `<span class="face sm"></span>`;
   // projected starting five: the healthy players who started the most games last season (anywhere), ties by minutes
   const healthy = ps.filter(p => !p.seasonOut && !p.tw);
-  const { five, shaped } = pickFive(healthy);
+  let { five, shaped } = pickFive(healthy);
+  // once the season has started: the starting five used most this season (ties: the most recent game)
+  const S5x = CUR.startersOf(ab), s5Live = !!S5x, s5Starts0 = p => S5x && p.espnId != null ? (S5x.starts.get(String(p.espnId)) || 0) : 0;
+  if (S5x){ const got = S5x.ids.map(id => ps.find(p => String(p.espnId) === id)).filter(Boolean);
+    const rest = five.filter(p => !got.includes(p)); five = got.concat(rest).slice(0, 5);
+    // lay the real starting five out guard-guard-forward-forward-center (or the closest allowed shape)
+    const g = five.map(p => ({...p, opts: posOpts(p.pos)})), slots = g.every(p => p.opts.length) ? fitShape(g) : null;
+    const slot = (p, j) => slots ? slots[j] : (p.opts[0] || "F"), rank = x => "GFC".indexOf(x);
+    five = g.map((p, j) => ({p, sl: slot(p, j), st: s5Starts0(p)})).sort((a, b) => rank(a.sl) - rank(b.sl) || b.st - a.st).map(x => ({...x.p, slot: x.sl})); }
+  else if (Date.now() >= +CUR.seasonStart && !CUR.__s5asked?.[ab]){ (CUR.__s5asked = CUR.__s5asked || {})[ab] = 1;
+    CUR.seasonStarters(ab).then(r => { if (r && seTeam === ab && current === "games") renderSeason(); }).catch(()=>{}); }
+  const s5Starts = p => S5x && p.espnId != null ? (S5x.starts.get(String(p.espnId)) || 0) : null;
+  const BX = CUR.boxOf(ab), curL = p => BX && p.espnId != null ? CUR.lineOf(BX.players.get(String(p.espnId))) : null, useCur = !!BX && SE_VIEW === "cur";
   const fiveCard = p => { const c = p.cepm, ls = p.ls, moved = ls && ls.team && ls.team !== ab;
     return `<div class="s5-card">${p.k != null ? faceImg(p.k) : `<span class="face"></span>`}
       <div class="nm">${nameCell(p)}</div>
-      <div class="sub">${p.pos ? esc(p.pos) + " · " : ""}${ls && ls.si !== LATEST ? `missed ${S[LATEST]} · ${S[ls.si]} stats` : `${p.starts} starts in ${S[LATEST]}${moved ? ` (${esc(ls.team)})` : ""}`}</div>
+      <div class="sub">${p.pos ? esc(p.pos) + " · " : ""}${s5Starts(p) != null ? `${s5Starts(p)} of ${S5x.games} starts this season` : ls && ls.si !== LATEST ? `missed ${S[LATEST]} · ${S[ls.si]} stats` : `${p.starts} starts in ${S[LATEST]}${moved ? ` (${esc(ls.team)})` : ""}`}</div>
       <div class="s5-cepm">${c ? sgn(c.r) : "–"}<span>Chip Equity</span></div>
       <div class="sub">${c ? `o ${sgn(c.o)} · d ${sgn(c.d)}` : "no Chip Equity yet"}</div>
-      <div class="s5-line">${ls ? `${ls.pts.toFixed(1)} pts · ${ls.reb.toFixed(1)} reb · ${ls.ast.toFixed(1)} ast` : "no NBA games last season"}</div>
+      <div class="s5-line">${(cl => cl ? `${cl.pts.toFixed(1)} pts · ${cl.reb.toFixed(1)} reb · ${cl.ast.toFixed(1)} ast <span class="sub">this season</span>` : ls ? `${ls.pts.toFixed(1)} pts · ${ls.reb.toFixed(1)} reb · ${ls.ast.toFixed(1)} ast` : "no NBA games last season")(curL(p))}</div>
       ${p.status ? `<div class="sub">${esc(p.status)}</div>` : ""}</div>`; };
   // top performers: current roster, ranked by Chip Equity x share of the game he played last season (wherever he played)
   const top = ps.filter(p => Number.isFinite(p.impact)).sort((x,y)=>y.impact-x.impact).slice(0, 3);
   const topRow = (p, j) => { const ls = p.ls, moved = ls.team !== ab;
     return `<tr><td>${j+1}</td><td class="l"><div class="who">${face(p)}${nameCell(p)}</div></td><td class="l">${ls.si !== LATEST ? `<span class="sub">missed ${S[LATEST]} · ${S[ls.si]}</span>` : moved ? `<span class="res">new · from ${esc(ls.team)}</span>` : esc(ls.team)}</td>
-      <td><strong>${sgn(p.cepm.r)}</strong></td><td>${sgn(p.cepm.o)}</td><td>${sgn(p.cepm.d)}</td><td>${ls.mpg.toFixed(1)}</td><td>${ls.pts.toFixed(1)}</td><td>${ls.reb.toFixed(1)}</td><td>${ls.ast.toFixed(1)}</td><td>${(ls.ts*100).toFixed(1)}%</td></tr>`; };
-  const rosterRows = ps.slice().sort((x,y)=>((y.ls?y.ls.mpg:0)-(x.ls?x.ls.mpg:0))).map(p => { const ls = p.ls, c = p.cepm;
+      <td class="nw"><strong>${sgn(p.cepm.r)}</strong>${pctl(p.cepm)}</td><td>${sgn(p.cepm.o)}</td><td>${sgn(p.cepm.d)}</td><td>${ls.mpg.toFixed(1)}</td><td>${ls.pts.toFixed(1)}</td><td>${ls.reb.toFixed(1)}</td><td>${ls.ast.toFixed(1)}</td><td>${(ls.ts*100).toFixed(1)}%</td></tr>`; };
+  const projMin = p => PRJ && PRJ.mins.has(T.players.find(q=>q.name===p.name && q.espnId===p.espnId)) ? PRJ.mins.get(T.players.find(q=>q.name===p.name && q.espnId===p.espnId)).toFixed(1) : (p.out ? "0" : "–");
+  const rosterRows = ps.slice().sort((x,y) => useCur ? (((curL(y)||{}).mpg||0) - ((curL(x)||{}).mpg||0)) || ((y.ls?y.ls.mpg:0)-(x.ls?x.ls.mpg:0)) : ((y.ls?y.ls.mpg:0)-(x.ls?x.ls.mpg:0))).map(p => { const ls = p.ls, c = p.cepm, q = useCur ? curL(p) : null;
+    const st = useCur ? (q ? {gp: q.gp, gs: s5Starts(p) || 0, mpg: q.mpg, pts: q.pts, reb: q.reb, ast: q.ast, ts: q.ts} : null) : (ls ? {gp: ls.gp, gs: p.starts || 0, mpg: ls.mpg, pts: ls.pts, reb: ls.reb, ast: ls.ast, ts: ls.ts} : null);
     return `<tr><td class="l"><div class="who">${face(p)}${nameCell(p)}</div></td><td class="l">${p.pos ? esc(p.pos) : ""}</td>
       <td class="l">${p.seasonOut ? `<span class="res">Out for season</span>` : p.tw ? `<span class="sub">Two-way</span>` : p.status ? `<span class="sub">${esc(p.status)}</span>` : ""}</td>
       <td class="l">${ls ? (ls.si !== LATEST ? `<span class="sub">missed season · ${S[ls.si]} ${esc(ls.team)}</span>` : ls.team !== ab ? `${esc(ls.team)} <span class="sub">(new)</span>` : esc(ls.team)) : `<span class="sub">no NBA games</span>`}</td>
-      <td>${ls ? ls.gp : "–"}</td><td>${p.starts || (ls ? 0 : "–")}</td><td>${ls ? ls.mpg.toFixed(1) : "–"}</td><td class="sub">${PRJ && PRJ.mins.has(T.players.find(q=>q.name===p.name && q.espnId===p.espnId)) ? PRJ.mins.get(T.players.find(q=>q.name===p.name && q.espnId===p.espnId)).toFixed(1) : (p.out ? "0" : "–")}</td><td>${ls ? ls.pts.toFixed(1) : "–"}</td><td>${ls ? ls.reb.toFixed(1) : "–"}</td><td>${ls ? ls.ast.toFixed(1) : "–"}</td>
-      <td>${ls && Number.isFinite(ls.ts) ? (ls.ts*100).toFixed(1)+"%" : "–"}</td><td><strong>${c ? sgn(c.r) : "–"}</strong></td><td>${c ? sgn(c.o) : "–"}</td><td>${c ? sgn(c.d) : "–"}</td></tr>`; }).join("");
+      <td>${st ? st.gp : "–"}</td><td>${st ? st.gs : "–"}</td><td>${st ? st.mpg.toFixed(1) : "–"}</td><td class="sub">${projMin(p)}</td><td>${st ? st.pts.toFixed(1) : "–"}</td><td>${st ? st.reb.toFixed(1) : "–"}</td><td>${st ? st.ast.toFixed(1) : "–"}</td>
+      <td>${st && Number.isFinite(st.ts) ? (st.ts*100).toFixed(1)+"%" : "–"}</td><td class="nw"><strong>${c ? sgn(c.r) : "–"}</strong>${c ? pctl(c) : ""}</td><td>${c ? sgn(c.o) : "–"}</td><td>${c ? sgn(c.d) : "–"}</td></tr>`; }).join("");
   const outN = ps.filter(p=>p.out).length;
   return `<p class="mlink" style="margin:0 0 10px"><a href="#" id="tp-back">‹ All teams</a></p>
     <div class="box"><div class="tp-head">${logoImg(ab, LATEST, "xl")}<div><h2 style="margin:0">${esc(T.name)}</h2>
@@ -2015,18 +2375,20 @@ function teamProfile(ab){
         <div class="tile"><div class="v">${r ? r.off.toFixed(1) : "–"}</div><div class="k">Off rating${r && r.rank && r.rank.off ? ` · ${ord(r.rank.off)}` : ""}</div></div>
         <div class="tile"><div class="v">${r ? r.def.toFixed(1) : "–"}</div><div class="k">Def rating${r && r.rank && r.rank.def ? ` · ${ord(r.rank.def)}` : ""}</div></div>
         <div class="tile"><div class="v">${r ? r.pace.toFixed(1) : "–"}</div><div class="k">Pace</div></div></div></div>
-    <div class="box s5-box"><h2>Projected starting five <small>top performers on the current roster</small></h2>
+    <div class="box s5-box"><h2>${s5Live ? `Starting five <small>most-used this season · together in ${S5x.n} of ${S5x.games} game${S5x.games === 1 ? "" : "s"}</small>` : `Projected starting five <small>top performers on the current roster</small>`}</h2>
       <div class="s5">${five.map(fiveCard).join("")}</div></div>
-    <div class="box"><h2>Top performers <small>current roster · ranked by 3-year Chip Equity</small></h2><div class="tscroll"><table>
+    <div class="box"><h2>Top performers <small>current roster · ranked by single-season Chip Equity</small></h2><div class="tscroll"><table>
       <thead><tr><th>#</th><th class="l">Player</th><th class="l">${S[LATEST]} team</th><th>Chip Equity</th><th>Off</th><th>Def</th><th>MPG</th><th>PTS</th><th>REB</th><th>AST</th><th>TS%</th></tr></thead>
       <tbody>${top.map(topRow).join("") || `<tr><td colspan="11" class="muted">No players with Chip Equity yet.</td></tr>`}</tbody></table></div></div>
-    <div class="box"><h2>Roster <small>${S[LATEST]} regular-season stats per game · 3-year Chip Equity through ${S[LATEST]} · click a column to sort</small></h2><div class="tscroll"><table>
-      <thead><tr><th class="l">Player</th><th class="l">Pos</th><th class="l">Status</th><th class="l">${S[LATEST]} team</th><th>GP</th><th>GS</th><th>MPG</th><th title="Minutes per game the projection gives him this season">Proj. MPG</th><th>PTS</th><th>REB</th><th>AST</th><th>TS%</th><th>Chip Equity</th><th>Off</th><th>Def</th></tr></thead>
+    <div class="box"><h2>Roster <small>${useCur ? `${CUR.C.season} stats per game so far (live from ESPN box scores, ${BX.games} game${BX.games === 1 ? "" : "s"})` : `${S[LATEST]} regular-season stats per game`} · single-season Chip Equity, ${S[LATEST]} · click a column to sort</small></h2>
+      ${BX ? `<div class="seg" style="margin:0 0 10px" role="group" aria-label="Roster stats"><button id="se-v-cur" aria-pressed="${useCur}">${CUR.C.season} so far</button><button id="se-v-last" aria-pressed="${!useCur}">${S[LATEST]}</button></div>` : ""}<div class="tscroll"><table>
+      <thead><tr><th class="l">Player</th><th class="l">Pos</th><th class="l">Status</th><th class="l">${S[LATEST]} team</th><th>GP</th><th title="Games started${useCur ? " this season" : ""}">GS</th><th>MPG</th><th title="Minutes per game the projection gives him this season">Proj. MPG</th><th>PTS</th><th>REB</th><th>AST</th><th>TS%</th><th>Chip Equity</th><th>Off</th><th>Def</th></tr></thead>
       <tbody>${rosterRows}</tbody></table></div>${MLINK_HTML("cur")}</div>`;
 }
 
 /* ---------------- METHOD (the one place the site explains itself) ---------------- */
 const mOut = document.getElementById("me-out");
+const METHOD_TXT = /*__METHODTXT__*/"";
 function renderMethod(){
   if (mOut.dataset.done) return;
   if (!BT) BT = { full: M.backtest(), base: M.backtest({wTop:0, wLuck:0, wRot:0, k:1, hca:4}), dOff: M.backtest({wTop:0}) };
@@ -2034,158 +2396,94 @@ function renderMethod(){
   const P0 = M.PARAMS, cp = CUR ? CUR.prm : null, cb = cp ? cp.backtest : null;
   const f1 = v => v.toFixed(1), f2 = v => v.toFixed(2), pc = v => (v*100).toFixed(1) + "%";
   const bins = BT.full.bins.filter(b=>b.n).map(b=>`<tr><td>${Math.round(b.lo*100)}–${Math.min(100,Math.round(b.hi*100))}%</td><td>${b.n}</td><td>${Math.round(b.won/b.n*100)}%</td></tr>`).join("");
-  const toc = [["what","What Chip Equity is"],["data","Data"],["clean","Cleaning"],["ridge","The regression"],["box","The box-score prior"],["windows","Windows, peaks and decades"],
-    ["po","Playoff-only Chip Equity"],["read","Reading the numbers"],["stats","Other stats on the site"],["model","Playoff matchup model"],["live","Live win probability"],["cur",(CUR?CUR.C.season:"Current-season")+" rosters and team pages"],["src","Sources and limits"]];
+  const toc = [["what","What Chip Equity is"],["data","Where the data comes from"],["windows","Seasons, peaks and decades"],["po","Playoffs"],["read","How we know it works"],
+    ["model","Playoff odds"],["live","Live win probability"],["cur",(CUR?CUR.C.season:"This season")+": projections and standings"],["stats","Other stats, in brief"],["src","Sources and limits"]];
   mOut.innerHTML = `<div class="method">
-  <div class="box"><h2>Method <small>how every number on this site is made</small></h2>
+  <div class="box"><h2>Method <small>how the numbers work, in plain English</small></h2>
+    <p>This page explains every number on the site. Every formula, weight and test result is in the full technical method: <a href="#" id="me-dl">download it (.txt)</a>.</p>
     <ol class="toc">${toc.map(([id,t])=>`<li><a href="#m-${id}" data-m="${id}">${t}</a></li>`).join("")}</ol></div>
 
   <div class="box" id="m-what"><h2>1. What Chip Equity is</h2>
-    <p><b>Chip Equity</b> is how many points per 100 possessions a player is worth to his team over an average player, counting how much of the game he actually carries. It has three parts:</p>
-    <div class="mscroll"><math display="block"><mrow><mtext>Chip Equity</mtext><mo>=</mo><mo>(</mo><mn>0.65</mn><mspace width="0.15em"/><mtext>Regression</mtext><mo>+</mo><mn>0.35</mn><mspace width="0.15em"/><mtext>LeadMargin</mtext><mo>)</mo><mo>×</mo><mtext>CompShare</mtext></mrow></math></div>
-    <ul><li><b>Regression</b>: a regularized adjusted plus-minus (RAPM). It looks at the score while each player is on the floor, accounts for every teammate and opponent sharing the floor with him, and solves for everyone at once. Where the on-court evidence is thin, it leans on a box-score estimate learned from the plus-minus data itself instead of shrinking the player to zero. Sections 3 to 5 describe it.</li>
-      <li><b>LeadMargin</b>: his team's scoring margin per 100 possessions in the stretches where he is the best player on the floor, garbage time left out. Playoff stretches count double and are adjusted for how good the opponent was (section 6).</li>
-      <li><b>CompShare</b>: the share of his team's competitive minutes he played, in the games he played (section 6).</li></ul>
-    <p>Every part splits into offense and defense, so Chip Equity ≈ Off + Def. Positive is good on both ends.</p></div>
+    <p><b>Chip Equity</b> is how many points per 100 possessions a player is worth to his team compared with an average player, counting how much of the game he actually carries. <b>0 is average.</b> In a typical season about 25 players reach +2 (All-Star level), about 5 reach +4 (top-five player) and about one reaches +6 (an MVP-level season). It's built from three things:</p>
+    <ul><li><b>Regression (65%).</b> For every stretch of every game, the model knows the ten players on the floor and the score. A regression solves for all players at once, so a player isn't credited for great teammates or blamed for bad ones. Where a player has little court time, it leans on his box score instead.</li>
+      <li><b>Lead margin (35%).</b> How his team does in the stretches where he's the main man: the best player on the floor, judged on his last three seasons, with the one running the offense breaking near-ties. Playoff stretches count double and are adjusted for how good the opponent was, and part of his teammates' quality is taken back out so stars on stacked teams don't get their teammates' credit.</li>
+      <li><b>Minutes that matter.</b> The total is multiplied by his share of his team's competitive minutes (garbage time out), so a star who carries a big load counts for more than a great role player in short minutes.</li></ul>
+    <p>Every number splits into <b>offense</b> and <b>defense</b>, and the two always add up to the total.</p></div>
 
-  <div class="box" id="m-data"><h2>2. Data</h2>
-    <p>Every NBA.com play-by-play event since 1996-97 (regular season and playoffs) is parsed into <b>stints</b>: stretches where the same ten players are on the floor. That's about 1.2 million stints. Parsing uses the open-source pbpstats library offline on archived NBA.com play-by-play, plus NBA.com's live play-by-play for games the archive is missing. For each stint <i>s</i> we keep the ten players, each side's possessions and points, the score, game time and date.</p>
-    <div class="mscroll"><math display="block"><mrow><msub><mi>p</mi><mi>s</mi></msub><mo>=</mo><mfrac><mrow><msubsup><mi>poss</mi><mi>s</mi><mtext>home</mtext></msubsup><mo>+</mo><msubsup><mi>poss</mi><mi>s</mi><mtext>away</mtext></msubsup></mrow><mn>2</mn></mfrac></mrow></math></div></div>
+  <div class="box" id="m-data"><h2>2. Where the data comes from</h2>
+    <p>Every NBA.com play-by-play event since 1996-97, regular season and playoffs: about 1.1 million stretches of play with the same ten players on the floor. Garbage time (fourth-quarter blowouts with the starters on the bench) is removed. 1996-97, the first season with play-by-play, is the noisiest, so it's left off the single-season leaderboard.</p></div>
 
-  <div class="box" id="m-clean"><h2>3. Cleaning</h2>
-    <h3>Garbage time</h3>
-    <p>A stint is dropped when it starts in the 4th quarter with a big lead for the time left <em>and</em> two or fewer starters are on the floor. That removes about 2.5% of possessions.</p>
-    <div class="tscroll"><table><thead><tr><th class="l">Time left in the 4th</th><th>Lead at least</th></tr></thead><tbody><tr><td class="l">12:00 – 9:00</td><td>25</td></tr><tr><td class="l">9:00 – 6:00</td><td>20</td></tr><tr><td class="l">6:00 – 0:00</td><td>10</td></tr></tbody></table></div>
-    <h3>Era scaling</h3>
-    <p>Each season's points are rescaled to the average scoring level of all seasons, so +5 in a low-scoring league counts more than +5 in a high-scoring one:</p>
-    <div class="mscroll"><math display="block"><mrow><msub><mi>e</mi><mi>t</mi></msub><mo>=</mo><mfrac><mover><mi>ORtg</mi><mo>¯</mo></mover><msub><mi>ORtg</mi><mi>t</mi></msub></mfrac><mo>,</mo><mspace width="1em"/><msub><mi>ORtg</mi><mi>t</mi></msub><mo>=</mo><mn>100</mn><mo>×</mo><mfrac><mrow><mtext>points in season</mtext><mspace width="0.25em"/><mi>t</mi></mrow><mrow><mtext>possessions in season</mtext><mspace width="0.25em"/><mi>t</mi></mrow></mfrac></mrow></math></div></div>
+  <div class="box" id="m-windows"><h2>3. Seasons, peaks and decades</h2>
+    <ul><li><b>Single seasons</b> are steadied: 40% of each season comes from that player's three-year number, so one hot season can't outrank a sustained peak.</li>
+      <li><b>2- to 5-year windows</b> and <b>decades</b> pool every possession in the span. A player's headline number is his best 5-year window (best 3-year for shorter careers).</li>
+      <li>Leaderboards show all-time ranks, and the single-season board starts in 1997-98.</li></ul></div>
 
-  <div class="box" id="m-ridge"><h2>4. The regression</h2>
-    <p>Each stint gives two rows, one per side. With offense <i>O</i>, defense <i>D</i>, season <i>t</i> and league average <i>μ</i>, the target is that side's era-scaled points per 100 possessions:</p>
-    <div class="mscroll"><math display="block"><mrow><msub><mi>y</mi><mrow><mi>s</mi><mo>,</mo><mi>O</mi></mrow></msub><mo>=</mo><mn>100</mn><mo>·</mo><mfrac><msub><mi>pts</mi><mi>O</mi></msub><msub><mi>poss</mi><mi>O</mi></msub></mfrac><mo>·</mo><msub><mi>e</mi><mi>t</mi></msub><mo>−</mo><mi>μ</mi>
-      <mo>=</mo><munder><mo>∑</mo><mrow><mi>i</mi><mo>∈</mo><mi>O</mi></mrow></munder><msub><mi>o</mi><mi>i</mi></msub><mo>−</mo><munder><mo>∑</mo><mrow><mi>j</mi><mo>∈</mo><mi>D</mi></mrow></munder><msub><mi>d</mi><mi>j</mi></msub><mo>+</mo><msup><mi>γ</mi><mo>⊤</mo></msup><msub><mi>c</mi><mi>s</mi></msub><mo>+</mo><mi>α</mi><mo>+</mo><mi>ε</mi></mrow></math></div>
-    <p>A good defender lowers the opponent's points, so <i>d</i> enters with a minus sign and positive defensive Chip Equity is good. The controls <i>c</i> (signed for the side) are fit alongside the players:</p>
-    <ul><li><b>Home court.</b></li><li><b>Fatigue:</b> how long the five have been on the floor without rest, and minutes already played in the game.</li><li><b>Back-to-back nights</b> (difference between the teams).</li>
-      <li><b>Score state:</b> margin at the start of the stint, clipped to ±20, divided by 10 (teams with a lead ease off).</li><li><b>Clutch:</b> 4th quarter or overtime, 5:00 or less left, margin 5 or less.</li></ul>
-    <p>Rows are weighted by possessions, <i>w<sub>s</sub></i> = <i>p<sub>s</sub></i>. The solution minimizes a weighted ridge loss that pulls each player toward his box-score prior (<i>o</i><sup>0</sup>, <i>d</i><sup>0</sup>, section 5) instead of toward zero:</p>
-    <div class="mscroll"><math display="block"><mrow><munder><mo movablelimits="false">min</mo><mrow><mi>o</mi><mo>,</mo><mi>d</mi><mo>,</mo><mi>γ</mi><mo>,</mo><mi>α</mi></mrow></munder><mspace width="0.4em"/><munder><mo>∑</mo><mi>s</mi></munder><msub><mi>w</mi><mi>s</mi></msub><msup><mrow><mo>(</mo><msub><mi>y</mi><mi>s</mi></msub><mo>−</mo><msub><mover><mi>y</mi><mo>^</mo></mover><mi>s</mi></msub><mo>)</mo></mrow><mn>2</mn></msup>
-      <mo>+</mo><mi>λ</mi><munder><mo>∑</mo><mi>i</mi></munder><mrow><mo>[</mo><msup><mrow><mo>(</mo><msub><mi>o</mi><mi>i</mi></msub><mo>−</mo><msubsup><mi>o</mi><mi>i</mi><mn>0</mn></msubsup><mo>)</mo></mrow><mn>2</mn></msup><mo>+</mo><msup><mrow><mo>(</mo><msub><mi>d</mi><mi>i</mi></msub><mo>−</mo><msubsup><mi>d</mi><mi>i</mi><mn>0</mn></msubsup><mo>)</mo></mrow><mn>2</mn></msup><mo>]</mo></mrow><mo>+</mo><munder><mo>∑</mo><mi>k</mi></munder><msub><mi>κ</mi><mi>k</mi></msub><msubsup><mi>γ</mi><mi>k</mi><mn>2</mn></msubsup></mrow></math></div>
-    <ul><li><b>λ</b> is chosen by 5-fold cross-validation over whole games (from 250 to 16,000); it settles at 2,000 in nearly every window. The control penalties are κ = 300 (home court 1), and the intercept α is unpenalized.</li>
-      <li>Players with fewer than 1,000 possessions in a window share one "replacement" column, so a handful of possessions can't produce an extreme number.</li>
-      <li>The sparse system is solved exactly (normal equations). offensive Chip Equity<sub>i</sub> = <i>o<sub>i</sub></i> and defensive Chip Equity<sub>i</sub> = <i>d<sub>i</sub></i>.</li><li><b>Total Chip Equity</b> comes from a matching fit on each stint's whole margin (home minus away per 100, same players, controls, prior and λ), with one value per player. It and offensive Chip Equity + defensive Chip Equity agree closely (correlation 0.997, about 0.15 apart on average), but they aren't forced to be identical.</li></ul></div>
+  <div class="box" id="m-po"><h2>4. Playoffs</h2>
+    <ul><li><b>In Chip Equity:</b> playoff possessions are part of the plus-minus, and playoff stretches count double in lead margin, credited for the strength of the opponent.</li>
+      <li><b>Playoffs-only Chip Equity</b> is the same recipe run on one postseason at a time. It drives the career playoff board and the most impressive title runs, which are ranked by how well a champion did against the field it beat.</li></ul></div>
 
-  <div class="box" id="m-box"><h2>5. The box-score prior</h2>
-    <p>The prior is a linear model of box-score stats, learned from pure plus-minus (3-year RAPM with no prior), separately for offense and defense:</p>
-    <div class="mscroll"><math display="block"><mrow><msubsup><mi>o</mi><mi>i</mi><mn>0</mn></msubsup><mo>=</mo><msub><mi>a</mi><mi>o</mi></msub><mo>+</mo><munder><mo>∑</mo><mi>f</mi></munder><msub><mi>b</mi><mrow><mi>o</mi><mo>,</mo><mi>f</mi></mrow></msub><msub><mi>x</mi><mrow><mi>i</mi><mo>,</mo><mi>f</mi></mrow></msub><mo>,</mo><mspace width="1.5em"/><msubsup><mi>d</mi><mi>i</mi><mn>0</mn></msubsup><mo>=</mo><msub><mi>a</mi><mi>d</mi></msub><mo>+</mo><munder><mo>∑</mo><mi>f</mi></munder><msub><mi>b</mi><mrow><mi>d</mi><mo>,</mo><mi>f</mi></mrow></msub><msub><mi>x</mi><mrow><mi>i</mi><mo>,</mo><mi>f</mi></mrow></msub></mrow></math></div>
-    <p>Inputs <i>x</i> are per 100 possessions and relative to that season's league average, averaged over the window by possessions:</p>
-    <ul><li><b>Scoring:</b> points added above league efficiency, true-shooting attempts, shot diet (rim, mid-range, three, free throws), <b>unassisted</b> points (self-creation).</li>
-      <li><b>Passing:</b> assists, plus assists that created rim shots and threes counted separately (assists valued by the shot they create).</li>
-      <li><b>Possession:</b> live-ball and dead-ball turnovers separately, fouls drawn, offensive fouls.</li>
-      <li><b>Rebounding:</b> offensive and defensive rebounds as <b>separate</b> inputs.</li><li><b>Defense:</b> steals, blocks, fouls, charges drawn.</li><li><b>Role:</b> minutes per game.</li></ul>
-    <p>Coefficients come from a ridge fit weighted by √possessions, with its own penalty (30) chosen by out-of-sample error. To avoid leakage, the prior for any window is predicted by a model trained only on windows that share <b>no season</b> with it. Out of sample, the box model explains about 50% of 3-year RAPM. Some learned weights (points per 100 per unit):</p>
-    <div class="tscroll"><table><thead><tr><th class="l">Input (per 100)</th><th>Offense</th><th>Defense</th></tr></thead><tbody>
-      <tr><td class="l">Points added above league efficiency</td><td>+0.50</td><td>+0.07</td></tr><tr><td class="l">Assist creating a rim shot</td><td>+0.42</td><td>+0.12</td></tr>
-      <tr><td class="l">Assist creating a three</td><td>+0.29</td><td>+0.30</td></tr><tr><td class="l">Offensive rebound</td><td>+0.34</td><td>−0.19</td></tr>
-      <tr><td class="l">Live-ball turnover</td><td>−0.50</td><td>−0.47</td></tr><tr><td class="l">Dead-ball turnover</td><td>−0.86</td><td>+0.03</td></tr>
-      <tr><td class="l">Defensive rebound</td><td>+0.00</td><td>+0.14</td></tr><tr><td class="l">Steal</td><td>+0.24</td><td>+0.88</td></tr>
-      <tr><td class="l">Block</td><td>−0.07</td><td>+0.51</td></tr><tr><td class="l">Charge drawn</td><td>+0.30</td><td>+0.61</td></tr></tbody></table></div>
-    <p class="sub">1996-97 to 1999-00 box stats are rebuilt from play-by-play.</p></div>
+  <div class="box" id="m-read"><h2>5. How we know it works</h2>
+    <p>Every version of the model was tested on seasons it never saw: it was fit on all the other seasons, then asked to predict the missing one.</p>
+    <ul><li><b>Playoff series:</b> it picks about 76% of the 450 series since 1997 correctly, and its probabilities are well calibrated (when it says 70%, those teams win about 70% of the time).</li>
+      <li><b>Next season:</b> rating each roster with Chip Equity predicts teams' next-season results to within about 7 wins on average.</li>
+      <li><b>What didn't make it:</b> a lot was tried and dropped because it didn't predict better: weighting by usage or shot volume, raw on/off numbers, play types, splitting lead credit proportionally, and style matchups (rebounding, turnovers, rim protection, pace, threes). A change was kept only when it held up.</li></ul></div>
 
-  <div class="box" id="m-windows"><h2>6. Windows, peaks and decades</h2>
-    <ul><li><b>Windows.</b> Chip Equity is fit on rolling windows of 2, 3, 4 and 5 seasons ending each season (and on single seasons, below), with every possession weighted equally, regular season and playoffs together. "3-year Chip Equity, 2025-26" means the window 2023-24 to 2025-26. Ranks are among every player in that window.</li>
-      <li><b>1-year Chip Equity.</b> Each season is also fit on its own, with the same box-score prior built for single seasons and its own cross-validated λ (2,000 in most seasons). One season is a smaller sample, so 1-year numbers lean more on the box-score estimate and move more from year to year. To let a big real on-court signal through for players who carry heavy minutes, the shrinkage is lighter for them: λ<sub>i</sub> = λ × min(1, 3,000 / possessions<sub>i</sub>), so a 6,000-possession season gets half the usual pull. Tested on every season since 1998-99, this predicted next season's team results as well as uniform shrinkage (same net-rating miss, 3.448).</li>
-      <li><b>Peaks.</b> A player's best window of each length, with a minimum on-court sample of 3,000 / 4,500 / 6,000 / 7,500 possessions for 2 / 3 / 4 / 5 years.</li>
-      <li><b>Decades.</b> One fit over each decade (1996-97 to 1999-00, the 2000s, 2010s, 2020s), minimum 3,000 possessions.</li>
-      <li><b>Model Chip Equity.</b> The odds models use a regular-season-only 3-year version, so they never see the playoffs they predict.</li>
-      <li>λ for every displayed window comes from the regular-season cross-validation for that window.</li></ul>
-    <h3>From the regression to Chip Equity</h3>
-    <p>The regression is a rate: how much a player helps per 100 possessions while he's on the floor. Chip Equity also counts how much of his team's winning he carries, by blending in the margin his team runs up when he's the main man and scaling by the meaningful minutes he plays:</p>
-    <div class="mscroll"><math display="block"><mrow><mtext>Chip Equity</mtext><mo>=</mo><mo>(</mo><mn>0.65</mn><mspace width="0.15em"/><mtext>Regression</mtext><mo>+</mo><mn>0.35</mn><mspace width="0.15em"/><mtext>LeadMargin</mtext><mo>)</mo><mo>×</mo><mtext>CompShare</mtext></mrow></math></div>
-    <ul><li><b>LeadMargin</b>: his team's scoring margin per 100 possessions in the stretches where he is the best player on the floor, garbage time left out, pulled toward zero for small samples (n / (n + 3,000) lead possessions). A player who blows teams out as the main man gets credit for the blowouts; a teammate riding along doesn't, because the star was the lead in those minutes. It is split into offense and defense against the league average.</li>
-      <li><b>Who counts as the lead</b>: the player with the highest <em>3-year</em> regression on the floor (the window ending that season). An earlier version used the single-season number, which let a role player having a hot year take the star's credit in the minutes they shared (Lamar Odom over Kobe Bryant in 2008-09). The steadier pick kept the same predictive accuracy.</li>
-      <li><b>Playoffs and opponents</b>: his playoff stretches as the lead count too, each playoff possession worth two regular-season ones, and the margin is adjusted for the opponent: the opponent team's regular-season offense and defense (against the league, garbage time out) are added back. Going +5 against a +6 team counts as +11; the same +5 against an average team counts as +5. Playoff opponents average about +4.8 per 100, so deep runs against good teams count for the most. Adjusting for the five opponents on the floor instead overcounted, so the team number is used.</li>
-      <li><b>CompShare</b>: the share of his team's competitive minutes he played, in the games he played. Garbage time is left out, so a star who sits the fourth quarter of a 30-point win isn't penalized for it.</li>
-      <li><b>Single seasons are steadied</b>: 40% of both the regression and the lead margin come from the three-season window ending that year (the first full window, 1996-99, for 1996-97 and 1997-98), so one hot season counts for less than a sustained peak. Single-season regressions use lighter shrinkage for players with fewer than 3,000 possessions.</li>
-      <li>Multi-year windows (2 to 5 years) and decades use the same formula with every input pooled over the window's seasons. The playoff model uses it too, with regular-season-only inputs (section 10).</li>
-      <li><b>How it was chosen.</b> Versions were judged on prediction: playoff series and next season's team results. Load built from usage, stint length or on-ball share rewarded high-volume players whose teams didn't win more with them; plain on-court margin rewarded great teammates; lead margin fixed both. This version picks 75.6% of past playoff series (log loss 0.4952) and misses next season's team wins by 7.0 on average, the same as the plain regression. Counting opponent-adjusted playoff stretches raised the playoff picks from 75.1%.</li>
-      <li>The single-season leaderboard starts at 1997-98. 1996-97 is the first season in the data, with nothing earlier to check it against, and it ran noticeably high; its numbers still show everywhere else.</li>
-      <li>The headline all-time number is each player's <b>best 5-year Chip Equity</b> (best 3-year for shorter careers).</ul></div>
+  <div class="box" id="m-model"><h2>6. Playoff odds</h2>
+    <p>Each team gets a strength made of four things, then home court is applied game by game in the 2-2-1-1-1 format and every path to four wins is added up:</p>
+    <ul><li><b>Net rating</b>: how many points per 100 possessions better than its opponents the team was in the regular season.</li>
+      <li><b>Top three players</b>: the team's three biggest Chip Equity numbers, built only from the regular season and earlier postseasons, never the series being predicted.</li>
+      <li><b>Who's actually playing</b>: the roster rated by who played in the last 15 games or the earlier playoff rounds, which is how injuries count.</li>
+      <li><b>Luck</b>: teams that won more close games than their point margin suggests are pulled back a little.</li></ul>
+    <p>Teams from different seasons can be matched up too; then each team's playoff results also count a little.</p>
+    <div class="tscroll"><table><thead><tr><th>Model's favorite odds</th><th>Series</th><th>Favorite won</th></tr></thead><tbody>${bins}</tbody></table></div></div>
 
-  <div class="box" id="m-po"><h2>7. Playoff-only Chip Equity</h2>
-    <p>"Playoffs only" Chip Equity is a separate fit for each postseason, using only that postseason's possessions. Its prior is the same box model applied to the player's <em>playoff</em> box stats, shrunk toward zero because one postseason is a small sample:</p>
-    <div class="mscroll"><math display="block"><mrow><msubsup><mi>o</mi><mrow><mi>i</mi><mo>,</mo><mtext>PO</mtext></mrow><mn>0</mn></msubsup><mo>=</mo><mfrac><msub><mi>n</mi><mi>i</mi></msub><mrow><msub><mi>n</mi><mi>i</mi></msub><mo>+</mo><mn>600</mn></mrow></mfrac><mrow><mo>(</mo><msub><mi>a</mi><mi>o</mi></msub><mo>+</mo><munder><mo>∑</mo><mi>f</mi></munder><msub><mi>b</mi><mrow><mi>o</mi><mo>,</mo><mi>f</mi></mrow></msub><msubsup><mi>x</mi><mrow><mi>i</mi><mo>,</mo><mi>f</mi></mrow><mtext>PO</mtext></msubsup><mo>)</mo></mrow></mrow></math></div>
-    <p>where <i>n<sub>i</sub></i> is his playoff possessions. Players need 150 possessions for their own column, and lists show 300 or more. Career playoff Chip Equity is the possession-weighted average over every postseason, shown for 2,000+ playoff possessions.</p>
-    <p>The playoff number uses the same recipe as the main stat: 0.65 × this playoff-only fit + 0.35 × his opponent-adjusted playoff lead margin (pulled toward zero by n / (n + 1,000) lead possessions), times his share of his team's competitive playoff minutes. A run against strong opponents counts for more than the same margin against weak ones.</p></div>
+  <div class="box" id="m-live"><h2>7. Live win probability</h2>
+    <p>During a game, the odds combine the current lead, how much time is left and the pregame expectation. Early on the pregame expectation matters most; late in the game the lead takes over.</p></div>
 
-  <div class="box" id="m-read"><h2>8. Reading the numbers</h2>
-    <ul><li>Units are points per 100 possessions compared with an average player, so the five players on the floor add up to the lineup's expected margin per 100.</li>
-      <li>Defense spreads less than offense. Among players in a 3-year window, one standard deviation is about 1.8 on offense and 1.4 on defense, so a given defensive Chip Equity is rarer than the same offensive Chip Equity.</li>
-      <li>Treat gaps under about 1 point as too close to call.</li>
-      <li>On-court plus-minus can't fully separate players who are almost always on the floor together; the prior helps but doesn't remove this.</li></ul></div>
-
-  <div class="box" id="m-stats"><h2>9. Other stats on the site</h2>
-    <div class="mscroll"><math display="block"><mrow><mtext>TS%</mtext><mo>=</mo><mfrac><mtext>PTS</mtext><mrow><mn>2</mn><mo>(</mo><mtext>FGA</mtext><mo>+</mo><mn>0.44</mn><mspace width="0.2em"/><mtext>FTA</mtext><mo>)</mo></mrow></mfrac><mo>,</mo><mspace width="1.2em"/><mtext>rTS</mtext><mo>=</mo><mtext>TS%</mtext><mo>−</mo><msub><mtext>TS%</mtext><mtext>league</mtext></msub><mo>,</mo><mspace width="1.2em"/><mtext>per 75</mtext><mo>=</mo><mtext>stat</mtext><mo>×</mo><mfrac><mn>75</mn><mtext>possessions on floor</mtext></mfrac></mrow></math></div>
-    <ul><li><b>Opp-adj rTS</b> (playoff series) = his TS% minus the TS% that opponent allowed in the regular season.</li>
-      <li><b>roRTG</b> = his team's offensive rating with him on the floor in the series, minus the opponent's regular-season defensive rating.</li>
-      <li><b>Net rating</b> = offensive rating − defensive rating (points per 100 possessions; pbpstats.com possessions).</li>
-      <li><b>SRS</b> solves every regular-season game at once for each team's rating <i>r</i>:</li></ul>
-    <div class="mscroll"><math display="block"><mrow><msub><mtext>margin</mtext><mi>g</mi></msub><mo>=</mo><msub><mi>r</mi><mtext>home</mtext></msub><mo>−</mo><msub><mi>r</mi><mtext>away</mtext></msub><mo>+</mo><mi>ε</mi><mo>,</mo><mspace width="1em"/><munder><mo>∑</mo><mi>t</mi></munder><msub><mi>r</mi><mi>t</mi></msub><mo>=</mo><mn>0</mn><mspace width="1em"/><mtext>(least squares)</mtext></mrow></math></div>
-    <ul><li><b>Opponent-adjusted net</b> (title runs) = the champion's playoff net rating + the games-weighted average regular-season net rating of the teams it beat.</li>
-      <li><b>Expected win%</b> (used for "luck"): PTS<sup>14</sup> / (PTS<sup>14</sup> + OPP<sup>14</sup>).</li></ul></div>
-
-  <div class="box" id="m-model"><h2>10. Playoff matchup model</h2>
-    <p>Each team gets a strength <i>S</i> in points per 100 possessions:</p>
-    <div class="mscroll"><math display="block"><mrow><mi>S</mi><mo>=</mo><mn>${P0.wNet}</mn><mspace width="0.15em"/><mtext>Net</mtext><mo>+</mo><mn>${P0.wTop}</mn><mspace width="0.15em"/><mtext>Top3</mtext><mo>+</mo><mn>${P0.wAv}</mn><mspace width="0.15em"/><mtext>Avail</mtext><mo>+</mo><mn>${P0.wLuck}</mn><mo>×</mo><mn>100</mn><mo>(</mo><mtext>W%</mtext><mo>−</mo><mtext>expected W%</mtext><mo>)</mo></mrow></math></div>
-    <div class="mscroll"><math display="block"><mrow><mtext>Top3</mtext><mo>=</mo><munder><mo>∑</mo><mrow><mtext>top 3</mtext></mrow></munder><msub><mtext>ChipEquity</mtext><mi>i</mi></msub><mo>,</mo><mspace width="1.2em"/><mtext>Avail</mtext><mo>=</mo><mn>5</mn><mo>·</mo><mfrac><mrow><msub><mo>∑</mo><mi>i</mi></msub><msub><mi>f</mi><mi>i</mi></msub><mo>·</mo><msubsup><mtext>ChipEquity</mtext><mi>i</mi><mtext>rs</mtext></msubsup></mrow><mrow><msub><mo>∑</mo><mi>i</mi></msub><msub><mi>f</mi><mi>i</mi></msub></mrow></mfrac></mrow></math></div>
-    <ul><li><b>Chip Equity<sup>rs</sup></b> is the regular-season-only 3-year Chip Equity, and <b>Top3</b> is the three biggest Chip Equity numbers on the roster (section 6), built from Chip Equity<sup>rs</sup>, the same three regular seasons and only the <em>earlier</em> postseasons in that window, so nothing comes from the playoffs being predicted. Tested on all 450 series: 75.6% picked, log loss 0.4952.</li>
-      <li><b><i>f<sub>i</sub></i></b> is floor time in the team's last 15 regular-season games, or in its earlier rounds of that postseason. Players without a Chip Equity count as −2.</li>
-      <li>For teams from different seasons, the playoff résumé is added: ${P0.wPO} × min(1, games/16) × (opponent-adjusted playoff net − Net).</li></ul>
-    <p>Each game, with <i>h<sub>g</sub></i> = +1 / −1 / 0 for home / away / neutral (2-2-1-1-1), and the series is summed over every path to four wins:</p>
-    <div class="mscroll"><math display="block"><mrow><mi>m</mi><mo>=</mo><mo>(</mo><msub><mi>S</mi><mi>A</mi></msub><mo>−</mo><msub><mi>S</mi><mi>B</mi></msub><mo>)</mo><mo>·</mo><mfrac><mtext>pace</mtext><mn>100</mn></mfrac><mo>,</mo><mspace width="1.2em"/><mi>P</mi><mo>(</mo><mi>A</mi><mspace width="0.25em"/><mtext>wins game</mtext><mspace width="0.25em"/><mi>g</mi><mo>)</mo><mo>=</mo><mi>Φ</mi><mrow><mo>(</mo><mfrac><mrow><mi>m</mi><mo>+</mo><mn>${P0.hca}</mn><mspace width="0.15em"/><msub><mi>h</mi><mi>g</mi></msub></mrow><mn>${P0.sigma}</mn></mfrac><mo>)</mo></mrow></mrow></math></div>
-    <p>The weights were fit leave-one-season-out on every playoff series from 1997 to 2026. It picks <b>${pc(BT.full.acc)}</b> of ${BT.full.n} series with a log loss of ${BT.full.logloss.toFixed(3)} (lower means better-calibrated odds); net rating alone picks ${pc(NB.acc)} with a log loss of ${NB.logloss.toFixed(3)}. Even knowing exactly who played in each series only reaches about 76%. Calibration (favorite's odds → how often favorites won):</p>
-    <div class="tscroll"><table><thead><tr><th>Favorite's odds</th><th>Series</th><th>Favorites won</th></tr></thead><tbody>${bins}</tbody></table></div></div>
-
-  <div class="box" id="m-live"><h2>11. Live win probability</h2>
-    <p>During a game, with lead <i>L</i> for the home team, pregame margin <i>m</i> and the share of the game left <i>φ</i> = seconds left / 2880:</p>
-    <div class="mscroll"><math display="block"><mrow><mi>P</mi><mo>(</mo><mtext>home wins</mtext><mo>)</mo><mo>=</mo><mi>Φ</mi><mrow><mo>(</mo><mfrac><mrow><mi>L</mi><mo>+</mo><mi>m</mi><mspace width="0.1em"/><mi>φ</mi></mrow><mrow><mi>σ</mi><msqrt><mi>φ</mi></msqrt></mrow></mfrac><mo>)</mo></mrow></mrow></math></div></div>
-
-  ${CUR ? `<div class="box" id="m-cur"><h2>12. ${CUR.C.season} rosters and team pages</h2>
-    <p>Current rosters, positions and injury status load from ESPN each time the page opens; if that fails, last season's rosters are shown and the page says so. Each player is matched to NBA.com data by name.</p>
-    <ul><li><b>Stats</b> are each player's ${CUR.C.prior} regular season (all teams combined); his ${CUR.C.prior} team is where he played the most minutes.</li>
-      <li><b>Chip Equity</b> is the 3-year window ending ${CUR.C.prior} (regular season + playoffs).</li>
-      <li><b>Top performers</b> are ranked on the current roster by 3-year Chip Equity, so a player who changed teams counts for his new team.</li>
-      <li><b>Projected starting five</b> = the five healthy top performers (same score as above), kept to a realistic lineup of guards, forwards and a center using ESPN's positions.</li>
-      <li><b>Team record, ratings and playoff result</b> are from ${CUR.C.prior}.</li></ul>
-    <h3>Projected net rating and record</h3>
-    <p>Before the season, each team's net rating is projected by this site's model alone. It counts last season's net rating <b>only as far as last season's core is back</b>, adjusts for who came and went, and adds a bonus for <b>a lead star with quality support pieces</b>. The last two are the site's own basketball priors, put in on purpose. The league is then centered at zero and stretched by ${PJ.spread} so the standings spread like real seasons:</p>
-    <div class="mscroll"><math display="block"><mrow><msub><mtext>Net</mtext><mtext>model</mtext></msub><mo>=</mo><mn>${PJ.a.toFixed(2)}</mn><mo>+</mo><mn>${PJ.bPC.toFixed(2)}</mn><mspace width="0.15em"/><msub><mtext>Net</mtext><mtext>last season</mtext></msub><mo>·</mo><mi>K</mi><mo>+</mo><mn>${PJ.bD.toFixed(2)}</mn><mo>(</mo><msub><mi>V</mi><mtext>now</mtext></msub><mo>−</mo><msub><mi>V</mi><mtext>last season</mtext></msub><mo>)</mo><mo>+</mo><mn>${PJ.bX.toFixed(2)}</mn><mspace width="0.15em"/><msub><mi>V</mi><mtext>now</mtext></msub><mo>−</mo><mn>${Math.abs(PJ.bU).toFixed(2)}</mn><munder><mo>∑</mo><mrow><mi>i</mi><mspace width="0.2em"/><mtext>new</mtext></mrow></munder><mfrac><msub><mi>m</mi><mi>i</mi></msub><mn>48</mn></mfrac><mo>+</mo><mn>${PJ.bTop1}</mn><mspace width="0.15em"/><msub><mtext>Star</mtext><mtext>vs lg</mtext></msub><mo>+</mo><mn>${PJ.bAux}</mn><mspace width="0.15em"/><msub><mtext>Support</mtext><mtext>vs lg</mtext></msub></mrow></math></div>
-    <div class="mscroll"><math display="block"><mrow><msub><mi>V</mi><mtext>now</mtext></msub><mo>=</mo><munder><mo>∑</mo><mrow><mi>i</mi><mspace width="0.2em"/><mtext>known</mtext></mrow></munder><mfrac><msub><mi>m</mi><mi>i</mi></msub><mn>48</mn></mfrac><msubsup><mtext>ChipEquity</mtext><mi>i</mi><mtext>3-yr</mtext></msubsup><mo>,</mo><mspace width="1.2em"/><msub><mi>V</mi><mtext>last season</mtext></msub><mo>=</mo><munder><mo>∑</mo><mi>i</mi></munder><mn>5</mn><mo>·</mo><mtext>share of the team's minutes last season</mtext><mo>·</mo><msubsup><mtext>ChipEquity</mtext><mi>i</mi><mtext>3-yr</mtext></msubsup></mrow></math></div>
-    <ul><li><b>K</b> is core continuity: the share of last season's minutes played by the team's top 8 that is back on the roster and healthy. A team that kept its core keeps its record; a team that turned it over starts closer to average. A returning star who missed last season counts as core that wasn't there, so a season played without him counts for less; and if he played for the same team in his last healthy season, <b>Net<sub>last season</sub></b> is the better of last season and that season (the team is judged on its record with him).</li>
-      <li><b>V</b> is roster value: last season's roster with its real minutes, and this season's roster with projected minutes, both rated with the same Chip Equity, so the difference is purely who came and went.</li>
-      <li><b>Star</b> is the best player's Chip Equity and <b>Support</b> is the summed positive Chip Equity of the other rotation players (15+ projected minutes), each measured against this season's league average.</li>
-      <li><b>Wins</b> = 82 × (0.5 + ${PJ.slope.toFixed(4)} × Net), the historical link between net rating and winning percentage.</li>
-      <li><b>Chip Equity<sup>3-yr</sup></b> is the 3-year Chip Equity ending ${CUR.C.prior} (regular season + playoffs; the 2-year window when a player has no 3-year one). "New" players have fewer than ${PJ.min_gp} games last season (rookies, players returning from abroad or injury).</li>
-      <li><b><i>m<sub>i</sub></i></b> = projected minutes: last season's minutes per game (a new player with no NBA data gets the minutes the known players leave, between ${PJ.unknown_floor} and ${PJ.unknown_mpg.toFixed(1)}: rookies on deep teams barely play; tested on past seasons, this beat a flat default), then fit to 240 the way real rotations work: the team's top ${PJ.alloc_top} keep their usual minutes (a returning star's from his last healthy season), and everyone else shares what's left in proportion to his usual minutes (nobody above ${PJ.max_min}, and no bench player more than 15% past his usual minutes). Tested on past seasons, this tied the alternatives (wins miss ${PJ.backtest.priors.wins_mae_priors}). Everyone is projected healthy except players ruled out for the season.</li>
-      <li><b>Healthy form:</b> a player who played ${PJ.healthy_form.min_gp_last}–${PJ.healthy_form.max_gp_last} games last season is rated on the better of two 3-year windows: the one ending last season and the one ending the season before (his last mostly healthy stretch), so a short season never drags a player below his healthy level. Tested on past seasons, it was neutral on accuracy (wins miss 6.91 vs 6.92).</li>
-      <li><b>Two-way players</b> are listed on rosters but get no projected minutes (they rarely play in a team's first 10 games, which is what the model was tested on).</li>
-      <li><b>Returning stars</b> (fewer than ${PJ.star_rule.max_gp_last + 1} games last season, but ${PJ.star_rule.min_mpg_before}+ minutes and Chip Equity of +${PJ.star_rule.min_cepm} or better the season before) count at their full Chip Equity with their last healthy minutes (projected healthy). On past seasons, full value vs a 50% discount made no real difference (wins miss within 0.05).</li></ul>
-    <p>As the regular season goes, the projection blends with the team's real net rating after <i>n</i> games, and the record follows from it (preseason games never count):</p>
-    <div class="mscroll"><math display="block"><mrow><msub><mtext>Net</mtext><mi>n</mi></msub><mo>=</mo><mfrac><mrow><mi>n</mi><mo>·</mo><msub><mtext>Net</mtext><mtext>actual</mtext></msub><mo>+</mo><mn>${PJ.k}</mn><mo>·</mo><msub><mtext>Net</mtext><mn>0</mn></msub></mrow><mrow><mi>n</mi><mo>+</mo><mn>${PJ.k}</mn></mrow></mfrac><mo>,</mo><mspace width="1.2em"/><mtext>Wins</mtext><mo>=</mo><msub><mtext>W</mtext><mtext>so far</mtext></msub><mo>+</mo><mo>(</mo><mn>82</mn><mo>−</mo><mi>n</mi><mo>)</mo><mo>·</mo><mo>(</mo><mn>0.5</mn><mo>+</mo><mn>${PJ.slope.toFixed(4)}</mn><mo>·</mo><msub><mtext>Net</mtext><mi>n</mi></msub><mo>)</mo></mrow></math></div>
-    <p>How it was built: every season from ${PJ.backtest.seasons} was predicted using only what was known before it started (the roster = players in the team's first 10 games), with every number fit on the other seasons. Versions were tested one change at a time and a change was kept only if it predicted better: adding last season's net rating helped; 3-year and 2-year Chip Equity tied (3-year is used); concentrating minutes on stars, experience splits, roster continuity, a second Chip Equity window, playoff experience and experience on winning rosters didn't help (a newcomer's winning pedigree adds nothing beyond his Chip Equity). Held out, the preseason projection misses net rating by ${PJ.backtest.net_rmse} (RMSE; last season's net alone: ${PJ.backtest.net_rmse_last_season_only}, everyone average: ${PJ.backtest.net_rmse_average}). The 80% range on the record page is ±${PJ.band80_wins} wins before the season and narrows as games are played:</p>
-    <div class="tscroll"><table><thead><tr><th>Games played</th><th>Avg miss on final wins (per 82)</th><th>Within 5 wins</th></tr></thead><tbody>
+  ${CUR ? `<div class="box" id="m-cur"><h2>8. ${CUR.C.season}: projections and standings</h2>
+    <ul><li><b>Rosters and injuries</b> load from ESPN each time the page opens.</li>
+      <li><b>Preseason projection:</b> last season's results count only as far as last season's core is back. The model then adjusts for who came and went, gives a bonus for a lead star with good support around him, and counts returning stars who missed last season at full value.</li>
+      <li><b>During the season</b> the projection leans more on real results with every game. The standings show the real record, and <b>projected finish</b> = wins so far plus the projection for the games left.</li>
+      <li><b>Starting five:</b> before the season, the best healthy lineup with realistic positions. Once games are played, the five the team has started together most this season.</li>
+      <li><b>Player numbers</b> on team pages are ${CUR.C.prior} single-season Chip Equity.</li></ul>
+    <p>How close the projection has been, tested on past seasons:</p>
+    <div class="tscroll"><table><thead><tr><th>Games played</th><th>Avg miss on final wins</th><th>Within 5 wins</th></tr></thead><tbody>
       ${PJ.backtest.in_season.map(c=>`<tr><td>${c.games_played}</td><td>${c.wins_mae_82.toFixed(1)}</td><td>${Math.round(c.within_5*100)}%</td></tr>`).join("")}</tbody></table></div>
-    <h3>Compared with ESPN BPI</h3>
-    <p>ESPN's Basketball Power Index projected wins are shown beside the projection for comparison; they aren't blended in. How accurate BPI has been can't be checked here yet: ESPN publishes its preseason projections on pages this site can't archive, so there is no set of past preseason BPI numbers to test against final records. For reference, on the ${PJ.backtest.priors.n_market} past team-seasons with a preseason betting line, the line missed final wins by ${PJ.backtest.priors.on_market_seasons.market.toFixed(1)} on average and this site's model by ${PJ.backtest.priors.on_market_seasons.priors_model.toFixed(1)}.</p>
-    <p>Single-game and series odds for this season stay off until they've been tested the same way.</p></div>` : ""}
+    <p>ESPN BPI projected wins appear on team pages for comparison only.</p></div>` : ""}
 
-  <div class="box" id="m-src"><h2>13. Sources and limits</h2>
-    <ul><li><b>NBA.com play-by-play</b>, archived and live: stints, Chip Equity, per-game box scores, records, playoff series, SRS, TS% allowed.</li>
-      <li><b>pbpstats.com</b> team season totals for 2000-01 on (team ratings, league averages). 1996-97 to 1999-00 are computed the same way from play-by-play.</li>
-      <li><b>ESPN's</b> public NBA data for live scores, current rosters, injuries and current-season records.</li>
-      <li>League TS% is points / (2 × (FGA + 0.44 FTA)) over all teams.</li>
-      <li>A few games the parser couldn't read are missing, and three 2019-20 bubble games are filled from official results.</li>
-      <li>Players with fewer than 100 minutes in a season are left out of season tables.</li></ul></div>
+  <div class="box" id="m-stats"><h2>9. Other stats, in brief</h2>
+    <ul><li><b>Per 75</b>: a stat scaled to 75 possessions on the floor, so players with different minutes and paces compare fairly.</li>
+      <li><b>TS%</b> (true shooting): scoring efficiency counting threes and free throws. <b>rTS</b> is TS% minus that season's league average.</li>
+      <li><b>Usage</b>: the share of team plays a player finishes while he's on the floor.</li>
+      <li><b>Net rating</b>: points scored minus points allowed per 100 possessions. <b>SRS</b> adds strength of schedule.</li>
+      <li><b>Opponent-adjusted</b> playoff numbers add back how good the opponents were.</li>
+      <li><b>On/off and WOWY</b> (team pages): the team's points scored and allowed per 100 possessions with any group of players on the floor together and any others sitting, with each one taken away in turn, plus the best 2-, 3-, 4- and 5-man units. Built from every five-man lineup the team used, garbage time out.</li></ul></div>
+
+  <div class="box" id="m-src"><h2>10. Sources and limits</h2>
+    <ul><li><b>NBA.com play-by-play</b> (archived and live) for everything Chip Equity, box scores, records and playoff series. <b>pbpstats.com</b> team totals from 2000-01. <b>ESPN</b> for live scores, rosters, injuries and current records.</li>
+      <li>Defense is the hardest part to measure from play-by-play, so defensive numbers are less certain than offensive ones.</li>
+      <li>The model doesn't know who guarded whom, play-by-play style matchups or in-series injuries.</li>
+      <li>A few unreadable games are missing; players under 100 minutes in a season are left out of season tables.</li></ul></div>
   </div>`;
+  // (?) bubbles: each section opens the matching part of the full technical method, with every equation
+  const TECH = (() => { const out = {}, re = /^(\d+)\. (.+)\n=+\n/gm; const hits = [...METHOD_TXT.matchAll(re)];
+    hits.forEach((h, i) => { out[h[1]] = {title: h[2], body: METHOD_TXT.slice(h.index + h[0].length, i + 1 < hits.length ? hits[i + 1].index : undefined).trim()}; }); return out; })();
+  const QMAP = {what:["1","4","5","6"], data:["2","3"], windows:["6"], po:["7"], read:["8","6"], model:["10"], live:["11"], cur:["12"], stats:["9"], src:["13"]};
+  for (const [id, nums] of Object.entries(QMAP)){
+    const h = mOut.querySelector(`#m-${id} h2`); if (!h || !nums.some(n => TECH[n])) continue;
+    const bt = Object.assign(document.createElement("button"), {className: "qbtn", type: "button", textContent: "?", title: "Show the full equations for this section"});
+    bt.setAttribute("aria-label", "Show the full equations for this section"); bt.dataset.q = id; h.appendChild(bt);
+  }
+  mOut.addEventListener("click", e => { const bt = e.target.closest(".qbtn"); if (!bt) return; e.preventDefault();
+    const parts = QMAP[bt.dataset.q].filter(n => TECH[n]).map(n => `<h3>${n}. ${esc((TECH[n].title.charAt(0) + TECH[n].title.slice(1).toLowerCase()).replace(/chip equity/g, "Chip Equity").replace(/espn/g, "ESPN"))}</h3><pre>${esc(TECH[n].body)}</pre>`).join("");
+    let m = document.getElementById("qmodal");
+    if (!m){ m = Object.assign(document.createElement("div"), {id: "qmodal"}); document.body.appendChild(m);
+      m.addEventListener("click", ev => { if (ev.target === m || ev.target.closest(".qclose")) m.hidden = true; });
+      document.addEventListener("keydown", ev => { if (ev.key === "Escape") m.hidden = true; }); }
+    m.innerHTML = `<div class="qpanel" role="dialog" aria-modal="true" aria-label="In-depth method"><button class="qclose" type="button" aria-label="Close">×</button><h2>In depth <small>${esc(bt.closest("h2").firstChild.textContent.trim())}</small></h2><p class="sub" style="margin:0 0 4px">From the full technical method (section numbers below refer to that document).</p>${parts}</div>`;
+    m.hidden = false; m.querySelector(".qpanel").scrollTop = 0; });
+  const dl = document.getElementById("me-dl");
+  if (dl) dl.onclick = e => { e.preventDefault(); const u = URL.createObjectURL(new Blob([METHOD_TXT], {type: "text/plain"})); const a = Object.assign(document.createElement("a"), {href: u, download: "Basketball_Done_Right_method.txt"}); document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 2000); };
   mOut.querySelectorAll("[data-m]").forEach(a => a.addEventListener("click", e => { e.preventDefault(); const t = document.getElementById("m-" + a.dataset.m); if (t) t.scrollIntoView({behavior:"smooth", block:"start"}); }));
   mOut.dataset.done = "1";
 }
@@ -2199,6 +2497,10 @@ const renderLiveFeed = () => { renderGames(); if (!gcGame) renderSeason(); };
 const renderers = {home:renderHome, players:renderPlayer, compare:renderCompare, matchup:renderMatchup, method:renderMethod, leaders:renderLeaders, teams:renderTeams, league:renderLeague, games:renderLiveFeed};
 let current = "players";
 const stSeg = document.getElementById("season-type");
+document.addEventListener("click", e => {          // any player link opens his profile
+  const a = e.target.closest && e.target.closest("[data-player]"); if (!a || e.defaultPrevented) return;
+  e.preventDefault(); plQ.value = optLabel(+a.dataset.player); show("players"); renderPlayer(); window.scrollTo({top:0});
+});
 function show(tab){
   current = tab;
   tabs.forEach(b=>b.setAttribute("aria-selected", b.dataset.tab===tab));
@@ -2218,17 +2520,18 @@ plRS.addEventListener("click", ()=>setType(0)); plPO.addEventListener("click", (
 function setType(t){ TYPE=t; stReg.setAttribute("aria-pressed", t===0); stPo.setAttribute("aria-pressed", t===1); plRS.setAttribute("aria-pressed", t===0); plPO.setAttribute("aria-pressed", t===1); ldStatOptions(); fillTeamSelects(); renderers[current](); }
 stReg.addEventListener("click", ()=>setType(0)); stPo.addEventListener("click", ()=>setType(1));
 const cvCum = document.getElementById("cv-cum"), cvPo = document.getElementById("cv-po");
-function setCepmView(v){ CEPM_VIEW = v; cvCum.setAttribute("aria-pressed", v==="cum"); cvPo.setAttribute("aria-pressed", v==="po"); renderLeaders(); }
+function setCepmView(v){ CEPM_VIEW = v; cvCum.setAttribute("aria-pressed", v==="cum"); cvPo.setAttribute("aria-pressed", v==="po"); if (!["r","o","d"].includes(LD_SORT)) LD_SORT = "r"; ldStatOptions(); renderLeaders(); }
 cvCum.addEventListener("click", ()=>setCepmView("cum")); cvPo.addEventListener("click", ()=>setCepmView("po"));
 
 /* ---------------- starting state ---------------- */
 plQ.value = optLabel(findPlayer("LeBron James"));
 cmIn[0].value = optLabel(findPlayer("LeBron James")); cmIn[1].value = optLabel(findPlayer("Kevin Durant"));
 ldMode.value = "peak"; ldStatOptions();
-tmSeason.value = String(LATEST); fillTeamSelects(); tmSel[0].value = "OKC"; tmSel[1].value = "SAS";
+tmSeason.value = String(HEAD); fillTeamSelects(); tmSel[0].value = "OKC"; tmSel[1].value = "SAS";
 { muSA.value = String(S.indexOf("2016-17")); fillTeams(muTA, S.indexOf("2016-17"), "GSW");
-  muSB.value = String(LATEST); fillTeams(muTB, LATEST, "OKC"); }
+  muSB.value = String(HEAD); fillTeams(muTB, HEAD, "OKC"); }
 let startTab = "home";   // the site always opens on the front page (a #players style link still works)
 if (/^#(home|players|compare|matchup|season|method|leaders|teams|league|games)$/.test(location.hash)) startTab = location.hash.slice(1) === "season" ? "games" : location.hash.slice(1);
 show(startTab);
+document.documentElement.classList.add("ready");      // hides the loading screen
 </script>
