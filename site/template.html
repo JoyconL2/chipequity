@@ -535,6 +535,17 @@ function syncCurTeams(){       // -> true if anything changed
   CURTEAM.clear(); for (const [k, ab] of m) CURTEAM.set(k, ab); CURTEAM_SRC = "live"; return changed;
 }
 const curTeamOf = k => CURTEAM.get(k) || null;
+// most-tenured team: the team he played the most regular-season games for (logo from his biggest season there)
+const MAIN_TEAM = new Map();
+function mainTeamOf(k){
+  if (MAIN_TEAM.has(k)) return MAIN_TEAM.get(k);
+  const by = new Map();
+  for (const i of playerRows(k, 0)) for (const [ab, n] of playerTeams(k, P.s[i], AB(P.tm[i]))){ const g = n || P.gp[i]; const e = by.get(ab) || {ab, gp: 0, s: P.s[i], best: -1};
+    e.gp += g; if (g > e.best){ e.best = g; e.s = P.s[i]; } by.set(ab, e); }
+  const top = [...by.values()].sort((a, b) => b.gp - a.gp)[0] || null; MAIN_TEAM.set(k, top); return top;
+}
+// the team shown for a player: his current team if he's on a roster now, otherwise his most-tenured team
+const homeTeamOf = k => { const ct = curTeamOf(k); if (ct) return {ab: ct, s: LATEST, now: true}; const m = mainTeamOf(k); return m ? {ab: m.ab, s: m.s, now: false} : null; };
 // career stints plus the current team, when he's on a roster for a season the data doesn't have yet
 function stintsNow(k){
   const st = careerStints(k), ct = curTeamOf(k);
@@ -1025,7 +1036,7 @@ function renderPlayer(){
   plOut.innerHTML = `
     <div class="box"><div class="profile">${faceImg(k)}<div style="min-width:0">
       <h2 class="pname">${esc(DATA.names[k])}</h2>
-      <div class="teamline">${(ct => ct && CUR_SEASON && S[LATEST] !== CUR_SEASON ? `${logoImg(ct, LATEST)}${esc(curTeamName(ct))} <span class="ip-tag" title="${CURTEAM_SRC === "live" ? "Current roster, live from ESPN" : "From reported offseason moves"}">${esc(CUR_SEASON)}</span>${ct !== ab || P.s[last] !== LATEST ? ` <span class="muted">· last played for ${esc(ab)} (${S[P.s[last]]})</span>` : ""}` : `${logoImg(ab, P.s[last])}${esc(teamName(ab,P.s[last]))}`)(curTeamOf(k))} <span class="muted">· ${S[P.s[rows[0]]]} to ${S[P.s[last]]} · ${typeName()}${plMode==="p75"?" · per 75 possessions":""}</span></div>
+      <div class="teamline">${(h => h ? (h.now ? `${logoImg(h.ab, LATEST)}${esc(curTeamName(h.ab))}` : `${logoImg(h.ab, h.s)}${esc(teamName(h.ab, h.s))}`) : `${logoImg(ab, P.s[last])}${esc(teamName(ab,P.s[last]))}`)(homeTeamOf(k))} <span class="muted">· ${S[P.s[rows[0]]]} to ${S[P.s[last]]} · ${typeName()}${plMode==="p75"?" · per 75 possessions":""}</span></div>
       <div class="stints"><span class="muted" style="margin-right:2px">Teams</span>${stintsNow(k).map(st => `<span class="stint${st.now ? " now" : ""}">${logoImg(st.ab, Math.min(st.s1, LATEST))}${esc(st.ab)} <span class="muted">${stintYrs(st)}</span></span>`).join("")}</div>
       <div class="tiles">${tiles}</div></div></div>
       <p class="note">${stars}${po}</p></div>
@@ -1316,14 +1327,14 @@ function renderLeaders(){
     const allV = [];
     for (let k=0;k<rowsByPlayer.length;k++){ const v = peakGet(k, stat); if (!v) continue; allV.push(v); const rows = rowsByPlayer[k].filter(i=>P.t[i]===0);
       const g = rows.reduce((a,i)=>a+P.gp[i],0); if (g<min) continue; const last = rows.length ? rows[rows.length-1] : rowsByPlayer[k][rowsByPlayer[k].length-1];
-      const ct = curTeamOf(k); list.push({k, v, gp:g, s: ct ? LATEST : P.s[last], tm: ct || AB(P.tm[last])}); }
+      const h = homeTeamOf(k); list.push({k, v, gp:g, s: h ? h.s : P.s[last], tm: h ? h.ab : AB(P.tm[last])}); }
     // all-time rank on the chosen side of the ball (offense / defense ranks are among the same pool as the total rank)
     const PK = ["r","o","d"].includes(LD_SORT) ? LD_SORT : "r"; const rankOf = new Map(); M.tieRank(allV.map(v => ({v})), x => x.v[PK], "rk").forEach(x => rankOf.set(x.v, x.rk));
     list = M.tieRank(list, x => x.v[PK], "pos").slice(0,n);
     const bp = (key, r) => key === PK ? pctl({rank: rankOf.get(r.v), n: allV.length}, "on this all-time list") : "";
     if (!list.length){ ldOut.innerHTML = `<div class="msg">Nobody qualifies. Try a lower minimum number of games.</div>`; return; }
     ldOut.innerHTML = `<div class="box"><h2>${esc(PEAK_LABEL[stat])}${LD_SORT!=="r"?` · ranked by ${SORT_NAME[LD_SORT]}`:""} <small>all-time · regular season + playoffs</small></h2><div class="tscroll"><table>
-      <thead><tr><th>#</th><th class="l">Player</th><th class="l" title="${CUR_SEASON ? CUR_SEASON + " team for players on a current roster, otherwise the last team he played for" : "Last team"}">Team</th><th>GP since 1996-97</th>${sth("r","Total")}${sth("o","Off")}${sth("d","Def")}<th>All-time rank${LD_SORT!=="r"?(LD_SORT==="o"?" (off)":" (def)"):""}</th></tr></thead>
+      <thead><tr><th>#</th><th class="l">Player</th><th class="l" title="${CUR_SEASON ? CUR_SEASON + " team for players on a current roster, otherwise the team he played the most games for" : "Team he played the most games for"}">Team</th><th>GP since 1996-97</th>${sth("r","Total")}${sth("o","Off")}${sth("d","Def")}<th>All-time rank${LD_SORT!=="r"?(LD_SORT==="o"?" (off)":" (def)"):""}</th></tr></thead>
       <tbody>${list.map((r,i)=>`<tr><td>${r.pos}</td><td class="l"><div class="who">${faceImg(r.k,"sm")}<span class="n">${pLink(r.k, esc(DATA.names[r.k]))}</span></div></td>
         <td class="l"><div class="who">${logoImg(r.tm, r.s)}${r.tm||""}</div></td><td>${r.gp.toLocaleString()}</td><td class="nw">${sb("r",pm(r.v.r))}${bp("r", r)}</td><td class="nw">${sb("o",pm(r.v.o))}${bp("o", r)}</td><td class="nw">${sb("d",pm(r.v.d))}${bp("d", r)}</td><td class="sub">${ord(rankOf.get(r.v))} of ${r.v.n.toLocaleString()}</td></tr>`).join("")}</tbody>
       </table></div><p class="note">Click Total, Off or Def to rank by that number.</p><p class="mlink"><a href="#" data-method="windows">How it's calculated ›</a></p></div>`;
@@ -1352,7 +1363,7 @@ function renderLeaders(){
       else v = val(a,stat);
       if (Number.isNaN(v)) continue;
       const last = rows[rows.length-1];
-      const ct = curTeamOf(k); list.push({k, v, sortv:v, gp:a.gp, s: ct ? LATEST : P.s[last], tm: ct || AB(P.tm[last]), span:`${S[P.s[rows[0]]].slice(0,4)}–${S[P.s[last]].slice(0,4)}`}); }
+      const h = homeTeamOf(k); list.push({k, v, sortv:v, gp:a.gp, s: h ? h.s : P.s[last], tm: h ? h.ab : AB(P.tm[last]), span:`${S[P.s[rows[0]]].slice(0,4)}–${S[P.s[last]].slice(0,4)}`}); }
   }
   const dec = rwW ? 1 : (STATS[stat] && STATS[stat].fmt === "pct") ? 3 : (m === "career" ? 0 : 1);
   list = M.tieRank(list, x => x.sortv, "pos", dec).slice(0,n);
