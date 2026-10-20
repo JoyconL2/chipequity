@@ -172,3 +172,4 @@ table.wy-t td.l{max-width:none!important;white-space:normal!important;overflow:v
 /* this season so far (live, ESPN) */
 #pl-live details{margin-top:14px}
 #pl-live .tiles{margin-top:6px}
+.stint.now{border-color:rgba(255,196,64,.55)}
