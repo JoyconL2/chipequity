@@ -181,3 +181,6 @@ table.wy-t td.l{max-width:none!important;white-space:normal!important;overflow:v
 /* full box score */
 table.box-t td,table.box-t th{white-space:nowrap}
 table.box-t tr.car td{border-top:2px solid rgba(255,255,255,.25);font-weight:600}
+/* play-type tables: labels wrap; on phones the bars give way so the numbers and percentiles fit */
+table.pt-tbl td.l{white-space:normal!important;max-width:none!important;overflow:visible!important;text-overflow:clip!important;min-width:130px;line-height:1.35}
+@media (max-width:600px){ table.pt-tbl td.pt-bar, table.pt-tbl th:nth-child(2){display:none} table.pt-tbl{width:100%!important} }

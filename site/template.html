@@ -1028,6 +1028,55 @@ function ptBox(k, si){
 const pScope = v => v.w ? `with a ${v.w}-year window ending ${S[v.s]}` : "on this list";
 const pctlO = (v, scope) => v && v.orank ? pctl({rank: v.orank, n: v.n}, (scope || pScope(v)) + ", on offense") : "";
 const pctlD = (v, scope) => v && v.drank ? pctl({rank: v.drank, n: v.n}, (scope || pScope(v)) + ", on defense") : "";
+/* ---- defensive play types: events from play-by-play (1996-97 on) + NBA.com matchup tracking (2017-18 on) ---- */
+const DPT = DATA.dpt || {cols:[], rows:[]}, DPC = Object.fromEntries(DPT.cols.map((c,i)=>[c,i]));
+const DMU = DATA.dmu || {cols:[], rows:[]}, DMC = Object.fromEntries(DMU.cols.map((c,i)=>[c,i]));
+const DPTMAP = new Map(), DPTPOOL = new Map(), DMUMAP = new Map(), DMUPOOL = new Map();
+for (const r of DPT.rows){ const key = (r[0]*64 + r[1])*2 + r[2]; DPTMAP.set(key, r); if (r[DPC.pos] >= (r[2] ? 150 : 1000)) (DPTPOOL.get(r[1]*2+r[2]) || DPTPOOL.set(r[1]*2+r[2], []).get(r[1]*2+r[2])).push(r); }
+for (const r of DMU.rows){ const key = (r[0]*64 + r[1])*2 + r[2]; DMUMAP.set(key, r); if (r[DMC.mposs] >= (r[2] ? 150 : 1000)) (DMUPOOL.get(r[1]*2+r[2]) || DMUPOOL.set(r[1]*2+r[2], []).get(r[1]*2+r[2])).push(r); }
+const CHARGES_FROM = S.indexOf("2010-11");           // the play-by-play marks charges from 2010-11 on
+const NO_CHARGE = new Set(DPT.nocharge || []);        // seasons from NBA.com's live feed, which doesn't label charges
+const chargesKnown = si => si >= CHARGES_FROM && !NO_CHARGE.has(si);
+// percentile of v in a pool of values (share at or below it); "low" = smaller is better
+function poolPct(pool, f, v, low){ const xs = pool.map(f).filter(Number.isFinite); if (!xs.length || !Number.isFinite(v)) return null;
+  let n = 0; for (const x of xs) if (low ? x >= v : x <= v) n++; return Math.max(1, Math.min(99, Math.round(100 * n / xs.length))); }
+const DEV = r => { const g = c => r[DPC[c]], p75 = x => 75 * x / Math.max(1, g("pos")), blk = g("blk_rim") + g("blk_mid") + g("blk_3");
+  return [
+    {key:"rim", label:"Blocks at the rim", v: p75(g("blk_rim"))},
+    {key:"mid", label:"Blocks on mid-range shots", v: p75(g("blk_mid"))},
+    {key:"three", label:"Blocks on threes", v: p75(g("blk_3"))},
+    {key:"rec", label:"Blocks kept by his team", v: blk >= 10 ? 100 * g("blk_rec") / blk : NaN, pct: true},
+    {key:"int", label:"Interceptions (bad-pass steals)", v: p75(g("stl_int"))},
+    {key:"strip", label:"Strips (steals off the dribble)", v: p75(g("stl_strip"))},
+    {key:"chg", label:"Charges drawn", v: chargesKnown(r[1]) ? p75(g("charges")) : NaN, na: !chargesKnown(r[1])},
+    {key:"dreb", label:"Defensive rebounds", v: p75(g("dreb"))},
+    {key:"sf", label:"Shooting fouls", v: p75(g("sfouls")), low: true},
+  ]; };
+const DMV = r => { const g = c => r[DMC[c]], mp = g("mposs");
+  return {mposs: mp, pts: 100 * g("pts") / mp, fgd: g("fga") >= 50 && g("xfga") ? 100 * (g("fgm") / g("fga") - g("xfgm") / g("xfga")) : NaN,
+    tpd: g("fg3a") >= 40 && g("x3a") ? 100 * (g("fg3m") / g("fg3a") - g("x3m") / g("x3a")) : NaN, usg: g("uposs") ? g("usgw") / g("uposs") : NaN, top: 100 * g("top") / mp,
+    G: 100 * g("g") / mp, F: 100 * g("f") / mp, C: 100 * g("c") / mp, sw: 100 * g("switch") / mp, sf: 100 * g("sfouls") / mp, tov: 100 * g("tov") / mp}; };
+function defBox(k, si){
+  const t = TYPE, r = DPTMAP.get((k*64 + si)*2 + t), mu = DMUMAP.get((k*64 + si)*2 + t), scope = `among players with ${t ? "150" : "1,000"}+ ${t ? "playoff " : ""}defensive possessions that ${t ? "postseason" : "season"}`;
+  if (!r) return `<p class="muted">No defensive play-by-play for ${S[si]}.</p>`;
+  const pool = DPTPOOL.get(si*2 + t) || [], parts = DEV(r), mx = Math.max(1, ...parts.filter(p => !p.pct && !p.na && Number.isFinite(p.v)).map(p => p.v));
+  const rowsH = parts.map(p => { const q = p.na ? null : poolPct(pool, x => DEV(x).find(y => y.key === p.key).v, p.v, p.low);
+    return `<tr><td class="l">${esc(p.label)}${p.low ? ` <span class="sub">(fewer is better)</span>` : ""}</td><td class="pt-bar">${p.pct || p.na || !Number.isFinite(p.v) ? "" : `<i style="width:${Math.min(100, p.v/mx*100)}%"></i>`}</td>
+      <td><strong>${p.na ? "–" : Number.isFinite(p.v) ? (p.pct ? p.v.toFixed(0) + "%" : p.v.toFixed(2)) : "–"}</strong></td><td>${q != null ? pctlQ(q, scope) : p.na ? `<span class="sub" title="Charges are marked in the play-by-play from 2010-11 on (not in NBA.com's live feed)">not recorded</span>` : "–"}</td></tr>`; }).join("");
+  const ev = `<div class="tscroll"><table class="pt-tbl"><thead><tr><th class="l">Defensive events</th><th></th><th title="Per 75 defensive possessions">Per 75</th><th>Pct</th></tr></thead><tbody>${rowsH}</tbody></table></div>`;
+  let mh;
+  if (mu){ const v = DMV(mu), mp = DMUPOOL.get(si*2 + t) || [], ms = `among defenders with ${t ? "150" : "1,000"}+ matchup possessions that ${t ? "postseason" : "season"}`;
+    const P_ = (f, val, low) => { const q = poolPct(mp, x => DMV(x)[f], val, low); return q != null ? pctlQ(q, ms) : ""; };
+    const tile = (val, lab, badge = "") => `<div class="tile"><div class="v">${val}${badge}</div><div class="k">${lab}</div></div>`, sg = x => Number.isFinite(x) ? (x >= 0 ? "+" : "") + x.toFixed(1) : "–";
+    mh = `<h3 style="margin:16px 0 6px;font-size:13px">Who he guarded <span class="sub">· NBA.com matchup tracking · ${Math.round(v.mposs).toLocaleString()} matchup possessions</span></h3>
+      <div class="tiles">${tile(v.usg.toFixed(1) + "%", "Usage of the players he guarded", P_("usg", v.usg))}${tile(v.top.toFixed(0) + "%", "Of his time on the other team's top option", P_("top", v.top))}
+        ${tile(`${v.G.toFixed(0)} / ${v.F.toFixed(0)} / ${v.C.toFixed(0)}`, "% on guards / forwards / centers")}</div>
+      <div class="tiles">${tile(v.pts.toFixed(1), "Points allowed per 100 matchup poss.", P_("pts", v.pts, true))}${tile(sg(v.fgd), "FG% allowed vs. his men's usual", P_("fgd", v.fgd, true))}${tile(sg(v.tpd), "3P% allowed vs. their usual", P_("tpd", v.tpd, true))}
+        ${tile(v.tov.toFixed(1), "Turnovers forced per 100", P_("tov", v.tov))}${tile(v.sf.toFixed(1), "Shooting fouls per 100", P_("sf", v.sf, true))}</div>
+      <p class="sub" style="margin:6px 0 0">Positions are NBA.com's listings (players without a start that season count only in the total). Better-than-usual shooting allowed is measured against each opponent's own season FG% and 3P%.</p>`;
+  } else mh = `<p class="sub" style="margin:12px 0 0">${si < S.indexOf("2017-18") ? "Who-guarded-whom tracking starts in 2017-18, so there's no matchup data for this season." : "Not enough matchup possessions this season for a profile."}</p>`;
+  return ev + mh;
+}
 // a percentile badge from a percentile already computed (play types)
 const pctlQ = (q, scope) => ` <span class="pctl ${q >= 90 ? "p90" : q >= 70 ? "p70" : q >= 50 ? "p50" : "p0"}" title="${ord(q)} percentile ${esc(scope || "")}">${ord(q)}</span>`;
 // full box score, season by season: every counting stat the play-by-play records, per game or per 75, plus a career line
@@ -1118,12 +1167,17 @@ function renderPlayer(){
     ${TYPE === 0 ? (() => { const ss = rows.map(i=>P.s[i]).filter((s, j, a) => a.indexOf(s) === j && PTMAP.has(k*64+s)); if (!ss.length) return "";
       const def = ss[ss.length-1]; return `<div class="box"><h2>Play types <small>from play-by-play and shot charts · regular season</small></h2>
         <label class="sub">Season <select id="pt-season">${ss.slice().reverse().map(s=>`<option value="${s}" ${s===def?"selected":""}>${S[s]}</option>`).join("")}</select></label>
-        <div id="pt-out" style="margin-top:10px">${ptBox(k, def)}</div><p class="mlink"><a href="#" data-method="pt">How play types are measured ›</a></p></div>`; })() : ""}${TYPE===1 ? playoffSeriesBox(k) : ""}`;
+        <div id="pt-out" style="margin-top:10px">${ptBox(k, def)}</div><p class="mlink"><a href="#" data-method="pt">How play types are measured ›</a></p></div>`; })() : ""}
+    ${(() => { const ss = rows.map(i=>P.s[i]).filter((s, j, a) => a.indexOf(s) === j && DPTMAP.has((k*64+s)*2 + TYPE)); if (!ss.length) return "";
+      const def = ss[ss.length-1]; return `<div class="box"><h2>Defensive play types <small>${typeName().toLowerCase()} · play-by-play since 1996-97, matchup tracking since 2017-18</small></h2>
+        <label class="sub">Season <select id="dpt-season">${ss.slice().reverse().map(s=>`<option value="${s}" ${s===def?"selected":""}>${S[s]}</option>`).join("")}</select></label>
+        <div id="dpt-out" style="margin-top:10px">${defBox(k, def)}</div><p class="mlink"><a href="#" data-method="dpt">How defensive play types are measured ›</a></p></div>`; })()}${TYPE===1 ? playoffSeriesBox(k) : ""}`;
   // team bands: each season's width is split by games played for each team, so a mid-season trade shows mid-season
   const bands = []; for (const i of rows){ const s0 = P.s[i], tl = playerTeams(k, s0, AB(P.tm[i])), tot = tl.reduce((a,t)=>a+(t[1]||0),0) || 1;
     let x = s0 - 0.5; for (const [ab, n] of tl){ const x1 = x + (tl.length > 1 ? (n||0)/tot : 1), last = bands[bands.length-1];
       if (last && last.ab === ab && Math.abs(last.x1 - x) < 1e-6) { last.x1 = x1; last.s1 = s0; } else bands.push({ab, x0: x, x1, s0, s1: s0}); x = x1; } }
   const ptSel = document.getElementById("pt-season"); if (ptSel) ptSel.onchange = () => { document.getElementById("pt-out").innerHTML = ptBox(k, +ptSel.value); };
+  const dSel = document.getElementById("dpt-season"); if (dSel) dSel.onchange = () => { document.getElementById("dpt-out").innerHTML = defBox(k, +dSel.value); };
   lineChart(document.getElementById("pl-chart"), [{name:DATA.names[k], pts: rows.map(i=>({x:P.s[i], y:rowVal(i,plStat.value), sub:playerTeams(k, P.s[i], AB(P.tm[i])).map(t=>t[0]).join("/")}))}], STATS[plStat.value], {bands});
   if (TYPE === 0 && typeof CUR !== "undefined" && CUR && Date.now() >= +CUR.seasonStart){
     const prof = plOut.querySelector(".box"); if (prof){ prof.insertAdjacentHTML("afterend", `<div id="pl-live"></div>`); playerLive(k); } }
@@ -2575,6 +2629,11 @@ function renderMethod(){
       <li><b>Points per shot (pps)</b> is shown against the league average for that play type and season, and percentiles compare players with 1,000+ possessions that season.</li>
       <li><b>Shots created for teammates</b>: his assists per 75 possessions, split by the shot they created.</li>
       <li><b>Does it help predict?</b> Added to what the model already knows, play types improve the forecast of a player's next-season offensive impact slightly (error 1.356 to 1.340). They aren't part of Chip Equity yet; they're shown for context.</li></ul></div>
+
+  <div class="box" id="m-dpt"><h2>Defensive play types</h2>
+    <p>Two sources. Play-by-play, every season since 1996-97: blocks by the zone of the shot (rim 0–4 ft, mid-range, threes) and how often his team kept the ball after the block, steals split into interceptions (bad-pass steals) and strips (lost-ball steals), charges drawn (marked in the play-by-play from 2010-11 on), defensive rebounds and shooting fouls, all per 75 defensive possessions.</p>
+    <p>NBA.com matchup tracking, from 2017-18 (the first season it was published): for every pair of players it records how long one guarded the other, as partial possessions, with the points, shots, turnovers and fouls in those possessions. From those: the usage of the players he guarded and how much of his time was on each opponent's top option (highest usage among 20+ minute players) as assignment difficulty; points allowed per 100 matchup possessions; and the FG% and 3P% he allowed against what those same players shot all season, so guarding stars isn't held against him. Percentiles compare players with 1,000+ defensive (or matchup) possessions that season (150+ in the playoffs); for fouls, points and shooting allowed, lower ranks higher.</p>
+    <p>Matchup numbers are tracking estimates (switches and help defense blur who was responsible), so they describe a role more than they grade it; Chip Equity remains the measure of impact.</p></div>
 
   <div class="box" id="m-src"><h2>10. Sources and limits</h2>
     <ul><li><b>NBA.com play-by-play</b> (archived and live) for everything Chip Equity, box scores, records and playoff series. <b>pbpstats.com</b> team totals from 2000-01. <b>ESPN</b> for live scores, rosters, injuries and current records.</li>
