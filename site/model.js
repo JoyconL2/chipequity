@@ -121,7 +121,7 @@ function buildModel(DATA, PARAMS_IN){
   for (const [k,j,o,d,r,rank] of PEAK.rows){ let a = peakMap.get(k); if (!a){ a = []; peakMap.set(k, a); } a[j] = {o,d,r,rank,n:PEAK.n[j],ds:PEAK.ds[j]}; }
   const PEAK_DS = PEAK.ds;
   { const lists = PEAK_DS.map(() => []); for (const a of peakMap.values()) a.forEach((v, j) => { if (v) lists[j].push(v); });
-    lists.forEach(l => { tieRank(l); l.forEach(v => v.n = l.length); }); }
+    lists.forEach(l => { tieRank(l); tieRank(l, v => v.o, "orank"); tieRank(l, v => v.d, "drank"); l.forEach(v => v.n = l.length); }); }
   const peakOf = (k, name) => { const a = peakMap.get(k); const j = PEAK_DS.indexOf(name); return a && j>=0 ? (a[j] || null) : null; };
   // which decade lists a season belongs to (boundary seasons like 2009-10 appear in both)
   const decadesOf = s => { const y = +S[s].slice(0,4); const d = Math.floor(y/10)*10; return y%10===9 ? [`${d}s Chip Equity`, `${d+10}s Chip Equity`] : [`${d}s Chip Equity`]; };
@@ -138,7 +138,7 @@ function buildModel(DATA, PARAMS_IN){
   const rwMap = new Map();
   for (const [k,s,w,o,d,r,rank,poss] of RW.rows) rwMap.set((k*64+s)*4+w, {o,d,r,rank,poss,s,w,n:RW.n[s+"_"+w]||null});
   { const g = new Map(); for (const v of rwMap.values()){ const key = v.s*4 + v.w; (g.get(key) || g.set(key, []).get(key)).push(v); }
-    for (const l of g.values()){ tieRank(l); l.forEach(v => v.n = l.length); } }
+    for (const l of g.values()){ tieRank(l); tieRank(l, v => v.o, "orank"); tieRank(l, v => v.d, "drank"); l.forEach(v => v.n = l.length); } }
   const rwOf = (k, s, w) => rwMap.get((k*64+s)*4+w) || null;
   // regular-season-only 3-year Chip Equity used by the playoff model (the displayed numbers include playoff games)
   const rwmMap = new Map(); for (const [k,s,r] of (DATA.rwm||[])) rwmMap.set(k*64+s, r);
