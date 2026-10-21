@@ -12,32 +12,79 @@ from concurrent.futures import ThreadPoolExecutor
 import requests
 
 CDN = os.environ.get("NBA_CDN", "https://cdn.nba.com/static/json")   # override only for testing
-H = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-     "Accept": "application/json", "Referer": "https://www.nba.com/", "Origin": "https://www.nba.com"}
+UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+HEADERS = [{"User-Agent": UA, "Accept": "application/json, text/plain, */*", "Referer": "https://www.nba.com/", "Origin": "https://www.nba.com"},
+           {"User-Agent": UA, "Accept": "*/*"},                     # plainer request, in case the first set is refused
+           {}]
+STATUS = {}                                                          # url -> what NBA.com answered (shown if the run fails)
+SESSION = requests.Session()
 
 
-def get(url, tries=4):
+def get(url, tries=3):
     for i in range(tries):
-        try:
-            r = requests.get(url, headers=H, timeout=30)
-            if r.status_code == 200: return r.json()
-            if r.status_code in (403, 404) and i >= 1: return None
-        except (requests.RequestException, ValueError):
-            pass
+        for h in HEADERS:
+            try:
+                r = SESSION.get(url, headers=h, timeout=30)
+                STATUS[url] = r.status_code
+                if r.status_code == 200: return r.json()
+                if r.status_code == 404: return None
+            except (requests.RequestException, ValueError) as e:
+                STATUS[url] = type(e).__name__
         time.sleep(2 * (i + 1))
     return None
 
 
+def note(msg):
+    """a one-line message that shows up as an annotation on the GitHub run (and in the log)"""
+    print(f"::warning::{msg}" if os.environ.get("GITHUB_ACTIONS") else msg, flush=True)
+
+
+def games_from_ids(season):
+    """Fallback when the schedule file can't be read: walk the game ids (regular season 002YY0nnnn, playoffs
+    004YY00RSG) and keep the games whose box score says they're final. Box scores already on disk are reused."""
+    yy = season[2:4]; out = []
+    def box(gid):
+        return get(f"{CDN}/liveData/boxscore/boxscore_{gid}.json", tries=1)
+    def keep(gid, B):
+        g = B["game"]; ht, at = g["homeTeam"], g["awayTeam"]
+        out.append(dict(gid=gid, stype="rs" if gid[:3] == "002" else "po", date=(g.get("gameEt") or g.get("gameTimeUTC") or "")[:10],
+                        home=ht["teamId"], away=at["teamId"], home_ab=ht["teamTricode"], away_ab=at["teamTricode"], hp=int(ht.get("score") or 0), ap=int(at.get("score") or 0)))
+    misses, n = 0, 1
+    while n <= 1320 and misses < 40:                        # ids are handed out roughly in date order
+        ids = [f"002{yy}{i:05d}" for i in range(n, n + 20)]; n += 20
+        with ThreadPoolExecutor(6) as ex: got = list(ex.map(box, ids))
+        for gid, B in zip(ids, got):
+            if B and B.get("game", {}).get("gameStatus") == 3: keep(gid, B); misses = 0
+            else: misses += 1
+    if time.localtime().tm_mon in (4, 5, 6, 7):            # playoffs: round 1-4, series 0-7, game 1-7
+        ids = [f"004{yy}00{r}{s}{g}" for r in range(1, 5) for s in range(8) for g in range(1, 8)]
+        with ThreadPoolExecutor(6) as ex: got = list(ex.map(box, ids))
+        for gid, B in zip(ids, got):
+            if B and B.get("game", {}).get("gameStatus") == 3: keep(gid, B)
+    return out
+
+
 def main():
     out = sys.argv[1]
-    sch = get(f"{CDN}/staticData/scheduleLeagueV2.json")
-    if not sch: sys.exit("could not load the NBA.com schedule")
-    L = sch["leagueSchedule"]; season = sys.argv[2] if len(sys.argv) > 2 else L["seasonYear"]
-    if L["seasonYear"] != season: sys.exit(f"schedule is for {L['seasonYear']}, not {season}")
+    url = f"{CDN}/staticData/scheduleLeagueV2.json"
+    sch = get(url)
+    want = sys.argv[2] if len(sys.argv) > 2 else None
+    if not sch:
+        note(f"NBA.com schedule not readable (answer: {STATUS.get(url)}); finding finished games by game id instead")
+        if not want: sys.exit("no season given and no schedule")
+        season, games = want, None
+    else:
+        L = sch["leagueSchedule"]; season = want or L["seasonYear"]
+        if L["seasonYear"] != season: sys.exit(f"schedule is for {L['seasonYear']}, not {season}")
+        games = []
     d = os.path.join(out, season)
     for sub in ("pbp_rs", "pbp_po", "box"): os.makedirs(os.path.join(d, sub), exist_ok=True)
-    games = []
-    for day in L["gameDates"]:
+    if games is None:
+        games = games_from_ids(season)
+        if not games:
+            bad = sorted({str(v) for v in STATUS.values()})
+            note(f"no finished {season} games found by id either (NBA.com answers seen: {', '.join(bad)})"); sys.exit("could not download games")
+    for day in ([] if sch is None else L["gameDates"]):
         for g in day["games"]:
             gid = g["gameId"]
             if g.get("gameStatus") != 3 or gid[:3] not in ("002", "004"): continue
@@ -78,6 +125,7 @@ def main():
     json.dump(names, open(os.path.join(d, "names.json"), "w"))
     n_rs = sum(g["stype"] == "rs" for g in games)
     print(f"{season}: {len(games)} finished games ({n_rs} regular season, {len(games) - n_rs} playoffs), {len(missing)} not available yet, through {games[-1]['date'] if games else '-'}")
+    if missing: note(f"{len(missing)} finished games' files couldn't be downloaded yet (e.g. {missing[0]}: {STATUS.get(f'{CDN}/liveData/playbyplay/playbyplay_{missing[0]}.json')})")
     if games == [] and missing: sys.exit("no game files could be downloaded")
 
 
