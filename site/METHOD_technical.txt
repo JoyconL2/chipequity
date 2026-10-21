@@ -259,7 +259,7 @@ share a rank and the next rank skips (1, 1, 3). On leaderboards the badge follow
 is measured against that list's whole pool (that season, every season for 'best' lists, or the all-time list), so it never
 rises going down a list.
 
-The season being played is added every week (Mondays) from NBA.com's play-by-play files. History is frozen and never
+The season being played is updated every morning from NBA.com's play-by-play files. History is frozen and never
 refit: only the windows ending in the new season are computed, with the same box-score prior (trained only on windows
 that share no season with the one being fit), the same ridge penalty rule (cross-validated for the regular-season
 3-year and single-season fits; the other windows take the regular-season 3-year penalty), the same lead-margin,
