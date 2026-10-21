@@ -458,7 +458,7 @@ const ipTag = si => INPROG && si === LATEST ? ` <span class="ip-tag" title="${es
 const sOpt = (si, txt) => INPROG && si === LATEST ? `${txt} (in progress)` : txt;
 // percentile of a Chip Equity value within its list: share of the players in that list (same season and window, or
 // all-time for peaks) he is ahead of. Rank 1 -> 99th, the median -> 50th.
-const pctOf = v => v && v.rank && v.n ? (v.n === 1 ? 99 : Math.max(0, Math.min(99, Math.round(100 * (v.n - v.rank) / (v.n - 1))))) : null;   // #1 -> 99th, median -> 50th, last -> 0
+const pctOf = v => v && v.rank && v.n ? (v.n === 1 ? 99 : Math.max(1, Math.min(99, Math.round(100 * (v.n - v.rank) / (v.n - 1))))) : null;   // #1 -> 99th, median -> 50th, last -> 0
 const pctl = (v, scope) => { const q = pctOf(v); return q == null ? "" : ` <span class="pctl ${q >= 90 ? "p90" : q >= 70 ? "p70" : q >= 50 ? "p50" : "p0"}" title="${ord(q)} percentile: ahead of ${q}% of the ${v.n.toLocaleString()} players ${scope || (v.w ? `with a ${v.w}-year window ending ${S[v.s]}` : "on this list")}">${ord(q)}</span>`; };
 
 /* ---------------- helpers ---------------- */
@@ -569,7 +569,7 @@ const minutesOf = rowsByPlayer.map(r => r.reduce((a,i)=>a+P.sec[i],0));
 const spanOf = rowsByPlayer.map(r => { let lo=99,hi=0; r.forEach(i=>{lo=Math.min(lo,P.s[i]);hi=Math.max(hi,P.s[i]);}); return [lo,hi]; });
 const ONE_PK = (() => { const best = new Map();
   for (const v of (DATA.rw || {rows:[]}).rows){ const [k,s,w,o,d,r,rank,poss] = v; if (w !== 1 || poss < 1500 || s === 0) continue; const b = best.get(k); if (!b || r > b.r) best.set(k, {o, d, r, s, ds:"Peak 1Y CEPM"}); }
-  const list = [...best.values()]; M.tieRank(list).forEach(x => { x.n = list.length; }); return best; })();
+  const list = [...best.values()]; M.tieRank(list).forEach(x => { x.n = list.length; }); M.tieRank(list, x => x.o, "orank"); M.tieRank(list, x => x.d, "drank"); return best; })();
 const peakGet = (k, name) => name === "Peak 1Y CEPM" ? (ONE_PK.get(k) || null) : M.peakOf(k, name);
 const normNames = DATA.names.map(norm);
 const optLabel = k => { const [lo,hi]=spanOf[k]; return `${DATA.names[k]} (${S[lo].slice(0,4)}–${playingNow(k) ? CUR_SEASON.slice(0,4) : S[hi].slice(0,4)})`; };
@@ -786,7 +786,7 @@ function rwTable(k){
   const by = new Map();
   for (const w of [1,2,3]) for (const v of M.rwSeries(k, w)) { const e = by.get(v.s) || {}; e[w] = v; by.set(v.s, e); }
   if (!by.size) return `<p class="muted">No Chip Equity windows for this player.</p>`;
-  const cell = v => v ? `<td>${pm(v.o)}</td><td>${pm(v.d)}</td><td class="nw"><strong>${pm(v.r)}</strong>${pctl(v)}</td><td class="sub">${v.rank?ord(v.rank):"–"}</td>` : `<td>–</td><td>–</td><td>–</td><td></td>`;
+  const cell = v => v ? `<td class="nw">${pm(v.o)}${pctlO(v)}</td><td class="nw">${pm(v.d)}${pctlD(v)}</td><td class="nw"><strong>${pm(v.r)}</strong>${pctl(v)}</td><td class="sub">${v.rank?ord(v.rank):"–"}</td>` : `<td>–</td><td>–</td><td>–</td><td></td>`;
   const rows = [...by.entries()].sort((a,b)=>b[0]-a[0]).map(([s,e]) => `<tr><td>${S[s]}${ipTag(s)}</td>${cell(e[1])}<td class="sub">${rwSpan(s,2)}</td>${cell(e[2])}<td class="sub">${rwSpan(s,3)}</td>${cell(e[3])}</tr>`).join("");
   return `<div class="tscroll"><table><thead><tr><th>Season</th><th>Off</th><th>Def</th><th title="Chip Equity for that season alone (steadied 40% toward the 3-year window)">1-yr</th><th>Rank</th><th>Span</th><th>Off</th><th>Def</th><th>2-yr</th><th>Rank</th><th>Span</th><th>Off</th><th>Def</th><th>3-yr</th><th>Rank</th></tr></thead><tbody>${rows}</tbody></table></div>
     <p class="mlink"><a href="#" data-method="windows">How it's calculated ›</a></p>`;
@@ -794,7 +794,7 @@ function rwTable(k){
 function peakTable(k){
   const rows = ["Peak 1Y CEPM"].concat(M.PEAK_DS).map(n=>({n, v:peakGet(k,n)})).filter(x=>x.v);
   if (!rows.length) return `<p class="muted">No peak or decade data for this player.</p>`;
-  const tr = x => `<tr><td class="l">${x.n === "Peak 1Y CEPM" ? `Best single season <span class="muted">(${S[x.v.s]})</span>` : esc(PEAK_LABEL[x.n])}</td><td class="nw"><strong>${pm(x.v.r)}</strong>${pctl(x.v, "on this all-time list")}</td><td>${pm(x.v.o)}</td><td>${pm(x.v.d)}</td><td class="sub">${ord(x.v.rank)} of ${x.v.n.toLocaleString()}</td></tr>`;
+  const tr = x => `<tr><td class="l">${x.n === "Peak 1Y CEPM" ? `Best single season <span class="muted">(${S[x.v.s]})</span>` : esc(PEAK_LABEL[x.n])}</td><td class="nw"><strong>${pm(x.v.r)}</strong>${pctl(x.v, "on this all-time list")}</td><td class="nw">${pm(x.v.o)}${pctlO(x.v, "on this all-time list")}</td><td class="nw">${pm(x.v.d)}${pctlD(x.v, "on this all-time list")}</td><td class="sub">${ord(x.v.rank)} of ${x.v.n.toLocaleString()}</td></tr>`;
   const grp = (title, f) => { const g = rows.filter(f); return g.length ? `<tr><td class="l sub" colspan="5" style="padding-top:12px">${title}</td></tr>${g.map(tr).join("")}` : ""; };
   return `<div class="tscroll"><table><thead><tr><th class="l">Metric</th><th>Total</th><th>Off</th><th>Def</th><th>All-time rank</th></tr></thead><tbody>
     ${grp("Peak Chip Equity", x=>/^Peak \dY/.test(x.n))}${grp("Decade Chip Equity", x=>/0s Chip Equity$/.test(x.n))}</tbody></table></div>`;
@@ -818,12 +818,12 @@ const PSL = DATA.psl || [], PCTX = DATA.pctx || [], PCEPM = DATA.pcepm || [];
 // playoff-only Chip Equity per player-postseason (rank among that postseason's 300+ possession players) and per career
 const POC = (() => { const m = new Map(), nS = new Map(); for (const r of PCEPM) nS.set(r[1], (nS.get(r[1]) || 0) + 1);
   for (const r of PCEPM) m.set(r[0]*64 + r[1], {r:r[2], o:r[3], d:r[4], p:r[5], rank:r[6], n:nS.get(r[1]), s:r[1]});
-  const g = new Map(); for (const v of m.values()) (g.get(v.s) || g.set(v.s, []).get(v.s)).push(v); for (const l of g.values()) M.tieRank(l);
+  const g = new Map(); for (const v of m.values()) (g.get(v.s) || g.set(v.s, []).get(v.s)).push(v); for (const l of g.values()){ M.tieRank(l); M.tieRank(l, v => v.o, "orank"); M.tieRank(l, v => v.d, "drank"); }
   return m; })();
 const POC_CAREER = (() => { const by = new Map();
   for (const r of PCEPM){ const e = by.get(r[0]) || {w:0, o:0, p:0, seasons:0, best:null}; e.w += r[2]*r[5]; e.o += r[3]*r[5]; e.p += r[5]; e.seasons++; if (!e.best || r[2] > e.best.r) e.best = {r:r[2], s:r[1]}; by.set(r[0], e); }
   for (const e of by.values()){ e.r = e.w/e.p; e.o = +(e.o/e.p).toFixed(1); e.d = +(+e.r.toFixed(1) - e.o).toFixed(1); }
-  const q = [...by.values()].filter(e => e.p >= 2000); M.tieRank(q).forEach(e => { e.n = q.length; });
+  const q = [...by.values()].filter(e => e.p >= 2000); M.tieRank(q).forEach(e => { e.n = q.length; }); M.tieRank(q, e => e.o, "orank"); M.tieRank(q, e => e.d, "drank");
   return by; })();
 const pslByPlayer = new Map(), pslBySeries = new Map();
 for (const r of PSL){ (pslByPlayer.get(r[0]) || pslByPlayer.set(r[0], []).get(r[0])).push(r); (pslBySeries.get(r[1]) || pslBySeries.set(r[1], []).get(r[1])).push(r); }
@@ -981,7 +981,7 @@ function poTable(k){
   const rows = PCEPM.filter(r => r[0] === k).sort((a,b) => b[1] - a[1]);
   if (!rows.length) return `<p class="muted">No playoff Chip Equity for this player (a postseason needs 300+ playoff possessions).</p>`;
   const tr = r => { const v = POC.get(k*64 + r[1]), t = pcepmTeam.get(k*64 + r[1]), ab = t != null ? AB(t) : "", sr = t != null ? seasonResult(t, r[1]) : {txt:"", cls:""};
-    return `<tr><td>${S[r[1]]}</td><td class="l"><div class="who">${ab ? logoImg(ab, r[1]) : ""}${ab}</div></td><td class="l"><span class="res ${sr.cls}">${sr.txt}</span></td><td>${r[5].toLocaleString()}</td><td>${pm(v.o)}</td><td>${pm(v.d)}</td><td class="nw"><strong>${pm(v.r)}</strong>${pctl(v, `with 300+ possessions in the ${S[r[1]]} playoffs`)}</td><td class="sub">${ord(v.rank)} of ${v.n}</td></tr>`; };
+    return `<tr><td>${S[r[1]]}</td><td class="l"><div class="who">${ab ? logoImg(ab, r[1]) : ""}${ab}</div></td><td class="l"><span class="res ${sr.cls}">${sr.txt}</span></td><td>${r[5].toLocaleString()}</td><td class="nw">${pm(v.o)}${pctlO(v, `with 300+ possessions in the ${S[r[1]]} playoffs`)}</td><td class="nw">${pm(v.d)}${pctlD(v, `with 300+ possessions in the ${S[r[1]]} playoffs`)}</td><td class="nw"><strong>${pm(v.r)}</strong>${pctl(v, `with 300+ possessions in the ${S[r[1]]} playoffs`)}</td><td class="sub">${ord(v.rank)} of ${v.n}</td></tr>`; };
   return `<div class="tscroll"><table><thead><tr><th>Postseason</th><th class="l">Team</th><th class="l">Result</th><th>Playoff poss.</th><th>Off</th><th>Def</th><th>Playoff Chip Equity</th><th>Rank that year</th></tr></thead><tbody>${rows.map(tr).join("")}</tbody></table></div>
     <p class="mlink"><a href="#" data-method="po">How it's calculated ›</a></p>`;
 }
@@ -1024,6 +1024,10 @@ function ptBox(k, si){
   return `<p class="sub" style="margin:0 0 8px">Shots per 75 possessions by play type, and points per shot against the league (pps). ${hc ? `${Math.round(100*self/hc)}% of his half-court shots were self-created.` : ""}</p>
     ${tbl}<h3 style="margin:14px 0 6px;font-size:13px">Shots created for teammates</h3><div class="tiles">${astH}</div>`;
 }
+// percentile badges for the offense / defense split of a Chip Equity value (same pool as the total)
+const pScope = v => v.w ? `with a ${v.w}-year window ending ${S[v.s]}` : "on this list";
+const pctlO = (v, scope) => v && v.orank ? pctl({rank: v.orank, n: v.n}, (scope || pScope(v)) + ", on offense") : "";
+const pctlD = (v, scope) => v && v.drank ? pctl({rank: v.drank, n: v.n}, (scope || pScope(v)) + ", on defense") : "";
 // a percentile badge from a percentile already computed (play types)
 const pctlQ = (q, scope) => ` <span class="pctl ${q >= 90 ? "p90" : q >= 70 ? "p70" : q >= 50 ? "p50" : "p0"}" title="${ord(q)} percentile ${esc(scope || "")}">${ord(q)}</span>`;
 // full box score, season by season: every counting stat the play-by-play records, per game or per 75, plus a career line
@@ -1031,16 +1035,15 @@ const BOX_KEYS = ["gp","sec","pts","fg2m","fg2a","fg3m","fg3a","ftm","fta","oreb
 function boxSum(rows){ const a = Object.fromEntries(BOX_KEYS.map(c => [c, 0])); a.miss = false;
   for (const i of rows) for (const c of BOX_KEYS){ const v = P[c] ? P[c][i] : null; if (v == null){ if (["fg2m","ftm","oreb","dreb","pf"].includes(c)) a.miss = true; } else a[c] += v; }
   return a; }
-function fullBoxTable(k, rows){
-  const per = plMode === "p75" ? (a, x) => a.pos ? 75 * x / a.pos : NaN : (a, x) => a.gp ? x / a.gp : NaN;
-  const f1 = v => Number.isFinite(v) ? v.toFixed(1) : "–", pc = (m, n) => n ? (100 * m / n).toFixed(1) : "–";
-  const line = (lab, a, cls = "") => { const fgm = a.fg2m + a.fg3m, fga = a.fg2a + a.fg3a, q = x => a.miss ? "–" : f1(per(a, x));
-    return `<tr class="${cls}"><td class="l">${lab}</td><td>${a.gp}</td><td>${f1(a.sec/60/a.gp)}</td><td><strong>${f1(per(a, a.pts))}</strong></td>
-      <td>${q(fgm)}</td><td>${f1(per(a, fga))}</td><td>${a.miss ? "–" : pc(fgm, fga)}</td><td>${f1(per(a, a.fg3m))}</td><td>${f1(per(a, a.fg3a))}</td><td>${pc(a.fg3m, a.fg3a)}</td>
-      <td>${q(a.ftm)}</td><td>${f1(per(a, a.fta))}</td><td>${a.miss ? "–" : pc(a.ftm, a.fta)}</td><td>${q(a.oreb)}</td><td>${q(a.dreb)}</td><td>${f1(per(a, a.reb))}</td>
-      <td>${f1(per(a, a.ast))}</td><td>${f1(per(a, a.stl))}</td><td>${f1(per(a, a.blk))}</td><td>${f1(per(a, a.tov))}</td><td>${q(a.pf)}</td><td>${a.tov ? (a.ast / a.tov).toFixed(2) : "–"}</td></tr>`; };
-  const body = rows.map(i => line(`${S[P.s[i]]}${ipTag(P.s[i])} <span class="sub">${esc(AB(P.tm[i]) || "")}</span>`, boxSum([i]))).join("") + (rows.length > 1 ? line("<b>Career</b>", boxSum(rows), "car") : "");
-  return `<div class="tscroll"><table class="box-t"><thead><tr><th class="l">Season</th><th>GP</th><th>MPG</th><th>PTS</th><th>FGM</th><th>FGA</th><th>FG%</th><th>3PM</th><th>3PA</th><th>3P%</th><th>FTM</th><th>FTA</th><th>FT%</th><th>OREB</th><th>DREB</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>TOV</th><th>PF</th><th title="Assists per turnover">AST/TO</th></tr></thead><tbody>${body}</tbody></table></div>`;
+// box-score columns of the season-by-season table (per game or per 75), with TS% and rTS beside the shooting splits
+const BOX_HEAD = `<th>PTS</th><th>FGM</th><th>FGA</th><th>FG%</th><th>3PM</th><th>3PA</th><th>3P%</th><th>FTM</th><th>FTA</th><th>FT%</th><th>TS%</th><th title="True shooting minus that season's league average">rTS</th><th>OREB</th><th>DREB</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>TOV</th><th>PF</th><th title="Assists per turnover">AST/TO</th>`;
+function boxCells(a, r){
+  const per = plMode === "p75" ? x => a.pos ? 75 * x / a.pos : NaN : x => a.gp ? x / a.gp : NaN;
+  const f1 = v => Number.isFinite(v) ? v.toFixed(1) : "–", pc = (m, n) => n ? (100 * m / n).toFixed(1) : "–", q = x => a.miss ? "–" : f1(per(x));
+  const fgm = a.fg2m + a.fg3m, fga = a.fg2a + a.fg3a;
+  return `<td><strong>${f1(per(a.pts))}</strong></td><td>${q(fgm)}</td><td>${f1(per(fga))}</td><td>${a.miss ? "–" : pc(fgm, fga)}</td><td>${f1(per(a.fg3m))}</td><td>${f1(per(a.fg3a))}</td><td>${pc(a.fg3m, a.fg3a)}</td>
+    <td>${q(a.ftm)}</td><td>${f1(per(a.fta))}</td><td>${a.miss ? "–" : pc(a.ftm, a.fta)}</td><td>${fmt(val(r,"TS"),"pct")}</td><td>${fmt(val(r,"RTS"),"rel")}</td>
+    <td>${q(a.oreb)}</td><td>${q(a.dreb)}</td><td>${f1(per(a.reb))}</td><td>${f1(per(a.ast))}</td><td>${f1(per(a.stl))}</td><td>${f1(per(a.blk))}</td><td>${f1(per(a.tov))}</td><td>${q(a.pf)}</td><td>${a.tov ? (a.ast / a.tov).toFixed(2) : "–"}</td>`;
 }
 // this season so far, for players on a current roster: averages + game log from ESPN box scores (live, in the browser)
 let PL_LIVE_TOKEN = 0;
@@ -1082,15 +1085,16 @@ function renderPlayer(){
   const pk5 = M.peakOf(k, "Peak 5Y CEPM"), pkH = pk5 || pk, pkW = pk5 ? 5 : 3;
   const PC = POC_CAREER.get(k);
   const poTiles = PC ? tile(pm(PC.r) + (PC.rank ? pctl(PC, "with 2,000+ career playoff possessions") : ""), `Career playoff Chip Equity · ${PC.rank ? ord(PC.rank) + " all-time" : "under 2,000 playoff poss., not ranked"}`, "hero")
-      + tile(`${pm(PC.o)} / ${pm(PC.d)}`, "Offense / defense") + tile(`${pm(PC.best.r)}`, `Best postseason · ${S[PC.best.s]}`)
+      + tile(`${pm(PC.o)}${PC.rank ? pctlO(PC, "with 2,000+ career playoff possessions") : ""} / ${pm(PC.d)}${PC.rank ? pctlD(PC, "with 2,000+ career playoff possessions") : ""}`, "Offense / defense") + tile(`${pm(PC.best.r)}`, `Best postseason · ${S[PC.best.s]}`)
     : tile("–", "Playoff Chip Equity (300+ playoff poss. in a postseason)", "hero");
-  const tiles = TYPE === 1 ? poTiles + keys.slice(0,3).map((s,j)=>tile(fmt(val(a,s),1), heads[j])).join("") + tile(fmt(val(a,"TS"),"pct"),"True shooting") + tile(a.gp.toLocaleString(),"Playoff games") + (res.titles ? tile(res.titles,"Titles") : "") : (pkH ? tile(pm(pkH.r) + pctl(pkH, "on this all-time list"), `Best ${pkW}-yr Chip Equity · ${ord(pkH.rank)} all-time`, "hero") + tile(`${pm(pkH.o)} / ${pm(pkH.d)}`,"Offense / defense") + (pk5 && pk ? tile(pm(pk.r) + pctl(pk, "on this all-time list"), `Best 3-yr Chip Equity · ${ord(pk.rank)} all-time`) : "") : tile("–","Peak Chip Equity","hero"))
+  const tiles = TYPE === 1 ? poTiles + keys.slice(0,3).map((s,j)=>tile(fmt(val(a,s),1), heads[j])).join("") + tile(fmt(val(a,"TS"),"pct"),"True shooting") + tile(a.gp.toLocaleString(),"Playoff games") + (res.titles ? tile(res.titles,"Titles") : "") : (pkH ? tile(pm(pkH.r) + pctl(pkH, "on this all-time list"), `Best ${pkW}-yr Chip Equity · ${ord(pkH.rank)} all-time`, "hero") + tile(`${pm(pkH.o)}${pctlO(pkH, "on this all-time list")} / ${pm(pkH.d)}${pctlD(pkH, "on this all-time list")}`,"Offense / defense") + (pk5 && pk ? tile(pm(pk.r) + pctl(pk, "on this all-time list"), `Best 3-yr Chip Equity · ${ord(pk.rank)} all-time`) : "") : tile("–","Peak Chip Equity","hero"))
     + keys.slice(0,3).map((s,j)=>tile(fmt(val(a,s),1), heads[j])).join("")
     + tile(fmt(val(a,"TS"),"pct"),"True shooting") + tile(fmt(val(a,"RTS"),"rel"),"rTS vs. league")
     + tile(a.gp.toLocaleString(),"Games") + (res.titles ? tile(res.titles,"Titles") : "");
   const body = rows.map(i=>{ const r=agg([i]); const tab = AB(P.tm[i]), sr = seasonResult(P.tm[i], P.s[i]);
     return `<tr><td>${S[P.s[i]]}${ipTag(P.s[i])}</td><td class="l"><div class="who">${playerTeams(k, P.s[i], tab).map(([a,n]) => `${logoImg(a, P.s[i])}<span title="${n ? n + " games" : ""}">${a||""}</span>`).join(" ")}</div></td><td class="sub">${recTxt(tab,P.s[i])}</td><td class="l"><span class="res ${sr.cls}">${sr.txt}</span></td><td>${r.gp}</td>
-    <td>${fmt(val(r,"MPG"),1)}</td>${keys.map(s=>`<td>${fmt(val(r,s),1)}</td>`).join("")}<td>${fmt(val(r,"TS"),"pct")}</td><td>${fmt(val(r,"RTS"),"rel")}</td><td>${fmt(val(r,"USG"),1)}</td>${TYPE === 1 ? (v => v ? `<td class="nw"><strong>${pm(v.r)}</strong>${pctl(v, `with 300+ possessions in the ${S[P.s[i]]} playoffs`)}</td><td>${pm(v.o)}</td><td>${pm(v.d)}</td>` : `<td>–</td><td>–</td><td>–</td>`)(POC.get(k*64 + P.s[i])) : `<td class="nw">${pm(rowVal(i,"RW1"))}${pctl(M.rwOf(P.p[i], P.s[i], 1))}</td><td class="nw"><strong>${pm(rowVal(i,"RW2"))}</strong>${pctl(M.rwOf(P.p[i], P.s[i], 2))}</td><td class="nw">${pm(rowVal(i,"RW3"))}${pctl(M.rwOf(P.p[i], P.s[i], 3))}</td><td>${pm(rowVal(i,"O3"))}</td><td>${pm(rowVal(i,"D3"))}</td>`}</tr>`; }).join("");
+    <td>${fmt(val(r,"MPG"),1)}</td>${boxCells(boxSum([i]), r)}<td>${fmt(val(r,"USG"),1)}</td>${TYPE === 1 ? (v => v ? `<td class="nw"><strong>${pm(v.r)}</strong>${pctl(v, `with 300+ possessions in the ${S[P.s[i]]} playoffs`)}</td><td class="nw">${pm(v.o)}${pctlO(v, `with 300+ possessions in the ${S[P.s[i]]} playoffs`)}</td><td class="nw">${pm(v.d)}${pctlD(v, `with 300+ possessions in the ${S[P.s[i]]} playoffs`)}</td>` : `<td>–</td><td>–</td><td>–</td>`)(POC.get(k*64 + P.s[i])) : `<td class="nw">${pm(rowVal(i,"RW1"))}${pctl(M.rwOf(P.p[i], P.s[i], 1))}</td><td class="nw"><strong>${pm(rowVal(i,"RW2"))}</strong>${pctl(M.rwOf(P.p[i], P.s[i], 2))}</td><td class="nw">${pm(rowVal(i,"RW3"))}${pctl(M.rwOf(P.p[i], P.s[i], 3))}</td><td class="nw">${pm(rowVal(i,"O3"))}${pctlO(M.rwOf(P.p[i], P.s[i], 3))}</td><td class="nw">${pm(rowVal(i,"D3"))}${pctlD(M.rwOf(P.p[i], P.s[i], 3))}</td>`}</tr>`; }).join("")
+    + (rows.length > 1 ? `<tr class="car"><td><b>Career</b></td><td></td><td></td><td></td><td>${a.gp}</td><td>${fmt(val(a,"MPG"),1)}</td>${boxCells(boxSum(rows), a)}<td>${fmt(val(a,"USG"),1)}</td>${TYPE === 1 ? "<td></td><td></td><td></td>" : "<td></td><td></td><td></td><td></td><td></td>"}</tr>` : "");
   const stars = TYPE === 1 ? (PC ? `Career playoff Chip Equity ${pm(PC.r)} (offense ${pm(PC.o)}, defense ${pm(PC.d)}) over ${PC.seasons} postseason${PC.seasons > 1 ? "s" : ""} and ${Math.round(PC.p).toLocaleString()} playoff possessions${PC.rank ? `, ${ord(PC.rank)} of ${PC.n.toLocaleString()} players with 2,000+` : ""}. Best postseason: ${S[PC.best.s]}, ${pm(PC.best.r)}.` : "No playoff Chip Equity for this player (a postseason needs 300+ playoff possessions).")
     : pk ? `Best 3-year Chip Equity ${pm(pk.r)} (offensive Chip Equity ${pm(pk.o)}, defensive Chip Equity ${pm(pk.d)}), ${ord(pk.rank)} of ${pk.n.toLocaleString()} all-time.` : "No peak Chip Equity for this player.";
   const po = res.apps ? ` Playoffs: ${res.apps} trip${res.apps>1?"s":""}, ${res.series} series won, ${res.finals} Finals${res.titles?`, ${res.titles} title${res.titles>1?"s":""}`:""}.` : "";
@@ -1108,10 +1112,9 @@ function renderPlayer(){
     </div>
     ${TYPE === 1 ? `<div class="box" style="margin-top:16px"><h2>Playoff Chip Equity by postseason <small>playoff possessions only · opponent-adjusted lead margin · points per 100 possessions</small></h2>${poTable(k)}</div>`
       : `<div class="box" style="margin-top:16px"><h2>Chip Equity by window <small>single-season (1-yr), 2-year and 3-year Chip Equity ending each season · regular season + playoffs · points per 100 possessions</small></h2>${rwTable(k)}</div>`}
-    <div class="box"><h2>Season by season <small>${plMode==="p75"?"per 75 possessions":"per game"} · rTS = true shooting minus that season's league average</small></h2><div class="tscroll"><table>
-      <thead><tr><th>Season</th><th class="l">Team</th><th>Team W-L</th><th class="l">Playoffs</th><th>GP</th><th>MPG</th>${heads.map(h=>`<th>${h}</th>`).join("")}<th>TS%</th><th>rTS</th><th>USG</th>${TYPE === 1 ? `<th title="Chip Equity on that postseason's playoff possessions only">Playoff Chip Equity</th><th>Off</th><th>Def</th>` : `<th title="Chip Equity fit on that season alone">1-yr Chip Equity</th><th>2-yr Chip Equity</th><th>3-yr Chip Equity</th><th title="3-year offensive Chip Equity">3-yr offensive Chip Equity</th><th title="3-year defensive Chip Equity">3-yr defensive Chip Equity</th>`}</tr></thead>
+    <div class="box"><h2>Season by season <small>${typeName().toLowerCase()} · ${plMode==="p75"?"per 75 possessions":"per game"} · shooting splits are made / attempted · rTS = true shooting minus that season's league average</small></h2><div class="tscroll"><table class="box-t">
+      <thead><tr><th>Season</th><th class="l">Team</th><th>Team W-L</th><th class="l">Playoffs</th><th>GP</th><th>MPG</th>${BOX_HEAD}<th>USG</th>${TYPE === 1 ? `<th title="Chip Equity on that postseason's playoff possessions only">Playoff Chip Equity</th><th>Off</th><th>Def</th>` : `<th title="Chip Equity fit on that season alone">1-yr Chip Equity</th><th>2-yr Chip Equity</th><th>3-yr Chip Equity</th><th title="3-year offensive Chip Equity">3-yr offensive Chip Equity</th><th title="3-year defensive Chip Equity">3-yr defensive Chip Equity</th>`}</tr></thead>
       <tbody>${body}</tbody></table></div></div>
-    <div class="box"><h2>Full box score <small>${typeName().toLowerCase()} · ${plMode==="p75"?"per 75 possessions":"per game"} · shooting splits are made / attempted</small></h2>${fullBoxTable(k, rows)}</div>
     ${TYPE === 0 ? (() => { const ss = rows.map(i=>P.s[i]).filter((s, j, a) => a.indexOf(s) === j && PTMAP.has(k*64+s)); if (!ss.length) return "";
       const def = ss[ss.length-1]; return `<div class="box"><h2>Play types <small>from play-by-play and shot charts · regular season</small></h2>
         <label class="sub">Season <select id="pt-season">${ss.slice().reverse().map(s=>`<option value="${s}" ${s===def?"selected":""}>${S[s]}</option>`).join("")}</select></label>
@@ -1299,7 +1302,7 @@ function renderMatchup(){
       <td style="text-align:center;color:var(--ink-2);white-space:normal">${t.label}</td><td class="${t.better==="B"?"best":""}" style="text-align:left">${t.b}${t.rb?` <span class="muted">${ord(t.rb)}</span>`:""}</td></tr>`).join("");
   const top3Rows = ro => ro.top3Info.length ? ro.top3Info.map(p=>{ const i=p.i, k=P.p[i], a=agg([i]);
     return `<tr><td class="l"><div class="who">${faceImg(k,"sm")}<span class="n">${pLink(k, esc(DATA.names[k]))}</span></div></td>
-      <td>${fmt(val(a,"MPG"),1)}</td><td>${fmt(val(a,"PPG"),1)}</td><td>${fmt(val(a,"RPG"),1)}</td><td>${fmt(val(a,"APG"),1)}</td><td>${fmt(val(a,"TS"),"pct")}</td>${(c => `<td class="nw"><strong>${pm(c?c.r:NaN)}</strong>${pctl(c)}</td><td>${pm(c?c.o:NaN)}</td><td>${pm(c?c.d:NaN)}</td>`)(M.rwOf(k, P.s[i], 3))}<td class="sub">${pm(p.r3)}</td></tr>`; }).join("")
+      <td>${fmt(val(a,"MPG"),1)}</td><td>${fmt(val(a,"PPG"),1)}</td><td>${fmt(val(a,"RPG"),1)}</td><td>${fmt(val(a,"APG"),1)}</td><td>${fmt(val(a,"TS"),"pct")}</td>${(c => `<td class="nw"><strong>${pm(c?c.r:NaN)}</strong>${pctl(c)}</td><td class="nw">${pm(c?c.o:NaN)}${pctlO(c)}</td><td class="nw">${pm(c?c.d:NaN)}${pctlD(c)}</td>`)(M.rwOf(k, P.s[i], 3))}<td class="sub">${pm(p.r3)}</td></tr>`; }).join("")
     : `<tr><td colspan="10" class="muted">No data for this team.</td></tr>`;
   const keyBox = x => { const ro = x==="A"?r.rA:r.rB;
     return `<div class="box"><h2><span class="dot" style="background:${col[x]}"></span>${esc(nm[x])} top performers <small>regular season</small></h2><div class="tscroll"><table>
@@ -1589,7 +1592,7 @@ function renderTeams(){
       <thead><tr><th class="l">Team</th><th class="l">Player</th><th>MPG</th><th>PTS</th><th>REB</th><th>AST</th><th>TS%</th><th>3-yr Chip Equity</th><th>Off</th><th>Def</th></tr></thead><tbody>
       ${t3.map(({ab, ro}) => (ro && ro.top3Info.length ? ro.top3Info : []).map((p,j)=>{ const k=P.p[p.i], a=agg([p.i]), c = M.rwOf(k, s, 3);
         return `<tr><td class="l"><div class="who">${logoImg(ab,s)}${ab}</div></td><td class="l"><div class="who">${faceImg(k,"sm")}<span class="n">${pLink(k, esc(DATA.names[k]))}</span></div></td>
-          <td>${fmt(val(a,"MPG"),1)}</td><td>${fmt(val(a,"PPG"),1)}</td><td>${fmt(val(a,"RPG"),1)}</td><td>${fmt(val(a,"APG"),1)}</td><td>${fmt(val(a,"TS"),"pct")}</td><td class="nw"><strong>${pm(c?c.r:NaN)}</strong>${pctl(c)}</td><td>${pm(c?c.o:NaN)}</td><td>${pm(c?c.d:NaN)}</td></tr>`; }).join("")).join("")}
+          <td>${fmt(val(a,"MPG"),1)}</td><td>${fmt(val(a,"PPG"),1)}</td><td>${fmt(val(a,"RPG"),1)}</td><td>${fmt(val(a,"APG"),1)}</td><td>${fmt(val(a,"TS"),"pct")}</td><td class="nw"><strong>${pm(c?c.r:NaN)}</strong>${pctl(c)}</td><td class="nw">${pm(c?c.o:NaN)}${pctlO(c)}</td><td class="nw">${pm(c?c.d:NaN)}${pctlD(c)}</td></tr>`; }).join("")).join("")}
       </tbody></table></div></div>`;
   }
   const sorted = all.slice().sort((a,b)=>b.net-a.net);
@@ -2457,7 +2460,7 @@ function teamProfile(ab){
   const top = ps.filter(p => Number.isFinite(p.impact)).sort((x,y)=>y.impact-x.impact).slice(0, 3);
   const topRow = (p, j) => { const ls = p.ls, moved = ls.team !== ab;
     return `<tr><td>${j+1}</td><td class="l"><div class="who">${face(p)}${nameCell(p)}</div></td><td class="l">${ls.si !== LATEST ? `<span class="sub">missed ${S[LATEST]} · ${S[ls.si]}</span>` : moved ? `<span class="res">new · from ${esc(ls.team)}</span>` : esc(ls.team)}</td>
-      <td class="nw"><strong>${sgn(p.cepm.r)}</strong>${pctl(p.cepm)}</td><td>${sgn(p.cepm.o)}</td><td>${sgn(p.cepm.d)}</td><td>${ls.mpg.toFixed(1)}</td><td>${ls.pts.toFixed(1)}</td><td>${ls.reb.toFixed(1)}</td><td>${ls.ast.toFixed(1)}</td><td>${(ls.ts*100).toFixed(1)}%</td></tr>`; };
+      <td class="nw"><strong>${sgn(p.cepm.r)}</strong>${pctl(p.cepm)}</td><td class="nw">${sgn(p.cepm.o)}${pctlO(p.cepm)}</td><td class="nw">${sgn(p.cepm.d)}${pctlD(p.cepm)}</td><td>${ls.mpg.toFixed(1)}</td><td>${ls.pts.toFixed(1)}</td><td>${ls.reb.toFixed(1)}</td><td>${ls.ast.toFixed(1)}</td><td>${(ls.ts*100).toFixed(1)}%</td></tr>`; };
   const projMin = p => PRJ && PRJ.mins.has(T.players.find(q=>q.name===p.name && q.espnId===p.espnId)) ? PRJ.mins.get(T.players.find(q=>q.name===p.name && q.espnId===p.espnId)).toFixed(1) : (p.out ? "0" : "–");
   const rosterRows = ps.slice().sort((x,y) => useCur ? (((curL(y)||{}).mpg||0) - ((curL(x)||{}).mpg||0)) || ((y.ls?y.ls.mpg:0)-(x.ls?x.ls.mpg:0)) : ((y.ls?y.ls.mpg:0)-(x.ls?x.ls.mpg:0))).map(p => { const ls = p.ls, c = p.cepm, q = useCur ? curL(p) : null;
     const st = useCur ? (q ? {gp: q.gp, gs: s5Starts(p) || 0, mpg: q.mpg, pts: q.pts, reb: q.reb, ast: q.ast, ts: q.ts} : null) : (ls ? {gp: ls.gp, gs: p.starts || 0, mpg: ls.mpg, pts: ls.pts, reb: ls.reb, ast: ls.ast, ts: ls.ts} : null);
@@ -2465,7 +2468,7 @@ function teamProfile(ab){
       <td class="l">${p.seasonOut ? `<span class="res">Out for season</span>` : p.tw ? `<span class="sub">Two-way</span>` : p.status ? `<span class="sub">${esc(p.status)}</span>` : ""}</td>
       <td class="l">${ls ? (ls.si !== LATEST ? `<span class="sub">missed season · ${S[ls.si]} ${esc(ls.team)}</span>` : ls.team !== ab ? `${esc(ls.team)} <span class="sub">(new)</span>` : esc(ls.team)) : `<span class="sub">no NBA games</span>`}</td>
       <td>${st ? st.gp : "–"}</td><td>${st ? st.gs : "–"}</td><td>${st ? st.mpg.toFixed(1) : "–"}</td><td class="sub">${projMin(p)}</td><td>${st ? st.pts.toFixed(1) : "–"}</td><td>${st ? st.reb.toFixed(1) : "–"}</td><td>${st ? st.ast.toFixed(1) : "–"}</td>
-      <td>${st && Number.isFinite(st.ts) ? (st.ts*100).toFixed(1)+"%" : "–"}</td><td class="nw"><strong>${c ? sgn(c.r) : "–"}</strong>${c ? pctl(c) : ""}</td><td>${c ? sgn(c.o) : "–"}</td><td>${c ? sgn(c.d) : "–"}</td></tr>`; }).join("");
+      <td>${st && Number.isFinite(st.ts) ? (st.ts*100).toFixed(1)+"%" : "–"}</td><td class="nw"><strong>${c ? sgn(c.r) : "–"}</strong>${c ? pctl(c) : ""}</td><td class="nw">${c ? sgn(c.o) + pctlO(c) : "–"}</td><td class="nw">${c ? sgn(c.d) + pctlD(c) : "–"}</td></tr>`; }).join("");
   const outN = ps.filter(p=>p.out).length;
   return `<p class="mlink" style="margin:0 0 10px"><a href="#" id="tp-back">‹ All teams</a></p>
     <div class="box"><div class="tp-head">${logoImg(ab, LATEST, "xl")}<div><h2 style="margin:0">${esc(T.name)}</h2>
