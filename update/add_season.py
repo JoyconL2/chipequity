@@ -50,7 +50,7 @@ def stint_len(path):
 
 
 STL = stint_len(os.path.join(wd, f"stints_{season}_rs.csv"))
-P_new = {k: [] for k in d["P"]}; T_new = {k: [] for k in d["T"]}; series_new = []
+P_new = {k: [] for k in d["P"]}; T_new = {k: [] for k in d["T"]}; series_new = []; dpt_new = []
 for t, st in ((0, "rs"), (1, "po")):
     f = os.path.join(wd, f"box_{season}_{st}.csv")
     if not os.path.exists(f) or os.path.getsize(f) < 100: continue
@@ -71,6 +71,15 @@ for t, st in ((0, "rs"), (1, "po")):
                    stint=STL.get(int(r.EntityId)),
                    fg2m=int(r.FG2M), ftm=int(r.FTM), oreb=int(r.OffRebounds), dreb=int(r.DefRebounds), pf=int(r.Fouls))
         for k in P_new: P_new[k].append(row.get(k))
+    # ---- defensive events (same keys as playtypes/def_build.py) ----
+    gv = lambda r, c: float(r.get(c, 0) or 0)
+    for r in W.to_dict("records"):
+        if not (0 < r["EntityId"] < 1610612700) or gv(r, "DefPoss") < 100: continue
+        dreb = sum(v for c, v in r.items() if c.endswith("DefRebounds") and isinstance(v, (int, float)))
+        fouls = sum(v for c, v in r.items() if c.endswith("Fouls") and not c.endswith("Drawn") and "Technical" not in c and isinstance(v, (int, float)))
+        dpt_new.append([kid(r["EntityId"]), si, t] + [int(round(x)) for x in (gv(r, "DefPoss"), gv(r, "BlockedAtRim"), gv(r, "BlockedShortMidRange") + gv(r, "BlockedLongMidRange"),
+            gv(r, "BlockedArc3") + gv(r, "BlockedCorner3"), sum(gv(r, f"Blocked{z}Recovered") for z in ("AtRim", "ShortMidRange", "LongMidRange", "Arc3", "Corner3")),
+            gv(r, "BadPassSteals"), gv(r, "LostBallSteals"), gv(r, "Charge Fouls Drawn"), gv(r, "Shooting Fouls"), fouls, dreb)])
     # ---- teams ----
     cols = lambda end: [c for c in W.columns if c.endswith(end)]
     for tid, x in W.groupby("TeamId"):
@@ -109,6 +118,16 @@ if not P_new["p"]: sys.exit(f"no {season} games to add")
 for k in d["P"]: d["P"][k] = d["P"][k] + P_new[k]
 for k in d["T"]: d["T"][k] = d["T"][k] + T_new[k]
 d["series"] = d["series"] + series_new
+if "dpt" in d:                     # a traded player has one box row per team: sum them, as in def_build.py
+    by = {}
+    for r in dpt_new:
+        e = by.setdefault((r[0], r[1], r[2]), [r[0], r[1], r[2]] + [0] * (len(r) - 3))
+        for j in range(3, len(r)): e[j] += r[j]
+    d["dpt"]["rows"] = [r for r in d["dpt"]["rows"] if r[1] != si] + list(by.values())
+    ci = d["dpt"]["cols"].index("charges")             # NBA.com's live feed doesn't label charges: mark the season "not recorded"
+    nc = [x for x in d["dpt"].get("nocharge", []) if x != si]
+    if not any(r[ci] for r in by.values()): nc.append(si)
+    d["dpt"]["nocharge"] = nc
 d["league"] = d["league"] + [lg]
 d["seasons"] = d["seasons"] + [season]
 d["ids"], d["names"] = ids, names
