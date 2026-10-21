@@ -173,3 +173,11 @@ table.wy-t td.l{max-width:none!important;white-space:normal!important;overflow:v
 #pl-live details{margin-top:14px}
 #pl-live .tiles{margin-top:6px}
 .stint.now{border-color:rgba(255,196,64,.55)}
+
+/* play types */
+.pt-tbl td.pt-bar{width:38%;min-width:90px}.pt-tbl td.pt-bar i{display:block;height:10px;border-radius:2px;background:var(--s1, #e8e23a);min-width:2px}
+.pt-tbl .pt-pps{white-space:nowrap}.pt-tbl .pos{color:var(--good, #3fbf7f)}.pt-tbl .neg{color:var(--bad, #e05a5a)}
+#pt-season{width:auto;display:inline-block;margin-left:6px}
+/* full box score */
+table.box-t td,table.box-t th{white-space:nowrap}
+table.box-t tr.car td{border-top:2px solid rgba(255,255,255,.25);font-weight:600}

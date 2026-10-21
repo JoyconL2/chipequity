@@ -68,7 +68,8 @@ for t, st in ((0, "rs"), (1, "po")):
                    usg=round(float((fga + 0.44 * r.FTA + tov) / max(r.OffPoss, 1) * 100 / 1.148), 1),
                    oo=round(float((r.PlusMinus + r.OpponentPoints) / max(r.OffPoss, 1) * 100), 1),
                    od=round(float(r.OpponentPoints / max(r.DefPoss, 1) * 100), 1),
-                   stint=STL.get(int(r.EntityId)))
+                   stint=STL.get(int(r.EntityId)),
+                   fg2m=int(r.FG2M), ftm=int(r.FTM), oreb=int(r.OffRebounds), dreb=int(r.DefRebounds), pf=int(r.Fouls))
         for k in P_new: P_new[k].append(row.get(k))
     # ---- teams ----
     cols = lambda end: [c for c in W.columns if c.endswith(end)]
