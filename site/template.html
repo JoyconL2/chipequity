@@ -985,6 +985,63 @@ function poTable(k){
   return `<div class="tscroll"><table><thead><tr><th>Postseason</th><th class="l">Team</th><th class="l">Result</th><th>Playoff poss.</th><th>Off</th><th>Def</th><th>Playoff Chip Equity</th><th>Rank that year</th></tr></thead><tbody>${rows.map(tr).join("")}</tbody></table></div>
     <p class="mlink"><a href="#" data-method="po">How it's calculated ›</a></p>`;
 }
+/* ---- play types (play-by-play + shot charts; playtypes/build_playtypes.py) ---- */
+const PT = DATA.pt || {cols:[], rows:[], lg:{}};
+const PTC = Object.fromEntries(PT.cols.map((c,i)=>[c,i]));
+const PTMAP = new Map(); const PTSEASON = new Map();
+for (const r of PT.rows){ PTMAP.set(r[0]*64 + r[1], r); (PTSEASON.get(r[1]) || PTSEASON.set(r[1], []).get(r[1])).push(r); }
+const ptRate = (r, x) => 75 * x / r[PTC.pos];
+function ptParts(r){        // per-75 volume and points per shot for each play type
+  const g = c => r[PTC[c]], s75 = c => r[PTC[c+"_self75"]], v = c => ptRate(r, g(c+"_fga"));
+  const pps = c => g(c+"_fga") ? g(c+"_pts") / g(c+"_fga") : NaN;
+  return [
+    {key:"transition", label:"Transition & early offense", v: v("transition"), pps: pps("transition"), cat:"transition"},
+    {key:"putback", label:"Putbacks & second chances", v: v("putback"), pps: pps("putback"), cat:"putback"},
+    {key:"rim_self", label:"Self-created at the rim (drives)", v: s75("rim"), pps: pps("rim"), cat:"rim"},
+    {key:"rim_set", label:"Set up at the rim (cuts, rolls, lobs)", v: Math.max(0, v("rim") - s75("rim")), pps: pps("rim"), cat:"rim"},
+    {key:"mid_self", label:"Self-created mid-range (pull-ups, post-ups)", v: s75("mid"), pps: pps("mid"), cat:"mid"},
+    {key:"mid_set", label:"Set-up mid-range", v: Math.max(0, v("mid") - s75("mid")), pps: pps("mid"), cat:"mid"},
+    {key:"three_self", label:"Self-created threes", v: s75("three"), pps: pps("three"), cat:"three"},
+    {key:"three_set", label:"Catch-and-shoot threes", v: Math.max(0, v("three") - s75("three")), pps: pps("three"), cat:"three"},
+  ];
+}
+const PT_AST = [["ast_rim","Rim shots"],["ast_three","Threes"],["ast_mid","Mid-range"],["ast_transition","Transition"]];
+function ptPct(si, f, val){ const pool = (PTSEASON.get(si) || []).filter(r => r[PTC.pos] >= 1000).map(f).filter(Number.isFinite).sort((a,b)=>a-b);
+  if (!pool.length || !Number.isFinite(val)) return null; let n = 0; for (const x of pool) if (x <= val) n++; return Math.round(100 * n / pool.length); }
+function ptBox(k, si){
+  const r = PTMAP.get(k*64 + si); if (!r) return `<p class="muted">No play-by-play play types for ${S[si]}.</p>`;
+  const lg = PT.lg[String(si)] || [], cats = ["transition","putback","rim","mid","three"], lgpps = c => { const i = cats.indexOf(c); return lg[i] ? lg[5+i] / lg[i] : NaN; };
+  const parts = ptParts(r), mx = Math.max(4, ...parts.map(p=>p.v));
+  const zoneShots = c => r[PTC[c+"_fga"]], ppsCell = (p, span) => { const n = zoneShots(p.cat), d = p.pps - lgpps(p.cat);
+    return `<td class="pt-pps" rowspan="${span}">${n >= 25 && Number.isFinite(d) ? `<strong class="${d>=0?"pos":"neg"}">${(d>=0?"+":"")+d.toFixed(2)}</strong><span class="sub"> on ${n} shots</span>` : `<span class="sub">${n} shots</span>`}</td>`; };
+  const rowsH = parts.map((p, i) => { const pc = ptPct(si, q => ptParts(q).find(x=>x.key===p.key).v, p.v);
+    const first = i < 2 || p.key.endsWith("_self"), span = i < 2 ? 1 : 2;
+    return `<tr><td class="l">${esc(p.label)}</td><td class="pt-bar"><i style="width:${Math.min(100, p.v/mx*100)}%"></i></td><td><strong>${p.v.toFixed(1)}</strong></td><td>${pc!=null ? pctlQ(Math.min(99,pc), "among players with 1,000+ possessions that season") : "–"}</td>${first ? ppsCell(p, span) : ""}</tr>`; }).join("");
+  const tbl = `<div class="tscroll"><table class="pt-tbl"><thead><tr><th class="l">Play type</th><th></th><th title="Shots per 75 possessions">Per 75</th><th title="Percentile among players with 1,000+ possessions that season">Pct</th><th title="Points per shot against the league average for that play type (half-court rows share one value per zone)">Pts/shot vs lg</th></tr></thead><tbody>${rowsH}</tbody></table></div>`;
+  const astH = PT_AST.map(([c,l]) => { const v = ptRate(r, r[PTC[c]]), pc = ptPct(si, q => ptRate(q, q[PTC[c]]), v);
+    return `<div class="tile"><div class="v">${v.toFixed(1)}</div><div class="k">${esc(l)} created / 75${pc!=null ? pctlQ(Math.min(99,pc), "among players with 1,000+ possessions that season") : ""}</div></div>`; }).join("");
+  const self = r[PTC.rim_self75] + r[PTC.mid_self75] + r[PTC.three_self75], hc = ptRate(r, r[PTC.rim_fga] + r[PTC.mid_fga] + r[PTC.three_fga]);
+  return `<p class="sub" style="margin:0 0 8px">Shots per 75 possessions by play type, and points per shot against the league (pps). ${hc ? `${Math.round(100*self/hc)}% of his half-court shots were self-created.` : ""}</p>
+    ${tbl}<h3 style="margin:14px 0 6px;font-size:13px">Shots created for teammates</h3><div class="tiles">${astH}</div>`;
+}
+// a percentile badge from a percentile already computed (play types)
+const pctlQ = (q, scope) => ` <span class="pctl ${q >= 90 ? "p90" : q >= 70 ? "p70" : q >= 50 ? "p50" : "p0"}" title="${ord(q)} percentile ${esc(scope || "")}">${ord(q)}</span>`;
+// full box score, season by season: every counting stat the play-by-play records, per game or per 75, plus a career line
+const BOX_KEYS = ["gp","sec","pts","fg2m","fg2a","fg3m","fg3a","ftm","fta","oreb","dreb","reb","ast","stl","blk","tov","pf","pos"];
+function boxSum(rows){ const a = Object.fromEntries(BOX_KEYS.map(c => [c, 0])); a.miss = false;
+  for (const i of rows) for (const c of BOX_KEYS){ const v = P[c] ? P[c][i] : null; if (v == null){ if (["fg2m","ftm","oreb","dreb","pf"].includes(c)) a.miss = true; } else a[c] += v; }
+  return a; }
+function fullBoxTable(k, rows){
+  const per = plMode === "p75" ? (a, x) => a.pos ? 75 * x / a.pos : NaN : (a, x) => a.gp ? x / a.gp : NaN;
+  const f1 = v => Number.isFinite(v) ? v.toFixed(1) : "–", pc = (m, n) => n ? (100 * m / n).toFixed(1) : "–";
+  const line = (lab, a, cls = "") => { const fgm = a.fg2m + a.fg3m, fga = a.fg2a + a.fg3a, q = x => a.miss ? "–" : f1(per(a, x));
+    return `<tr class="${cls}"><td class="l">${lab}</td><td>${a.gp}</td><td>${f1(a.sec/60/a.gp)}</td><td><strong>${f1(per(a, a.pts))}</strong></td>
+      <td>${q(fgm)}</td><td>${f1(per(a, fga))}</td><td>${a.miss ? "–" : pc(fgm, fga)}</td><td>${f1(per(a, a.fg3m))}</td><td>${f1(per(a, a.fg3a))}</td><td>${pc(a.fg3m, a.fg3a)}</td>
+      <td>${q(a.ftm)}</td><td>${f1(per(a, a.fta))}</td><td>${a.miss ? "–" : pc(a.ftm, a.fta)}</td><td>${q(a.oreb)}</td><td>${q(a.dreb)}</td><td>${f1(per(a, a.reb))}</td>
+      <td>${f1(per(a, a.ast))}</td><td>${f1(per(a, a.stl))}</td><td>${f1(per(a, a.blk))}</td><td>${f1(per(a, a.tov))}</td><td>${q(a.pf)}</td><td>${a.tov ? (a.ast / a.tov).toFixed(2) : "–"}</td></tr>`; };
+  const body = rows.map(i => line(`${S[P.s[i]]}${ipTag(P.s[i])} <span class="sub">${esc(AB(P.tm[i]) || "")}</span>`, boxSum([i]))).join("") + (rows.length > 1 ? line("<b>Career</b>", boxSum(rows), "car") : "");
+  return `<div class="tscroll"><table class="box-t"><thead><tr><th class="l">Season</th><th>GP</th><th>MPG</th><th>PTS</th><th>FGM</th><th>FGA</th><th>FG%</th><th>3PM</th><th>3PA</th><th>3P%</th><th>FTM</th><th>FTA</th><th>FT%</th><th>OREB</th><th>DREB</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>TOV</th><th>PF</th><th title="Assists per turnover">AST/TO</th></tr></thead><tbody>${body}</tbody></table></div>`;
+}
 // this season so far, for players on a current roster: averages + game log from ESPN box scores (live, in the browser)
 let PL_LIVE_TOKEN = 0;
 async function playerLive(k){
@@ -1053,11 +1110,17 @@ function renderPlayer(){
       : `<div class="box" style="margin-top:16px"><h2>Chip Equity by window <small>single-season (1-yr), 2-year and 3-year Chip Equity ending each season · regular season + playoffs · points per 100 possessions</small></h2>${rwTable(k)}</div>`}
     <div class="box"><h2>Season by season <small>${plMode==="p75"?"per 75 possessions":"per game"} · rTS = true shooting minus that season's league average</small></h2><div class="tscroll"><table>
       <thead><tr><th>Season</th><th class="l">Team</th><th>Team W-L</th><th class="l">Playoffs</th><th>GP</th><th>MPG</th>${heads.map(h=>`<th>${h}</th>`).join("")}<th>TS%</th><th>rTS</th><th>USG</th>${TYPE === 1 ? `<th title="Chip Equity on that postseason's playoff possessions only">Playoff Chip Equity</th><th>Off</th><th>Def</th>` : `<th title="Chip Equity fit on that season alone">1-yr Chip Equity</th><th>2-yr Chip Equity</th><th>3-yr Chip Equity</th><th title="3-year offensive Chip Equity">3-yr offensive Chip Equity</th><th title="3-year defensive Chip Equity">3-yr defensive Chip Equity</th>`}</tr></thead>
-      <tbody>${body}</tbody></table></div></div>${TYPE===1 ? playoffSeriesBox(k) : ""}`;
+      <tbody>${body}</tbody></table></div></div>
+    <div class="box"><h2>Full box score <small>${typeName().toLowerCase()} · ${plMode==="p75"?"per 75 possessions":"per game"} · shooting splits are made / attempted</small></h2>${fullBoxTable(k, rows)}</div>
+    ${TYPE === 0 ? (() => { const ss = rows.map(i=>P.s[i]).filter((s, j, a) => a.indexOf(s) === j && PTMAP.has(k*64+s)); if (!ss.length) return "";
+      const def = ss[ss.length-1]; return `<div class="box"><h2>Play types <small>from play-by-play and shot charts · regular season</small></h2>
+        <label class="sub">Season <select id="pt-season">${ss.slice().reverse().map(s=>`<option value="${s}" ${s===def?"selected":""}>${S[s]}</option>`).join("")}</select></label>
+        <div id="pt-out" style="margin-top:10px">${ptBox(k, def)}</div><p class="mlink"><a href="#" data-method="pt">How play types are measured ›</a></p></div>`; })() : ""}${TYPE===1 ? playoffSeriesBox(k) : ""}`;
   // team bands: each season's width is split by games played for each team, so a mid-season trade shows mid-season
   const bands = []; for (const i of rows){ const s0 = P.s[i], tl = playerTeams(k, s0, AB(P.tm[i])), tot = tl.reduce((a,t)=>a+(t[1]||0),0) || 1;
     let x = s0 - 0.5; for (const [ab, n] of tl){ const x1 = x + (tl.length > 1 ? (n||0)/tot : 1), last = bands[bands.length-1];
       if (last && last.ab === ab && Math.abs(last.x1 - x) < 1e-6) { last.x1 = x1; last.s1 = s0; } else bands.push({ab, x0: x, x1, s0, s1: s0}); x = x1; } }
+  const ptSel = document.getElementById("pt-season"); if (ptSel) ptSel.onchange = () => { document.getElementById("pt-out").innerHTML = ptBox(k, +ptSel.value); };
   lineChart(document.getElementById("pl-chart"), [{name:DATA.names[k], pts: rows.map(i=>({x:P.s[i], y:rowVal(i,plStat.value), sub:playerTeams(k, P.s[i], AB(P.tm[i])).map(t=>t[0]).join("/")}))}], STATS[plStat.value], {bands});
   if (TYPE === 0 && typeof CUR !== "undefined" && CUR && Date.now() >= +CUR.seasonStart){
     const prof = plOut.querySelector(".box"); if (prof){ prof.insertAdjacentHTML("afterend", `<div id="pl-live"></div>`); playerLive(k); } }
@@ -2500,6 +2563,15 @@ function renderMethod(){
       <li><b>Net rating</b>: points scored minus points allowed per 100 possessions. <b>SRS</b> adds strength of schedule.</li>
       <li><b>Opponent-adjusted</b> playoff numbers add back how good the opponents were.</li>
       <li><b>On/off and WOWY</b> (team pages): the team's points scored and allowed per 100 possessions with any group of players on the floor together and any others sitting, with each one taken away in turn, plus the best 2-, 3-, 4- and 5-man units. Built from every five-man lineup the team used, garbage time out.</li></ul></div>
+
+  <div class="box"><div id="m-pt"></div><h2>Play types</h2>
+    <p>Each player's shots are sorted into play types using only what the play-by-play and shot charts record in every season since 1996-97. Descriptive tags like "pull-up" or "cutting" exist only in recent seasons (a pull-up tag appears on almost no shots before 2010), so they aren't used.</p>
+    <ul><li><b>Transition &amp; early offense</b>: a shot within 7 seconds of his team gaining the ball on a defensive rebound or a turnover.</li>
+      <li><b>Putbacks &amp; second chances</b>: a shot within 3 seconds of his team's offensive rebound.</li>
+      <li><b>Half court</b>, by where the shot came from (shot-chart distance): at the rim (0–4 ft), mid-range (other 2-pointers) and threes. Each is split into <b>self-created</b> and <b>set up</b> using the share of his made shots there that were unassisted (pulled toward the league rate for small samples). Self-created covers drives, pull-ups, isolations and post-ups; set up covers catch-and-shoot shots, cuts, rolls and lobs. The split is estimated for misses, since only made shots record an assist.</li>
+      <li><b>Points per shot (pps)</b> is shown against the league average for that play type and season, and percentiles compare players with 1,000+ possessions that season.</li>
+      <li><b>Shots created for teammates</b>: his assists per 75 possessions, split by the shot they created.</li>
+      <li><b>Does it help predict?</b> Added to what the model already knows, play types improve the forecast of a player's next-season offensive impact slightly (error 1.356 to 1.340). They aren't part of Chip Equity yet; they're shown for context.</li></ul></div>
 
   <div class="box" id="m-src"><h2>10. Sources and limits</h2>
     <ul><li><b>NBA.com play-by-play</b> (archived and live) for everything Chip Equity, box scores, records and playoff series. <b>pbpstats.com</b> team totals from 2000-01. <b>ESPN</b> for live scores, rosters, injuries and current records.</li>
