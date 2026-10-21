@@ -120,9 +120,9 @@ The site's Method page is a short plain-English summary. The full technical meth
 
 For every team-season since 1996-97 (regular season and playoffs, garbage time out): team totals, each player's on-court possessions and points for/against, and every pair of the 12 most-used players together. Written to `wowy.json`, which the site loads the first time a team page is opened (so it must be deployed next to `index.html`). Every five-man lineup per team-season goes to `lineups/<season>.json` (also deployed next to `index.html`), so the team page can split any group of players (all on together, each one taken away, none of them, with chosen players sitting) and rank the best 2- to 5-man units. Off-court, "without" and "neither" splits follow by subtraction.
 
-## Weekly update (`update/run.py`, `.github/workflows/weekly.yml`)
+## Daily update (`update/run.py`, `.github/workflows/weekly.yml`)
 
-Every Monday a GitHub Action downloads the finished games of the season being played from NBA.com's public CDN
+Every morning a GitHub Action downloads the finished games of the season being played from NBA.com's public CDN
 (schedule, play-by-play and box score files), adds that season to the site and commits the rebuilt site to `dist/`.
 
 - History (1996-97 to the last finished season) is frozen in `base/` (xz-compressed: site data, Chip Equity
@@ -147,5 +147,5 @@ Setup (once):
    publish directory `dist`.
 3. Optional: Settings -> Secrets and variables -> Actions -> Variables -> `SITE_URL` = your Netlify address
    (used for link previews).
-4. Actions tab -> "weekly update" -> Run workflow, to run it right away.
+4. Actions tab -> "daily update" -> Run workflow, to run it right away.
 Run locally: `python update/run.py` (needs `pbplib/`, a clone of dblackrun/pbpstats).

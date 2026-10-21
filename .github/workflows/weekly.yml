@@ -1,10 +1,10 @@
-name: weekly update
-# Every Monday morning: download the week's NBA games, add them to the season being played, rebuild the site into
+name: daily update
+# Every morning: download the night's NBA games, add them to the season being played, rebuild the site into
 # dist/ and commit it (Netlify, linked to this repo with publish directory "dist", then deploys it).
 # Run it by hand any time from the Actions tab ("Run workflow").
 on:
   schedule:
-    - cron: "17 10 * * 1"        # Mondays 10:17 UTC (6:17 am Eastern)
+    - cron: "17 10 * * *"        # every day 10:17 UTC (6:17 am Eastern in summer time, 5:17 am in winter), after the last West Coast game
   workflow_dispatch:
     inputs:
       season:
@@ -13,7 +13,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: weekly-update
+  group: daily-update
   cancel-in-progress: false
 jobs:
   update:
@@ -29,7 +29,7 @@ jobs:
           git clone https://github.com/dblackrun/pbpstats.git pbplib
           git -C pbplib checkout e7ccf2fb6326da630a3cf1665aac964a1e108f4c
           echo "PYTHONPATH=$GITHUB_WORKSPACE/pbplib" >> $GITHUB_ENV
-      - name: games already downloaded (saves re-downloading the whole season each week)
+      - name: games already downloaded (saves re-downloading the whole season every day)
         uses: actions/cache@v4
         with:
           path: live
