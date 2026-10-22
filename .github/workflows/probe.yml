@@ -12,15 +12,10 @@ jobs:
           q = lambda **k: urllib.parse.urlencode(k)
           G = "0022600001"
           tests = {
-            "lineup totals 2025-26": "/get-totals/nba?" + q(Season="2025-26", SeasonType="Regular Season", Type="Lineup"),
-            "lineup-opponent totals 2025-26": "/get-totals/nba?" + q(Season="2025-26", SeasonType="Regular Season", Type="LineupOpponent"),
-            "lineup totals 2026-27": "/get-totals/nba?" + q(Season="2026-27", SeasonType="Regular Season", Type="Lineup"),
-            "game stats lineup": "/get-game-stats/nba?" + q(GameId=G, Type="Lineup"),
-            "game stats lineup-opponent": "/get-game-stats/nba?" + q(GameId=G, Type="LineupOpponent"),
-            "game stats player": "/get-game-stats/nba?" + q(GameId=G, Type="Player"),
-            "possessions": "/get-possessions/nba?" + q(GameId=G),
-            "live game": "/live/game/" + G,
-            "pbp": "/get-pbp/nba?" + q(GameId=G),
+            "possessions (bare)": "/get-possessions/nba?" + q(GameId=G),
+            "possessions team-season": "/get-possessions/nba?" + q(TeamId="1610612760", Season="2026-27", SeasonType="Regular Season", OffDef="Offense", StartType="All"),
+            "lineup totals OKC 2025-26": "/get-totals/nba?" + q(Season="2025-26", SeasonType="Regular Season", Type="Lineup", TeamId="1610612760"),
+            "lineup-opponent OKC 2025-26": "/get-totals/nba?" + q(Season="2025-26", SeasonType="Regular Season", Type="LineupOpponent", TeamId="1610612760"),
           }
           for name, path in tests.items():
               try:
@@ -30,8 +25,9 @@ jobs:
                   rows = j.get("multi_row_table_data") or j.get("results") or j.get("games") or j.get("possessions") or []
                   sample = list(rows[0].keys())[:12] if isinstance(rows, list) and rows and isinstance(rows[0], dict) else ""
                   print(f"::notice::{name}: HTTP {r.status}, {len(body)} bytes, keys {info} sample cols {sample}")
+                  if isinstance(rows, list) and rows: print(f"::notice::{name} first row: {json.dumps(rows[0])[:900]}")
               except urllib.error.HTTPError as e:
-                  print(f"::notice::{name}: HTTP {e.code} {e.reason}")
+                  print(f"::notice::{name}: HTTP {e.code} {e.reason} body {e.read()[:600]!r}")
               except Exception as e:
                   print(f"::notice::{name}: {type(e).__name__}: {str(e)[:150]}")
           PY
