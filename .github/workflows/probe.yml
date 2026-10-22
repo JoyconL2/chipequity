@@ -9,19 +9,25 @@ jobs:
           python3 - <<'PY'
           import json, urllib.request, urllib.parse
           B = "https://api.pbpstats.com"
+          q = lambda **k: urllib.parse.urlencode(k)
+          G = "0022600001"
           tests = {
-            "totals players 2026-27": "/get-totals/nba?" + urllib.parse.urlencode({"Season": "2026-27", "SeasonType": "Regular Season", "Type": "Player"}),
-            "totals teams 2026-27": "/get-totals/nba?" + urllib.parse.urlencode({"Season": "2026-27", "SeasonType": "Regular Season", "Type": "Team"}),
-            "games list 2026-27": "/get-games/nba?" + urllib.parse.urlencode({"Season": "2026-27", "SeasonType": "Regular Season"}),
-            "game logs (team OKC) 2026-27": "/get-game-logs/nba?" + urllib.parse.urlencode({"Season": "2026-27", "SeasonType": "Regular Season", "EntityId": "1610612760", "EntityType": "Team"}),
-            "totals players 2025-26 (control)": "/get-totals/nba?" + urllib.parse.urlencode({"Season": "2025-26", "SeasonType": "Regular Season", "Type": "Player"}),
+            "lineup totals 2025-26": "/get-totals/nba?" + q(Season="2025-26", SeasonType="Regular Season", Type="Lineup"),
+            "lineup-opponent totals 2025-26": "/get-totals/nba?" + q(Season="2025-26", SeasonType="Regular Season", Type="LineupOpponent"),
+            "lineup totals 2026-27": "/get-totals/nba?" + q(Season="2026-27", SeasonType="Regular Season", Type="Lineup"),
+            "game stats lineup": "/get-game-stats/nba?" + q(GameId=G, Type="Lineup"),
+            "game stats lineup-opponent": "/get-game-stats/nba?" + q(GameId=G, Type="LineupOpponent"),
+            "game stats player": "/get-game-stats/nba?" + q(GameId=G, Type="Player"),
+            "possessions": "/get-possessions/nba?" + q(GameId=G),
+            "live game": "/live/game/" + G,
+            "pbp": "/get-pbp/nba?" + q(GameId=G),
           }
           for name, path in tests.items():
               try:
                   r = urllib.request.urlopen(urllib.request.Request(B + path, headers={"User-Agent": "Mozilla/5.0"}), timeout=60)
                   body = r.read(); j = json.loads(body)
                   info = {k: (len(v) if isinstance(v, (list, dict)) else str(v)[:40]) for k, v in j.items()} if isinstance(j, dict) else type(j).__name__
-                  rows = j.get("multi_row_table_data") or j.get("results") or j.get("games") or []
+                  rows = j.get("multi_row_table_data") or j.get("results") or j.get("games") or j.get("possessions") or []
                   sample = list(rows[0].keys())[:12] if isinstance(rows, list) and rows and isinstance(rows[0], dict) else ""
                   print(f"::notice::{name}: HTTP {r.status}, {len(body)} bytes, keys {info} sample cols {sample}")
               except urllib.error.HTTPError as e:
