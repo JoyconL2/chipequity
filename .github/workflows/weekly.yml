@@ -2,7 +2,7 @@ name: daily update
 # Every morning: download the night's NBA games, add them to the season being played, rebuild the site into
 # dist/ and commit it (Netlify, linked to this repo with publish directory "dist", then deploys it).
 # Runs on GitHub's servers. Run it by hand any time from the Actions tab ("Run workflow").
-# (It also runs when this file itself is changed, so a fix to the update gets tried right away.)
+# (It also runs when this file or the update code changes, so a fix gets tried right away.)
 on:
   schedule:
     - cron: "17 10 * * *"        # every day 10:17 UTC (6:17 am Eastern in summer time, 5:17 am in winter), after the last West Coast game
@@ -13,7 +13,7 @@ on:
         required: false
   push:
     branches: [main]
-    paths: [".github/workflows/weekly.yml"]
+    paths: [".github/workflows/weekly.yml", "update/**", "stintbuild/**"]
 permissions:
   contents: write
 concurrency:
