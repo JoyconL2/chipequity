@@ -9,6 +9,7 @@ from multiprocessing import Pool
 import pandas as pd
 import build_stints  # noqa: F401  (puts ../pbplib on the path)
 from pbpstats.client import Client
+from live_fix import fix
 
 SKIP = re.compile(r"^(Period|Penalty|SecondChance|\d+:)")
 
@@ -17,10 +18,7 @@ def clean(path, out):
     """Since 2025-26 an end-of-quarter heave is its own action type ("heave"), not a shot; pbpstats doesn't know it,
     so a rebound that points back to a heave can't find its missed shot. Those rebounds are dropped."""
     J = json.load(open(path)); A = J["game"]["actions"]
-    heave = {a["actionNumber"] for a in A if a.get("actionType") == "heave"}
-    J["game"]["actions"] = [a for a in A if not (a.get("actionType") == "rebound" and a.get("shotActionNumber") in heave)]
-    for a in J["game"]["actions"]:                       # 2026-27 files leave personId out of period / game records (0 before)
-        if a.get("personId") in (None, ""): a["personId"] = 0
+    J["game"]["actions"], _ = fix(A)
     json.dump(J, open(out, "w"))
 
 
