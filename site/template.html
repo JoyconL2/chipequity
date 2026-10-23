@@ -1717,7 +1717,11 @@ async function feedNBA(day){
 // pregame prediction from the model, using each team's latest season in the data
 const isCurGame = g => typeof CUR !== "undefined" && CUR && CUR.ready() && g.start >= CUR.seasonStart;
 function gamePred(g){
-  if (typeof CUR !== "undefined" && CUR && g.start >= CUR.seasonStart) return null;   // current-season odds are on hold
+  if (typeof CUR !== "undefined" && CUR && g.start >= CUR.seasonStart){      // this season: the current-season model
+    if (!CUR.ready()) return null;                                          // (roster Chip Equity blended with the record so far)
+    const r = CUR.gameProb(g.home.ab, g.away.ab, false);
+    return r ? {pHome: r.pHome, margin: r.margin} : null;
+  }
   const s = LATEST, ih = M.teamRow(DATA.abbrs.indexOf(g.home.ab), s, 0), ia = M.teamRow(DATA.abbrs.indexOf(g.away.ab), s, 0);
   if (ih<0 || ia<0) return null;
   const pr = M.probs(ih, ia, "A", M.PARAMS, false, 4), p = pr.pGame(1);
