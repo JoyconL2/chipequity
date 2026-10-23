@@ -451,7 +451,8 @@ const LATEST = S.length - 1;
 // the season being played (daily update, update/run.py): labeled "in progress"; the headline season (home page,
 // leaderboard and team defaults) is the season being played from its first day
 const INPROG = DATA.inprog && !DATA.inprog.done && DATA.inprog.season === S[LATEST] ? DATA.inprog : null;
-const HEAD = LATEST;                                   // the season being played is the default from day one
+const HEAD = LATEST;
+const LS = INPROG ? LATEST - 1 : LATEST;              // last finished season: front page, team pages' "last season", projections                                   // the season being played is the default from day one
 const ipFloor = () => INPROG ? Math.min(1000, Math.max(50, Math.round(50 * INPROG.team_games))) : 1000;   // single-season floor (update/run.py)
 const ipMinGp = () => INPROG ? Math.max(1, Math.floor(INPROG.team_games / 2)) : 40;   // "enough games" this early in a season
 const ipDate = () => INPROG && INPROG.through ? new Date(INPROG.through + "T12:00:00").toLocaleDateString(undefined, {month:"short", day:"numeric"}) : "";
@@ -1958,7 +1959,7 @@ gmDate.addEventListener("change", ()=>{ if (!gmDate.value) return; gcGame = null
 const hmOut = document.getElementById("hm-out");
 let hmGamesLoaded = false;
 function renderHome(){
-  const s = HEAD, minGp = s === LATEST && INPROG ? ipMinGp() : 40;
+  const s = LS, minGp = s === LATEST && INPROG ? ipMinGp() : 40;
   // leaders: single-season Chip Equity, latest season (3-year until players reach the 1,000-possession single-season floor)
   let cand = [], W = 1;
   for (const w of [1, 3]){
@@ -2269,7 +2270,7 @@ let seTeam = null;                                     // abbreviation of the op
 document.getElementById("se-refresh").addEventListener("click", async ()=>{ seOut.innerHTML = `<div class="msg">Refreshing rosters…</div>`; await CUR.ensure(true); renderSeason(); });
 const STARTS = (CUR && CUR.C.starts) || {};
 // a player's last regular season (all teams combined) + where he played most
-function lastSeasonOf(k, si = LATEST){
+function lastSeasonOf(k, si = LS){
   if (k == null) return null;
   const rows = rowsByPlayer[k].filter(i => P.s[i] === si && P.t[i] === 0);
   if (!rows.length) return null;
@@ -2280,7 +2281,7 @@ function teamPlayers(ab){
   const T = CUR.state().teams[ab]; if (!T) return [];
   return T.players.map(p => {
     // a player who missed last season (e.g. injury) is shown with his last season that has games
-    const k = p.k, ls = lastSeasonOf(k) || lastSeasonOf(k, LATEST - 1), c = k != null ? (M.rwOf(k, LATEST, 1) || M.rwOf(k, LATEST - 1, 1) || M.rwOf(k, LATEST, 3)) : null;   // single-season Chip Equity (last season played; 3-year if none)
+    const k = p.k, ls = lastSeasonOf(k) || lastSeasonOf(k, LS - 1), c = k != null ? (M.rwOf(k, LS, 1) || M.rwOf(k, LS - 1, 1) || M.rwOf(k, LS, 3)) : null;   // single-season Chip Equity (last season played; 3-year if none)
     const pid = p.rec ? p.rec[0] : null;
     return {...p, k, ls, cepm: c, starts: pid != null ? (STARTS[pid] || 0) : 0,
             impact: c ? c.r : -Infinity};      // Chip Equity already counts minutes
@@ -2493,7 +2494,7 @@ function pickFive(healthy){
 }
 function teamProfile(ab){
   const T = CUR.state().teams[ab], ps = teamPlayers(ab);
-  const ai = DATA.abbrs.indexOf(ab), ti = M.teamRow(ai, LATEST, 0), r = ti >= 0 ? M.tm[ti] : null, res = ai >= 0 ? seasonResult(ai, LATEST) : {txt:""};
+  const ai = DATA.abbrs.indexOf(ab), ti = M.teamRow(ai, LS, 0), r = ti >= 0 ? M.tm[ti] : null, res = ai >= 0 ? seasonResult(ai, LS) : {txt:""};
   const L = r ? M.leagueOf(r) : null, PRALL = projectAll(), PRJ = PRALL ? PRALL[ab] : null;
   const sgn = v => v==null || Number.isNaN(v) ? "–" : (v>=0?"+":"") + v.toFixed(1);
   const nameCell = p => p.k != null ? `<a href="#" data-player="${p.k}" class="n">${esc(p.name)}</a>` : `<span class="n">${esc(p.name)}</span>`;
@@ -2516,7 +2517,7 @@ function teamProfile(ab){
   const fiveCard = p => { const c = p.cepm, ls = p.ls, moved = ls && ls.team && ls.team !== ab;
     return `<div class="s5-card">${p.k != null ? faceImg(p.k) : `<span class="face"></span>`}
       <div class="nm">${nameCell(p)}</div>
-      <div class="sub">${p.pos ? esc(p.pos) + " · " : ""}${s5Starts(p) != null ? `${s5Starts(p)} of ${S5x.games} starts this season` : ls && ls.si !== LATEST ? `missed ${S[LATEST]} · ${S[ls.si]} stats` : `${p.starts} starts in ${S[LATEST]}${moved ? ` (${esc(ls.team)})` : ""}`}</div>
+      <div class="sub">${p.pos ? esc(p.pos) + " · " : ""}${s5Starts(p) != null ? `${s5Starts(p)} of ${S5x.games} starts this season` : ls && ls.si !== LS ? `missed ${S[LS]} · ${S[ls.si]} stats` : `${p.starts} starts in ${S[LS]}${moved ? ` (${esc(ls.team)})` : ""}`}</div>
       <div class="s5-cepm">${c ? sgn(c.r) : "–"}<span>Chip Equity</span></div>
       <div class="sub">${c ? `o ${sgn(c.o)} · d ${sgn(c.d)}` : "no Chip Equity yet"}</div>
       <div class="s5-line">${(cl => cl ? `${cl.pts.toFixed(1)} pts · ${cl.reb.toFixed(1)} reb · ${cl.ast.toFixed(1)} ast <span class="sub">this season</span>` : ls ? `${ls.pts.toFixed(1)} pts · ${ls.reb.toFixed(1)} reb · ${ls.ast.toFixed(1)} ast` : "no NBA games last season")(curL(p))}</div>
@@ -2524,14 +2525,14 @@ function teamProfile(ab){
   // top performers: current roster, ranked by Chip Equity x share of the game he played last season (wherever he played)
   const top = ps.filter(p => Number.isFinite(p.impact)).sort((x,y)=>y.impact-x.impact).slice(0, 3);
   const topRow = (p, j) => { const ls = p.ls, moved = ls.team !== ab;
-    return `<tr><td>${j+1}</td><td class="l"><div class="who">${face(p)}${nameCell(p)}</div></td><td class="l">${ls.si !== LATEST ? `<span class="sub">missed ${S[LATEST]} · ${S[ls.si]}</span>` : moved ? `<span class="res">new · from ${esc(ls.team)}</span>` : esc(ls.team)}</td>
+    return `<tr><td>${j+1}</td><td class="l"><div class="who">${face(p)}${nameCell(p)}</div></td><td class="l">${ls.si !== LS ? `<span class="sub">missed ${S[LS]} · ${S[ls.si]}</span>` : moved ? `<span class="res">new · from ${esc(ls.team)}</span>` : esc(ls.team)}</td>
       <td class="nw"><strong>${sgn(p.cepm.r)}</strong>${pctl(p.cepm)}</td><td class="nw">${sgn(p.cepm.o)}${pctlO(p.cepm)}</td><td class="nw">${sgn(p.cepm.d)}${pctlD(p.cepm)}</td><td>${ls.mpg.toFixed(1)}</td><td>${ls.pts.toFixed(1)}</td><td>${ls.reb.toFixed(1)}</td><td>${ls.ast.toFixed(1)}</td><td>${(ls.ts*100).toFixed(1)}%</td></tr>`; };
   const projMin = p => PRJ && PRJ.mins.has(T.players.find(q=>q.name===p.name && q.espnId===p.espnId)) ? PRJ.mins.get(T.players.find(q=>q.name===p.name && q.espnId===p.espnId)).toFixed(1) : (p.out ? "0" : "–");
   const rosterRows = ps.slice().sort((x,y) => useCur ? (((curL(y)||{}).mpg||0) - ((curL(x)||{}).mpg||0)) || ((y.ls?y.ls.mpg:0)-(x.ls?x.ls.mpg:0)) : ((y.ls?y.ls.mpg:0)-(x.ls?x.ls.mpg:0))).map(p => { const ls = p.ls, c = p.cepm, q = useCur ? curL(p) : null;
     const st = useCur ? (q ? {gp: q.gp, gs: s5Starts(p) || 0, mpg: q.mpg, pts: q.pts, reb: q.reb, ast: q.ast, ts: q.ts} : null) : (ls ? {gp: ls.gp, gs: p.starts || 0, mpg: ls.mpg, pts: ls.pts, reb: ls.reb, ast: ls.ast, ts: ls.ts} : null);
     return `<tr><td class="l"><div class="who">${face(p)}${nameCell(p)}</div></td><td class="l">${p.pos ? esc(p.pos) : ""}</td>
       <td class="l">${p.seasonOut ? `<span class="res">Out for season</span>` : p.tw ? `<span class="sub">Two-way</span>` : p.status ? `<span class="sub">${esc(p.status)}</span>` : ""}</td>
-      <td class="l">${ls ? (ls.si !== LATEST ? `<span class="sub">missed season · ${S[ls.si]} ${esc(ls.team)}</span>` : ls.team !== ab ? `${esc(ls.team)} <span class="sub">(new)</span>` : esc(ls.team)) : `<span class="sub">no NBA games</span>`}</td>
+      <td class="l">${ls ? (ls.si !== LS ? `<span class="sub">missed season · ${S[ls.si]} ${esc(ls.team)}</span>` : ls.team !== ab ? `${esc(ls.team)} <span class="sub">(new)</span>` : esc(ls.team)) : `<span class="sub">no NBA games</span>`}</td>
       <td>${st ? st.gp : "–"}</td><td>${st ? st.gs : "–"}</td><td>${st ? st.mpg.toFixed(1) : "–"}</td><td class="sub">${projMin(p)}</td><td>${st ? st.pts.toFixed(1) : "–"}</td><td>${st ? st.reb.toFixed(1) : "–"}</td><td>${st ? st.ast.toFixed(1) : "–"}</td>
       <td>${st && Number.isFinite(st.ts) ? (st.ts*100).toFixed(1)+"%" : "–"}</td><td class="nw"><strong>${c ? sgn(c.r) : "–"}</strong>${c ? pctl(c) : ""}</td><td class="nw">${c ? sgn(c.o) + pctlO(c) : "–"}</td><td class="nw">${c ? sgn(c.d) + pctlD(c) : "–"}</td></tr>`; }).join("");
   const outN = ps.filter(p=>p.out).length;
@@ -2542,20 +2543,20 @@ function teamProfile(ab){
         ${PRJ ? `<div class="tile hero"><div class="v">${recStr(PRJ)}</div><div class="k">Projected ${CUR.C.season} · ${rangeStr(PRJ)}</div></div>
         <div class="tile"><div class="v">${sgn(PRJ.net)}</div><div class="k">Projected net rating</div></div>
         ${espnOf(ab) != null ? `<div class="tile"><div class="v">${espnOf(ab).toFixed(1)}</div><div class="k">ESPN BPI wins</div></div>` : ""}` : ""}
-        <div class="tile"><div class="v">${r ? `${r.w}-${r.l}` : "–"}</div><div class="k">${S[LATEST]} record${CUR.C.in_progress ? " so far" : ""}</div></div>
-        ${CUR.C.in_progress ? "" : `<div class="tile"><div class="v">${esc(res.txt || "–")}</div><div class="k">${S[LATEST]} playoffs</div></div>`}
-        <div class="tile"><div class="v">${r ? sgn(r.net) : "–"}</div><div class="k">Net rating${r && r.rank && r.rank.net ? ` · ${ord(r.rank.net)}` : ""}</div></div>
+        <div class="tile"><div class="v">${r ? `${r.w}-${r.l}` : "–"}</div><div class="k">${S[LS]} record${CUR.C.in_progress && LS === LS ? " so far" : ""}</div></div>
+        ${CUR.C.in_progress && LS === LS ? "" : `<div class="tile"><div class="v">${esc(res.txt || "–")}</div><div class="k">${S[LS]} playoffs</div></div>`}
+        <div class="tile"><div class="v">${r ? sgn(r.net) : "–"}</div><div class="k">${S[LS]} net rating${r && r.rank && r.rank.net ? ` · ${ord(r.rank.net)}` : ""}</div></div>
         <div class="tile"><div class="v">${r ? r.off.toFixed(1) : "–"}</div><div class="k">Off rating${r && r.rank && r.rank.off ? ` · ${ord(r.rank.off)}` : ""}</div></div>
         <div class="tile"><div class="v">${r ? r.def.toFixed(1) : "–"}</div><div class="k">Def rating${r && r.rank && r.rank.def ? ` · ${ord(r.rank.def)}` : ""}</div></div>
         <div class="tile"><div class="v">${r ? r.pace.toFixed(1) : "–"}</div><div class="k">Pace</div></div></div></div>
     <div class="box s5-box"><h2>${s5Live ? `Starting five <small>most-used this season · together in ${S5x.n} of ${S5x.games} game${S5x.games === 1 ? "" : "s"}</small>` : `Projected starting five <small>top performers on the current roster</small>`}</h2>
       <div class="s5">${five.map(fiveCard).join("")}</div></div>
     <div class="box"><h2>Top performers <small>current roster · ranked by single-season Chip Equity</small></h2><div class="tscroll"><table>
-      <thead><tr><th>#</th><th class="l">Player</th><th class="l">${S[LATEST]} team</th><th>Chip Equity</th><th>Off</th><th>Def</th><th>MPG</th><th>PTS</th><th>REB</th><th>AST</th><th>TS%</th></tr></thead>
+      <thead><tr><th>#</th><th class="l">Player</th><th class="l">${S[LS]} team</th><th>Chip Equity</th><th>Off</th><th>Def</th><th>MPG</th><th>PTS</th><th>REB</th><th>AST</th><th>TS%</th></tr></thead>
       <tbody>${top.map(topRow).join("") || `<tr><td colspan="11" class="muted">No players with Chip Equity yet.</td></tr>`}</tbody></table></div></div>
-    <div class="box"><h2>Roster <small>${useCur ? `${CUR.C.season} stats per game so far (live from ESPN box scores, ${BX.games} game${BX.games === 1 ? "" : "s"})` : `${S[LATEST]} regular-season stats per game`} · single-season Chip Equity, ${S[LATEST]} · click a column to sort</small></h2>
-      ${BX ? `<div class="seg" style="margin:0 0 10px" role="group" aria-label="Roster stats"><button id="se-v-cur" aria-pressed="${useCur}">${CUR.C.season} so far</button><button id="se-v-last" aria-pressed="${!useCur}">${S[LATEST]}</button></div>` : ""}<div class="tscroll"><table>
-      <thead><tr><th class="l">Player</th><th class="l">Pos</th><th class="l">Status</th><th class="l">${S[LATEST]} team</th><th>GP</th><th title="Games started${useCur ? " this season" : ""}">GS</th><th>MPG</th><th title="Minutes per game the projection gives him this season">Proj. MPG</th><th>PTS</th><th>REB</th><th>AST</th><th>TS%</th><th>Chip Equity</th><th>Off</th><th>Def</th></tr></thead>
+    <div class="box"><h2>Roster <small>${useCur ? `${CUR.C.season} stats per game so far (live from ESPN box scores, ${BX.games} game${BX.games === 1 ? "" : "s"})` : `${S[LS]} regular-season stats per game`} · single-season Chip Equity, ${S[LS]} · click a column to sort</small></h2>
+      ${BX ? `<div class="seg" style="margin:0 0 10px" role="group" aria-label="Roster stats"><button id="se-v-cur" aria-pressed="${useCur}">${CUR.C.season} so far</button><button id="se-v-last" aria-pressed="${!useCur}">${S[LS]}</button></div>` : ""}<div class="tscroll"><table>
+      <thead><tr><th class="l">Player</th><th class="l">Pos</th><th class="l">Status</th><th class="l">${S[LS]} team</th><th>GP</th><th title="Games started${useCur ? " this season" : ""}">GS</th><th>MPG</th><th title="Minutes per game the projection gives him this season">Proj. MPG</th><th>PTS</th><th>REB</th><th>AST</th><th>TS%</th><th>Chip Equity</th><th>Off</th><th>Def</th></tr></thead>
       <tbody>${rosterRows}</tbody></table></div>${MLINK_HTML("cur")}</div>`;
 }
 
