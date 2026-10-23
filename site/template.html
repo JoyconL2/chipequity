@@ -2543,8 +2543,8 @@ function teamProfile(ab){
         ${PRJ ? `<div class="tile hero"><div class="v">${recStr(PRJ)}</div><div class="k">Projected ${CUR.C.season} · ${rangeStr(PRJ)}</div></div>
         <div class="tile"><div class="v">${sgn(PRJ.net)}</div><div class="k">Projected net rating</div></div>
         ${espnOf(ab) != null ? `<div class="tile"><div class="v">${espnOf(ab).toFixed(1)}</div><div class="k">ESPN BPI wins</div></div>` : ""}` : ""}
-        <div class="tile"><div class="v">${r ? `${r.w}-${r.l}` : "–"}</div><div class="k">${S[LS]} record${CUR.C.in_progress && LS === LS ? " so far" : ""}</div></div>
-        ${CUR.C.in_progress && LS === LS ? "" : `<div class="tile"><div class="v">${esc(res.txt || "–")}</div><div class="k">${S[LS]} playoffs</div></div>`}
+        <div class="tile"><div class="v">${r ? `${r.w}-${r.l}` : "–"}</div><div class="k">${S[LS]} record${CUR.C.in_progress && LS === LATEST ? " so far" : ""}</div></div>
+        ${CUR.C.in_progress && LS === LATEST ? "" : `<div class="tile"><div class="v">${esc(res.txt || "–")}</div><div class="k">${S[LS]} playoffs</div></div>`}
         <div class="tile"><div class="v">${r ? sgn(r.net) : "–"}</div><div class="k">${S[LS]} net rating${r && r.rank && r.rank.net ? ` · ${ord(r.rank.net)}` : ""}</div></div>
         <div class="tile"><div class="v">${r ? r.off.toFixed(1) : "–"}</div><div class="k">Off rating${r && r.rank && r.rank.off ? ` · ${ord(r.rank.off)}` : ""}</div></div>
         <div class="tile"><div class="v">${r ? r.def.toFixed(1) : "–"}</div><div class="k">Def rating${r && r.rank && r.rank.def ? ` · ${ord(r.rank.def)}` : ""}</div></div>
