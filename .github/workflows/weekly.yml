@@ -19,6 +19,9 @@ permissions:
 concurrency:
   group: daily-update
   cancel-in-progress: false
+defaults:
+  run:
+    shell: bash          # with pipefail, so "| tee" doesn't hide a failure
 jobs:
   update:
     runs-on: ubuntu-latest
@@ -37,9 +40,12 @@ jobs:
           key: live-${{ github.run_id }}
           restore-keys: live-
       - name: update
-        run: python update/run.py ${{ inputs.season && format('--season {0}', inputs.season) || '' }} --site-url "${{ vars.SITE_URL || 'https://YOUR-SITE.netlify.app' }}"
+        run: mkdir -p update/tmp && python update/run.py ${{ inputs.season && format('--season {0}', inputs.season) || '' }} --site-url "${{ vars.SITE_URL || 'https://YOUR-SITE.netlify.app' }}" 2>&1 | tee update/tmp/run_out.txt
       - name: commit the new site
         run: python update/commit.py
+      - name: show what went wrong
+        if: failure()
+        run: python update/report_fail.py
       - name: logs
         if: failure()
         uses: actions/upload-artifact@v4
