@@ -126,7 +126,11 @@ def main():
     CRS = "../rapm_out/stints_rs.pkl"; CA = "../rapm_out/stints_all.pkl"; common = ["--decay", "1", "--only-end", CUR]
     run([PY, E, RS, "--cache", CRS, "--window", "3", "--prior", "prior_w3.csv", "--out", "new_cepm3_rs.csv", *common], cwd="cepm", out=os.path.join(tmp, "cepm3_rs.log"))
     merge_rows(os.path.join(ROOT, "cepm/cepm3_rs.csv"), os.path.join(ROOT, "cepm/new_cepm3_rs.csv"), CUR, "window_end")
-    run([PY, E, ALL, "--cache", CA, "--window", "1", "--prior", "prior_w1.csv", "--out", "new_disp1.csv", *common], cwd="cepm", out=os.path.join(tmp, "disp1.log"))
+    # single-season floor for the season being played: 100 on-court possessions per game teams have played (at least 50),
+    # reaching the usual 1,000 by game 10, so single-season numbers exist from the first week (still steadied 40% toward 3 years)
+    tg = 2 * int((G.stype == "rs").sum()) / 30; mp1 = int(min(1000, max(50, round(100 * tg))))
+    log(f"single-season floor {mp1} possessions ({tg:.1f} games per team)")
+    run([PY, E, ALL, "--cache", CA, "--window", "1", "--prior", "prior_w1.csv", "--out", "new_disp1.csv", "--min-poss", str(mp1), *common], cwd="cepm", out=os.path.join(tmp, "disp1.log"))
     jobs = []
     for w in (2, 3, 4, 5):
         args = [PY, E, ALL, "--cache", CA, "--window", str(w), "--prior", f"prior_w{w}.csv", "--lambda-from", "cepm3_rs.csv", "--out", f"new_disp{w}.csv", *common]
