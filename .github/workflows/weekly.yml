@@ -1,6 +1,8 @@
 name: daily update
 # Every morning: download the night's NBA games, add them to the season being played, rebuild the site into
 # dist/ and commit it (Netlify, linked to this repo with publish directory "dist", then deploys it).
+# Runs on YOUR computer (a self-hosted runner): NBA.com refuses downloads from GitHub's own servers.
+# If the computer is off or asleep at run time, the run waits (up to a day) and starts once it's back.
 # Run it by hand any time from the Actions tab ("Run workflow").
 on:
   schedule:
@@ -17,34 +19,20 @@ concurrency:
   cancel-in-progress: false
 jobs:
   update:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 300
     steps:
       - uses: actions/checkout@v4
+        with: { clean: false }            # keeps live/ (games already downloaded) and pbplib/ between runs
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install numpy pandas scipy requests
+      - run: python -m pip install --quiet numpy pandas scipy requests
       - name: pbpstats parser (same version the history was built with)
-        run: |
-          git clone https://github.com/dblackrun/pbpstats.git pbplib
-          git -C pbplib checkout e7ccf2fb6326da630a3cf1665aac964a1e108f4c
-          echo "PYTHONPATH=$GITHUB_WORKSPACE/pbplib" >> $GITHUB_ENV
-      - name: games already downloaded (saves re-downloading the whole season every day)
-        uses: actions/cache@v4
-        with:
-          path: live
-          key: live-${{ github.run_id }}
-          restore-keys: live-
+        run: python update/setup_pbp.py
       - name: update
         run: python update/run.py ${{ inputs.season && format('--season {0}', inputs.season) || '' }} --site-url "${{ vars.SITE_URL || 'https://YOUR-SITE.netlify.app' }}"
       - name: commit the new site
-        run: |
-          git config user.name "weekly-update[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add dist base
-          if git diff --cached --quiet; then echo "no changes"; exit 0; fi
-          git commit -m "Weekly update: $(python -c "import json;d=json.load(open('dist/update.json'));print(d['season'],'through',d['through'],'-',d['games'],'games')")"
-          git push
+        run: python update/commit.py
       - name: logs
         if: failure()
         uses: actions/upload-artifact@v4
