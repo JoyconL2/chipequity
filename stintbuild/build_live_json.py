@@ -17,6 +17,8 @@ def load(path):
     # pointing back to one can't find its missed shot, so those rebounds are dropped (as in box_from_live.py)
     heave = {a.get("actionNumber") for a in acts if a.get("actionType") == "heave"}
     acts = [a for a in acts if not (a.get("actionType") == "rebound" and a.get("shotActionNumber") in heave)]
+    for a in acts:                                       # 2026-27 files leave personId out of period / game records (0 before)
+        if a.get("personId") in (None, ""): a["personId"] = 0
     for a in acts:
         for k in NUM:
             if k in a and isinstance(a[k], str): a[k] = int(a[k]) if a[k].lstrip("-").isdigit() else 0
