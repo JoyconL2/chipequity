@@ -452,7 +452,7 @@ const LATEST = S.length - 1;
 // leaderboard and team defaults) is the season being played from its first day
 const INPROG = DATA.inprog && !DATA.inprog.done && DATA.inprog.season === S[LATEST] ? DATA.inprog : null;
 const HEAD = LATEST;                                   // the season being played is the default from day one
-const ipFloor = () => INPROG ? Math.min(1000, Math.max(50, Math.round(100 * INPROG.team_games))) : 1000;   // single-season floor (update/run.py)
+const ipFloor = () => INPROG ? Math.min(1000, Math.max(50, Math.round(50 * INPROG.team_games))) : 1000;   // single-season floor (update/run.py)
 const ipMinGp = () => INPROG ? Math.max(1, Math.floor(INPROG.team_games / 2)) : 40;   // "enough games" this early in a season
 const ipDate = () => INPROG && INPROG.through ? new Date(INPROG.through + "T12:00:00").toLocaleDateString(undefined, {month:"short", day:"numeric"}) : "";
 const ipNote = () => INPROG ? `${S[LATEST]} in progress · through ${ipDate()} · ${Math.round(INPROG.team_games)} games per team` : "";
@@ -2011,7 +2011,7 @@ function renderHome(){
   const lg = L.length ? `<div class="muted" style="font-size:.85em;margin-bottom:2px">${S[0]} → ${S[L.length-1]}, league average per team per game</div>${TR.map(trendRow).join("")}` : "";
   const card = (tab, title, sub, body, cta) => `<div class="box hcard" tabindex="0" role="link" data-go="${tab}"><h2>${title} <small>${sub}</small></h2>${body}<div class="go">${cta} ›</div></div>`;
   hmOut.innerHTML = `<div class="home-hero">
-      <div class="home-kicker">1996-97 → ${S[LATEST]} · Chip Equity · playoff odds · live games</div>${INPROG ? `<div class="ip-banner"><span class="ip-tag">in progress</span> ${esc(ipNote())}. Chip Equity updates every morning; a player gets a single-season number once he passes ${ipFloor().toLocaleString()} possessions (100 per game played, up to the usual 1,000 by game 10)${HEAD !== LATEST ? `, and the headline numbers stay on ${S[HEAD]} until 20 games in` : ""}.</div>` : ""}
+      <div class="home-kicker">1996-97 → ${S[LATEST]} · Chip Equity · playoff odds · live games</div>${INPROG ? `<div class="ip-banner"><span class="ip-tag">in progress</span> ${esc(ipNote())}. Chip Equity updates every morning; a player gets a single-season number once he passes ${ipFloor().toLocaleString()} possessions (50 per game played, up to the usual 1,000 by game 20)${HEAD !== LATEST ? `, and the headline numbers stay on ${S[HEAD]} until 20 games in` : ""}.</div>` : ""}
       <h2 class="home-title">Basketball <span>Done Right</span></h2>
       <p class="home-sub">Every player and team since 1996-97: real impact numbers, head-to-head comparisons, playoff series odds, and live games with play-by-play.</p>
       <div class="home-search"><input type="text" id="hm-q" placeholder="Search any player, e.g. Jokic" autocomplete="off"><button class="btn" id="hm-go">Go</button></div></div>
