@@ -1,0 +1,21 @@
+name: probe nba cdn
+on:
+  push:
+    paths: [".github/workflows/probe.yml", "update/fetch_season.py"]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: false }
+      - run: pip install requests
+      - run: |
+          python - <<'PY'
+          import sys; sys.argv = ["x"]; sys.path.insert(0, "update"); import fetch_season as f
+          C = f.CDN
+          for u in [f"{C}/staticData/scheduleLeagueV2.json", f"{C}/liveData/boxscore/boxscore_0022500001.json", f"{C}/liveData/playbyplay/playbyplay_0022600001.json"]:
+              for n, h in enumerate(f.HEADERS):
+                  r = f.SESSION.get(u, headers=h, timeout=30)
+                  print(f"::warning::python header set {n}: {r.status_code} {u.rsplit('/',1)[1]} {len(r.content)}B")
+              j, code = f.curl_get(u); print(f"::warning::curl: {code} {u.rsplit('/',1)[1]}")
+          PY

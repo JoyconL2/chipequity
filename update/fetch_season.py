@@ -12,10 +12,18 @@ from concurrent.futures import ThreadPoolExecutor
 import requests
 
 CDN = os.environ.get("NBA_CDN", "https://cdn.nba.com/static/json")   # override only for testing
-UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-HEADERS = [{"User-Agent": UA, "Accept": "application/json, text/plain, */*", "Referer": "https://www.nba.com/", "Origin": "https://www.nba.com"},
-           {"User-Agent": UA, "Accept": "*/*"},                     # plainer request, in case the first set is refused
-           {}]
+# NBA.com's CDN (since about Sept 2026) only answers requests that look like a current browser coming from nba.com:
+# a recent Firefox User-Agent plus Referer, or Chrome with its client-hint / fetch-metadata headers. Old browser
+# versions are refused, so the version number follows the calendar (Firefox ships every 4 weeks; 140 = 2025-06-24).
+import datetime as _dt
+FF = max(158, 140 + (_dt.date.today() - _dt.date(2025, 6, 24)).days // 28)
+UA = f"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:{FF}.0) Gecko/20100101 Firefox/{FF}.0"
+CR = 145 + max(0, (_dt.date.today() - _dt.date(2026, 2, 1)).days // 28)
+UA_CR = f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{CR}.0.0.0 Safari/537.36"
+HEADERS = [{"User-Agent": UA, "Accept": "application/json, text/plain, */*", "Accept-Language": "en-US,en;q=0.9", "Referer": "https://www.nba.com/", "Origin": "https://www.nba.com"},
+           {"User-Agent": UA_CR, "Accept": "application/json, text/plain, */*", "Accept-Language": "en-US,en;q=0.9", "Referer": "https://www.nba.com/", "Origin": "https://www.nba.com",
+            "Sec-Ch-Ua": f'"Chromium";v="{CR}", "Google Chrome";v="{CR}", "Not.A/Brand";v="99"', "Sec-Ch-Ua-Mobile": "?0", "Sec-Ch-Ua-Platform": '"Windows"',
+            "Sec-Fetch-Dest": "empty", "Sec-Fetch-Mode": "cors", "Sec-Fetch-Site": "same-site"}]
 STATUS = {}                                                          # url -> what NBA.com answered (shown if the run fails)
 SESSION = requests.Session()
 
@@ -29,7 +37,7 @@ def curl_get(url):
     but not curl's (different TLS handshake)"""
     if not CURL: return None, "no curl"
     try:
-        r = subprocess.run([CURL, "-s", "--compressed", "-m", "30", "-A", UA, "-H", "Referer: https://www.nba.com/", "-H", "Accept: application/json, text/plain, */*",
+        r = subprocess.run([CURL, "-s", "--compressed", "-m", "30", "-A", UA, "-H", "Referer: https://www.nba.com/", "-H", "Origin: https://www.nba.com", "-H", "Accept: application/json, text/plain, */*", "-H", "Accept-Language: en-US,en;q=0.9",
                             "-w", "\n%{http_code}", url], capture_output=True, timeout=45)
         body, _, code = r.stdout.rpartition(b"\n"); code = code.decode().strip()
         if code == "200": return json.loads(body), 200
