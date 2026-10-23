@@ -31,13 +31,17 @@ jobs:
           $g = Get-Command python -ErrorAction SilentlyContinue
           if ($g -and $g.Source -notlike "*WindowsApps*") { $c += $g.Source }
           $c += Get-ChildItem "C:\Program Files\Python3*\python.exe", "C:\Python3*\python.exe", "C:\Users\*\AppData\Local\Programs\Python\Python3*\python.exe" -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | ForEach-Object FullName
+          $ok = @()
           foreach ($p in $c) {
             $v = & $p -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>$null
-            if ($LASTEXITCODE -eq 0 -and [version]$v -ge [version]"3.10") {
-              Split-Path $p | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
-              (Join-Path (Split-Path $p) "Scripts") | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
-              Write-Output "using Python $v at $p"; exit 0
-            }
+            if ($LASTEXITCODE -eq 0 -and [version]$v -ge [version]"3.10") { $ok += [pscustomobject]@{ p = $p; v = [version]$v } }
+          }
+          # prefer 3.10-3.13 (numpy / pandas / scipy have Windows installs for them); a newer one only if that's all there is
+          $pick = @($ok | Where-Object { $_.v -le [version]"3.13" } | Sort-Object v -Descending) + @($ok | Where-Object { $_.v -gt [version]"3.13" } | Sort-Object v) | Select-Object -First 1
+          if ($pick) {
+            Split-Path $pick.p | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+            (Join-Path (Split-Path $pick.p) "Scripts") | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+            Write-Output "using Python $($pick.v) at $($pick.p)"; exit 0
           }
           Write-Output "::error::Python 3.10+ not found by the runner (it runs as its own Windows account). Install Python from python.org with 'Install Python for all users' ticked, then in admin PowerShell run: Restart-Service actions.runner.*   Looked at: $($c -join ', ')"
           exit 1
