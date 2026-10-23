@@ -19,6 +19,8 @@ def clean(path, out):
     J = json.load(open(path)); A = J["game"]["actions"]
     heave = {a["actionNumber"] for a in A if a.get("actionType") == "heave"}
     J["game"]["actions"] = [a for a in A if not (a.get("actionType") == "rebound" and a.get("shotActionNumber") in heave)]
+    for a in J["game"]["actions"]:                       # 2026-27 files leave personId out of period / game records (0 before)
+        if a.get("personId") in (None, ""): a["personId"] = 0
     json.dump(J, open(out, "w"))
 
 
