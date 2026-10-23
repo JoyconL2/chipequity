@@ -24,9 +24,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { clean: false }            # keeps live/ (games already downloaded) and pbplib/ between runs
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.12" }
-      - run: python -m pip install --quiet numpy pandas scipy requests
+      - name: Python (installed on the computer itself; 3.10 or newer)
+        run: python --version
+      - run: python -m pip install --quiet --upgrade numpy pandas scipy requests
       - name: pbpstats parser (same version the history was built with)
         run: python update/setup_pbp.py
       - name: update
