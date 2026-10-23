@@ -7,7 +7,7 @@ every earlier season). Files already on disk are not downloaded again.
 
 usage: python update/fetch_season.py <out dir> [season, e.g. 2026-27]
 writes <out>/<season>/pbp_rs/*.json, pbp_po/*.json, box/*.json, games.csv, names.json"""
-import sys, os, json, time, csv
+import sys, os, json, time, csv, shutil, subprocess
 from concurrent.futures import ThreadPoolExecutor
 import requests
 
@@ -20,16 +20,42 @@ STATUS = {}                                                          # url -> wh
 SESSION = requests.Session()
 
 
+CURL = shutil.which("curl")                                         # Windows 10+ and Macs have it built in
+USE_CURL = False                                                     # switched on once curl gets through where Python was refused
+
+
+def curl_get(url):
+    """same download through the system's curl: NBA.com's content network sometimes refuses Python's connection
+    but not curl's (different TLS handshake)"""
+    if not CURL: return None, "no curl"
+    try:
+        r = subprocess.run([CURL, "-s", "--compressed", "-m", "30", "-A", UA, "-H", "Referer: https://www.nba.com/", "-H", "Accept: application/json, text/plain, */*",
+                            "-w", "\n%{http_code}", url], capture_output=True, timeout=45)
+        body, _, code = r.stdout.rpartition(b"\n"); code = code.decode().strip()
+        if code == "200": return json.loads(body), 200
+        return None, int(code) if code.isdigit() else f"curl exit {r.returncode}"
+    except Exception as e:
+        return None, f"curl {type(e).__name__}"
+
+
 def get(url, tries=3):
+    global USE_CURL
     for i in range(tries):
-        for h in HEADERS:
-            try:
-                r = SESSION.get(url, headers=h, timeout=30)
-                STATUS[url] = r.status_code
-                if r.status_code == 200: return r.json()
-                if r.status_code == 404: return None
-            except (requests.RequestException, ValueError) as e:
-                STATUS[url] = type(e).__name__
+        if not USE_CURL:
+            for h in HEADERS:
+                try:
+                    r = SESSION.get(url, headers=h, timeout=30)
+                    STATUS[url] = r.status_code
+                    if r.status_code == 200: return r.json()
+                    if r.status_code == 404: return None
+                except (requests.RequestException, ValueError) as e:
+                    STATUS[url] = type(e).__name__
+        j, code = curl_get(url)
+        if j is not None:
+            if not USE_CURL: note("NBA.com refused Python's download but not curl's: using curl from here on")
+            USE_CURL = True; STATUS[url] = 200; return j
+        STATUS[url] = f"{STATUS.get(url)} / curl {code}" if not USE_CURL else code
+        if code == 404: return None
         time.sleep(2 * (i + 1))
     return None
 
