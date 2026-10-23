@@ -1553,9 +1553,10 @@ const S = DATA.seasons, P = DATA.P;
 const NP = P.p.length;
 const LATEST = S.length - 1;
 // the season being played (daily update, update/run.py): labeled "in progress"; the headline season (home page,
-// leaderboard and team defaults) stays on the last finished season until teams have played 20 games
+// leaderboard and team defaults) is the season being played from its first day
 const INPROG = DATA.inprog && !DATA.inprog.done && DATA.inprog.season === S[LATEST] ? DATA.inprog : null;
-const HEAD = INPROG && INPROG.team_games < 20 ? LATEST - 1 : LATEST;
+const HEAD = LATEST;                                   // the season being played is the default from day one
+const ipMinGp = () => INPROG ? Math.max(1, Math.floor(INPROG.team_games / 2)) : 40;   // "enough games" this early in a season
 const ipDate = () => INPROG && INPROG.through ? new Date(INPROG.through + "T12:00:00").toLocaleDateString(undefined, {month:"short", day:"numeric"}) : "";
 const ipNote = () => INPROG ? `${S[LATEST]} in progress · through ${ipDate()} · ${Math.round(INPROG.team_games)} games per team` : "";
 const ipTag = si => INPROG && si === LATEST ? ` <span class="ip-tag" title="${esc(ipNote())}">in progress</span>` : "";
@@ -2538,7 +2539,7 @@ function ldStatOptions(){
   else statOptions(ldStat, m==="careeravg" ? LEADER_KEYS.filter(k=>!STATS[k].rw) : LEADER_KEYS, m==="careeravg" ? "PTS75" : "RW3");
   if ([...ldStat.options].some(o=>o.value===prev)) ldStat.value = prev;
   ldSeasonF.hidden = m!=="season";
-  ldMin.value = CEPM_VIEW === "po" ? (m === "peak" ? 2000 : 300) : {season: TYPE?4:40, best: TYPE?10:50, career: TYPE?40:300, careeravg: TYPE?40:300, peak: 0, titles: 0}[m];
+  ldMin.value = CEPM_VIEW === "po" ? (m === "peak" ? 2000 : 300) : {season: TYPE?4:(INPROG && +ldSeason.value === LATEST ? ipMinGp() : 40), best: TYPE?10:50, career: TYPE?40:300, careeravg: TYPE?40:300, peak: 0, titles: 0}[m];
   if (CEPM_VIEW === "po" && (m === "season" || m === "best") && !(STATS[ldStat.value] && STATS[ldStat.value].rw)) ldStat.value = "RW3";
   ldMin.closest(".field").hidden = m==="titles";
 }
@@ -2611,6 +2612,7 @@ function renderLeaders(){
     </table></div><p class="note">${rwW ? "Click a column to rank by it." : "Click a column to sort."}</p>${rwW ? `<p class="mlink"><a href="#" data-method="windows">How it's calculated ›</a></p>` : ""}</div>`;
 }
 ldMode.addEventListener("change", ()=>{ ldStatOptions(); renderLeaders(); });
+ldSeason.addEventListener("change", ()=>{ if (ldMode.value === "season" && CEPM_VIEW !== "po" && !TYPE) ldMin.value = String(INPROG && +ldSeason.value === LATEST ? ipMinGp() : 40); });
 [ldStat, ldSeason, ldMin, ldN].forEach(el=>el.addEventListener("change", renderLeaders));
 
 /* ---------------- TEAMS ---------------- */
@@ -3059,10 +3061,14 @@ gmDate.addEventListener("change", ()=>{ if (!gmDate.value) return; gcGame = null
 const hmOut = document.getElementById("hm-out");
 let hmGamesLoaded = false;
 function renderHome(){
-  const s = HEAD, minGp = s === LATEST && INPROG ? Math.max(5, Math.floor(INPROG.team_games / 2)) : 40;
-  // leaders: single-season Chip Equity, latest season
-  const cand = []; const seen = new Set();
-  for (let i=0;i<NP;i++){ if (P.s[i]!==s || P.t[i]!==0 || seen.has(P.p[i])) continue; seen.add(P.p[i]); const v = M.rwOf(P.p[i], s, 1); if (v && P.gp[i] >= minGp) cand.push({rv:v, k:P.p[i], v:v.r, o:v.o, d:v.d, tm:AB(P.tm[i])}); }
+  const s = HEAD, minGp = s === LATEST && INPROG ? ipMinGp() : 40;
+  // leaders: single-season Chip Equity, latest season (3-year until players reach the 1,000-possession single-season floor)
+  let cand = [], W = 1;
+  for (const w of [1, 3]){
+    cand = []; const seen = new Set(); W = w;
+    for (let i=0;i<NP;i++){ if (P.s[i]!==s || P.t[i]!==0 || seen.has(P.p[i])) continue; seen.add(P.p[i]); const v = M.rwOf(P.p[i], s, w); if (v && P.gp[i] >= minGp) cand.push({rv:v, k:P.p[i], v:v.r, o:v.o, d:v.d, tm:AB(P.tm[i])}); }
+    if (cand.length >= 5 || !(s === LATEST && INPROG)) break;
+  }
   cand.sort((a,b)=>b.v-a.v);
   M.tieRank(cand, x => x.v, "pos");
   const lead = cand.slice(0,5).map((r,j)=>`<div class="hrow"><span class="n">${r.pos}</span>${faceImg(r.k,"sm")}<span>${pLink(r.k, esc(DATA.names[r.k]))} <span class="muted">${esc(r.tm)} · o ${pm(r.o)} · d ${pm(r.d)}</span></span><span class="v">${pm(r.v)}${pctl(r.rv)}</span></div>`).join("");
@@ -3115,7 +3121,7 @@ function renderHome(){
     <div class="home-grid">
       ${card("games", "Live Feed", "today", `<div id="hm-games"><div class="muted">Loading today's games…</div></div>`, "Scores & play-by-play")}
       ${card("matchup", "Playoff Matchup", "model vs. reality", mu, "Simulate any series")}
-      ${card("leaders", "Leaders", `Single-season Chip Equity, ${S[s]}`, lead, "All leaderboards")}
+      ${card("leaders", "Leaders", W === 1 ? `Single-season Chip Equity, ${S[s]}` : `3-year Chip Equity through ${S[s]} (single-season numbers start at 1,000 possessions)`, lead, "All leaderboards")}
       ${card("teams", "Teams", `net rating, ${S[s]}`, tms, "Compare teams")}
       ${card("compare", "Compare", "best single-season Chip Equity ever", cmp, "Compare players")}
       ${card("league", "League", "how the game changed", lg, "League trends")}
@@ -3123,7 +3129,7 @@ function renderHome(){
   hmOut.querySelectorAll(".hcard").forEach(c => { const go = () => { const tab = c.dataset.go;
       if (tab==="matchup" && hmMu){ openMatchup(hmMu[0], hmMu[2], hmMu[1], hmMu[2]); return; }
       if (tab==="compare" && lbK>=0 && cuK>=0){ cmIn[0].value = optLabel(lbK); cmIn[1].value = optLabel(cuK); cmScope.value = "career"; }
-      if (tab==="leaders"){ ldMode.value = "season"; ldStatOptions(); ldSeason.value = String(s); ldStat.value = "RW1"; }
+      if (tab==="leaders"){ ldMode.value = "season"; ldStatOptions(); ldSeason.value = String(s); ldStat.value = W === 1 ? "RW1" : "RW3"; ldMin.value = String(minGp); }
       show(tab); window.scrollTo({top:0}); };
     c.addEventListener("click", e => { if (e.target.closest("input,button,a")) return; go(); });
     c.addEventListener("keydown", e => { if (e.key==="Enter"){ e.preventDefault(); go(); } }); });
