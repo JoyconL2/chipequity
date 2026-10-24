@@ -1612,7 +1612,9 @@ function renderWowy(){
   if (!L){ wvOut.innerHTML = `<div class="msg">Couldn't load lineups/${S[s]}.json${LU_ERR.has(s) ? ` (${esc(LU_ERR.get(s))})` : ""}. It must be deployed next to index.html.</div>`; return; }
   const [tot, pl] = e, nm = k => esc(DATA.names[k]), last = k => esc(DATA.names[k].split(" ").slice(1).join(" ") || DATA.names[k]);
   WV.sel = WV.sel.filter(k => pl.some(x => x[0] === k));
-  const tO = rtg(tot[0], tot[1]), tD = rtg(tot[0], tot[2]);
+  // league average that regular season: every team's points per 100 possessions (wowy.json team totals)
+  let lp = 0, lpts = 0; for (const a in DATA.abbrs){ const q = WOWY[`${s}|${a}|0`]; if (q){ lp += q[0][0]; lpts += q[0][1]; } }
+  const lg = lp > 0 ? 100 * lpts / lp : NaN, tO = lg, tD = lg;
   const cls = v => !Number.isFinite(v) || Math.abs(v) < 0.05 ? "" : v > 0 ? "wv-pos" : "wv-neg";
   const dlt = v => Number.isFinite(v) ? `<span class="wv-d ${cls(v)}">${sgnf(v)}</span>` : "";
   const cells = v => { const o = rtg(v[0], v[1]), d = rtg(v[0], v[2]), n = netOf(v);
@@ -1624,7 +1626,7 @@ function renderWowy(){
     return `<button class="wv-p${on ? " sel" : ""}" data-wvp="${k}" ${!on && WV.sel.length >= cap ? "disabled" : ""}>${faceImg(k, "sm")}<span>${nm(k)}</span><small>${Math.round(x[1]).toLocaleString()} poss</small></button>`; }).join("");
   const modes = [["wowy", "WOWY"], ["2", "2 Man"], ["3", "3 Man"], ["4", "4 Man"], ["5", "5 Man"]].map(([v, l]) => `<button data-wvm="${v}" aria-pressed="${WV.mode === v}">${l}</button>`).join("");
   const th = (k, l, t) => `<th data-wvs="${k}" class="sortable${WV.sort === k ? " sorted" : ""}" title="${t}">${l}</th>`;
-  const head = `<thead><tr><th class="l">${isW ? "On / off" : size === 5 ? "Lineup" : size + "-man unit"}</th>${th("p", "Poss", "Possessions")}${th("o", "Off", "Points scored per 100 possessions (vs. the team's season)")}${th("d", "Def", "Points allowed per 100 possessions (vs. the team's season; green = fewer allowed)")}${th("n", "Net", "Net rating per 100 possessions")}</tr></thead>`;
+  const head = `<thead><tr><th class="l">${isW ? "On / off" : size === 5 ? "Lineup" : size + "-man unit"}</th>${th("p", "Poss", "Possessions")}${th("o", "Off", "Points scored per 100 possessions (small: vs. league average)")}${th("d", "Def", "Points allowed per 100 possessions (small: vs. league average; green = fewer allowed)")}${th("n", "Net", "Net rating per 100 possessions")}</tr></thead>`;
   const key = v => WV.sort === "p" ? v[0] : WV.sort === "o" ? rtg(v[0], v[1]) : WV.sort === "d" ? -rtg(v[0], v[2]) : netOf(v);
   let body;
   if (isW){
@@ -1635,7 +1637,7 @@ function renderWowy(){
       rows.sort((a, b) => (key(b.v) - key(a.v)) || 0);
       body = `<div class="tscroll"><table class="wv-t">${head}<tbody>${rows.map(r => `<tr><td class="l"><div class="wv-l">${WV.sel.map(k => badge(k, r.on.includes(k))).join("")}</div></td>${cells(r.v)}</tr>`).join("")}
         <tr class="wv-tot"><td class="l">${tn}, every possession</td>${cells(tot)}</tr></tbody></table></div>
-        <p class="note">Every on/off combination of the players picked (✓ on the floor, ✕ off); the rest of the roster as it played. Off and Def are per 100 possessions, with the difference from the team's season in small type (green = better). Garbage time out.</p>`;
+        <p class="note">Every on/off combination of the players picked (✓ on the floor, ✕ off); the rest of the roster as it played. Off and Def are per 100 possessions; the small number is the difference from the ${S[s]} league average (${fmt(lg, 1)} per 100; green = better than average). Garbage time out.</p>`;
     }
   } else {
     const early = s === LATEST && INPROG ? Math.min(1, INPROG.team_games / 82) : 1;
@@ -1647,7 +1649,7 @@ function renderWowy(){
       ${C.length ? `<div class="tscroll"><table class="wv-t">${head}<tbody>${shown.map(c => `<tr><td class="l"><div class="wv-l">${c.ks.map(k => `<span class="wv-b on">${faceImg(k, "sm")}<em>${last(k)}</em></span>`).join("")}</div></td>${cells(c.v)}</tr>`).join("")}
         <tr class="wv-tot"><td class="l">${tn}, every possession</td>${cells(tot)}</tr></tbody></table></div>
         ${C.length > shown.length ? `<p style="margin:8px 0 0"><button class="btn" id="wv-more">Show ${Math.min(10, C.length - shown.length)} more</button></p>` : ""}
-        <p class="note">${C.length.toLocaleString()} ${size === 5 ? "lineups" : size + "-man units"} with ${minP.toLocaleString()}+ possessions${WV.sel.length ? ` that include ${WV.sel.map(nm).join(", ")}` : ""}. Pick players above to narrow it down.</p>`
+        <p class="note">${C.length.toLocaleString()} ${size === 5 ? "lineups" : size + "-man units"} with ${minP.toLocaleString()}+ possessions${WV.sel.length ? ` that include ${WV.sel.map(nm).join(", ")}` : ""}. Small numbers under Off and Def: vs. the ${S[s]} league average (${fmt(lg, 1)} per 100). Pick players above to narrow it down.</p>`
         : `<div class="msg">No ${size === 5 ? "lineup" : size + "-man unit"} ${WV.sel.length ? "with those players " : ""}reached ${minP.toLocaleString()} possessions. Try a lower minimum.</div>`}`;
   }
   wvOut.innerHTML = `<div class="box"><h2>${logoImg(ab, s)} ${tn} <small>${S[s]} · ${typeName().toLowerCase()} · with or without you</small></h2>
