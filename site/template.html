@@ -327,6 +327,7 @@ td.sub{color:var(--ink-3);font-size:12px}
       <button role="tab" data-tab="matchup" id="tab-matchup">Playoff Matchup</button>
       <button role="tab" data-tab="leaders" id="tab-leaders">Leaders</button>
       <button role="tab" data-tab="teams" id="tab-teams">Teams</button>
+      <button role="tab" data-tab="wowy" id="tab-wowy">WOWY</button>
       <button role="tab" data-tab="league" id="tab-league">League</button>
       <button role="tab" data-tab="games" id="tab-games">Live Feed</button>
       <button role="tab" data-tab="method" id="tab-method">Method</button>
@@ -415,6 +416,13 @@ td.sub{color:var(--ink-3);font-size:12px}
       <div class="field"><label for="tm-4">Team 4</label><select id="tm-4"></select></div>
     </div>
     <div id="tm-out"></div>
+  </section>
+  <section class="panel" id="p-wowy" hidden>
+    <div class="controls">
+      <div class="field"><label for="wv-season">Season</label><select id="wv-season"></select></div>
+      <div class="field"><label for="wv-team">Team</label><select id="wv-team"></select></div>
+    </div>
+    <div id="wv-out"></div>
   </section>
 
   <section class="panel" id="p-games" hidden>
@@ -1574,58 +1582,85 @@ function renderRoster(ab, s){
     return `<tr><td class="l"><div class="who">${faceImg(k, "sm")}<span class="n">${pLink(k, esc(DATA.names[k]))}</span></div></td>
       <td>${a ? (traded && gpHere ? gpHere : a.gp) : "–"}</td><td>${a ? fmt(val(a, "MPG"), 1) : "–"}${traded ? `<sup title="Season totals across all his ${S[s]} teams">†</sup>` : ""}</td><td>${a ? fmt(val(a, "PPG"), 1) : "–"}</td><td>${a ? fmt(val(a, "RPG"), 1) : "–"}</td><td>${a ? fmt(val(a, "APG"), 1) : "–"}</td><td>${a ? fmt(val(a, "TS"), "pct") : "–"}</td>
       <td><strong>${pm(c ? c.r : NaN)}</strong></td><td>${Math.round(x[1]).toLocaleString()}</td><td>${sgnf(onN)}</td><td>${sgnf(offN)}</td><td><strong>${sgnf(onN - offN)}</strong></td></tr>`; }).join("");
-  // ---- WOWY for any group: these players on the floor together, those sitting ----
-  const L = (LU.get(s) || {})[`${ai}|${TYPE}`], luState = LU.has(s) ? (L ? "ok" : "none") : LU_ERR.has(s) ? "err" : "loading";
-  if (luState === "loading") loadLineups(s).then(() => { if (tmRoster === ab && +tmSeason.value === s) renderRoster(ab, s); });
-  if (!WY.on || WY.on.some(k => !PL.has(k))) WY.on = [pl[0][0]];
-  WY.off = WY.off.filter(k => PL.has(k) && !WY.on.includes(k));
-  const nm = k => esc(DATA.names[k]), list = ks => ks.map(nm).join(", ").replace(/, ([^,]*)$/, " and $1");
-  const lineRow = (lab, v, note) => `<tr><td class="l">${lab}</td><td>${v && v[0] > 0 ? Math.round(v[0]).toLocaleString() : "–"}</td><td>${fmt(rtg(v[0], v[1]), 1)}</td><td>${fmt(rtg(v[0], v[2]), 1)}</td><td><strong>${sgnf(netOf(v))}</strong></td></tr>`;
-  const offTxt = "", offNote = WY.off.length ? `<p class="note" style="margin:0 0 6px">Every row: ${list(WY.off)} off the floor.</p>` : "";
-  let wy = "";
-  if (L){
-    const on = WY.on, off = WY.off;
-    wy += lineRow(on.length > 1 ? `<b>${list(on)}</b> together${offTxt}` : `<b>${nm(on[0])}</b> on the floor${offTxt}`, luSum(L, on, off));
-    if (on.length > 1) for (const k of on) wy += lineRow(`${list(on.filter(x => x !== k))} <b>without</b> ${nm(k)}${offTxt}`, luSum(L, on.filter(x => x !== k), off.concat([k])));
-    wy += lineRow(on.length > 1 ? `<b>None</b> of them${offTxt}` : `${nm(on[0])} <b>off</b> the floor${offTxt}`, luSum(L, [], off.concat(on)));
-  } else {      // lineup file not loaded (yet): plain on/off for the first player
-    const A = PL.get(WY.on[0]); wy = lineRow(`${nm(WY.on[0])} on the floor`, A.slice(1, 4)) + lineRow(`${nm(WY.on[0])} off the floor`, off(A));
-  }
-  const chip = (k, grp) => `<span class="wy-chip">${nm(k)}<button data-wyx="${grp}|${k}" aria-label="Remove ${nm(k)}">×</button></span>`;
-  const addSel = (id, grp, lab, full) => full ? "" : `<select id="${id}" class="wy-add" aria-label="${lab}"><option value="">+ ${lab}</option>${pl.filter(x => !WY.on.includes(x[0]) && !WY.off.includes(x[0])).map(x => `<option value="${x[0]}">${nm(x[0])}</option>`).join("")}</select>`;
-  // best units of a size
-  const size = WY.size, minP = WY.min != null ? WY.min : Math.round((TYPE ? 0.25 : 1) * ({2: 300, 3: 200, 4: 120, 5: 60}[size]));
-  let combos = "";
-  if (L){
-    const C = [...luCombos(L, size).entries()].filter(([, v]) => v[0] >= minP).map(([k, v]) => ({ks: k.split(".").map(Number), v, p: v[0], o: rtg(v[0], v[1]), d: -rtg(v[0], v[2]), n: netOf(v)}));
-    const K = WY.sort; C.sort((x, y) => (y[K] - x[K]));
-    const th = (k, lab) => `<th data-wys="${k}" class="sortable${K === k ? " sorted" : ""}" title="Sort by ${lab.toLowerCase()}">${lab}</th>`;
-    combos = C.length ? `<div class="tscroll"><table><thead><tr><th>#</th><th class="l">${size === 5 ? "Lineup" : size + "-man unit"}</th>${th("p", "Poss")}${th("o", "Off rtg")}${th("d", "Def rtg")}${th("n", "Net")}</tr></thead><tbody>
-      ${C.slice(0, 15).map((c, i) => `<tr><td>${i + 1}</td><td class="l"><a href="#" data-wyset="${c.ks.join(".")}">${c.ks.map(nm).join(" · ")}</a></td><td>${Math.round(c.p).toLocaleString()}</td><td>${fmt(c.o, 1)}</td><td>${fmt(-c.d, 1)}</td><td><strong>${sgnf(c.n)}</strong></td></tr>`).join("")}</tbody></table></div>
-      <p class="note">${C.length.toLocaleString()} ${size === 5 ? "lineups" : size + "-man units"} with ${minP.toLocaleString()}+ possessions. Click one to load it above.</p>`
-      : `<div class="msg">No ${size}-man unit reached ${minP.toLocaleString()} possessions. Try a lower minimum.</div>`;
-  }
   tmOut.innerHTML = head + `
-    <div class="box"><h2>With or without you <small>any group of players · team results per 100 possessions · garbage time out</small></h2>
-      <div class="wy-pick"><div><span class="wy-lab">On the floor</span>${WY.on.map(k => chip(k, "on")).join("")}${addSel("wy-on", "on", "add player", WY.on.length >= 5)}</div>
-        <div><span class="wy-lab">Off the floor</span>${WY.off.map(k => chip(k, "off")).join("")}${addSel("wy-off", "off", "add player", WY.off.length >= 5)}</div></div>
-      ${offNote}<div class="tscroll"><table class="wy-t"><thead><tr><th class="l">Lineups</th><th>Poss</th><th title="Points scored per 100 possessions">Off rtg</th><th title="Points allowed per 100 possessions">Def rtg</th><th>Net</th></tr></thead><tbody>${wy}</tbody></table></div>
-      ${luState === "loading" ? `<p class="note">Loading lineups…</p>` : luState === "err" ? `<p class="note">Couldn't load lineups/${S[s]}.json (${esc(LU_ERR.get(s))}), so only plain on/off is shown. It must be deployed next to index.html.</p>` : ""}
-      <p class="note">Raw on-court results: they include the teammates and opponents each player shared the floor with. Chip Equity is the version that separates them.</p></div>
-    ${L ? `<div class="box"><h2>Best units <small>most-used groups that played together · ${typeName().toLowerCase()} · click a column to sort</small></h2>
-      <div class="controls" style="margin:0 0 10px"><div class="field"><label for="wy-size">Group</label><select id="wy-size">${[2,3,4,5].map(n => `<option value="${n}" ${n === size ? "selected" : ""}>${n === 5 ? "5-man lineups" : n + "-man units"}</option>`).join("")}</select></div>
-        <div class="field"><label for="wy-min">Min. possessions</label><input type="number" id="wy-min" min="0" step="25" value="${minP}"></div></div>${combos}</div>` : ""}
+    <div class="box"><h2>With or without you</h2><p style="margin:0">Every on/off combination of any players, and the best 2- to 5-man units: <a href="#" id="tm-wowy">open WOWY for ${esc(name)}, ${S[s]}</a>.</p></div>
     <div class="box"><h2>Full roster <small>${S[s]} ${typeName().toLowerCase()} · on/off = team net rating per 100 with him on vs. off the floor</small></h2><div class="tscroll"><table>
       <thead><tr><th class="l">Player</th><th>GP</th><th>MPG</th><th>PTS</th><th>REB</th><th>AST</th><th>TS%</th><th title="Single-season Chip Equity">Chip Equity</th><th title="Possessions on the floor for this team">Poss</th><th>On</th><th>Off</th><th>On − off</th></tr></thead>
       <tbody>${rows}</tbody></table></div><p class="note">† traded that season: per-game stats are his season totals across teams; GP and on/off are for this team only.</p></div>`;
   bindRosterBack(s);
-  const re = () => renderRoster(ab, s);
-  for (const [id, grp] of [["wy-on", "on"], ["wy-off", "off"]]){ const el = document.getElementById(id); if (el) el.onchange = ev => { if (ev.target.value !== "") { WY[grp].push(+ev.target.value); re(); } }; }
-  tmOut.querySelectorAll("[data-wyx]").forEach(b => b.onclick = () => { const [g, k] = b.dataset.wyx.split("|"); WY[g] = WY[g].filter(x => x !== +k); if (!WY.on.length) WY.on = null; re(); });
-  tmOut.querySelectorAll("[data-wys]").forEach(t => t.onclick = () => { WY.sort = t.dataset.wys; re(); });
-  tmOut.querySelectorAll("[data-wyset]").forEach(a => a.onclick = ev => { ev.preventDefault(); WY.on = a.dataset.wyset.split(".").map(Number); WY.off = []; re(); tmOut.querySelector(".wy-pick").scrollIntoView({block: "center"}); });
-  const sz = document.getElementById("wy-size"); if (sz) sz.onchange = ev => { WY.size = +ev.target.value; WY.min = null; re(); };
-  const mn = document.getElementById("wy-min"); if (mn) mn.onchange = ev => { WY.min = Math.max(0, +ev.target.value || 0); re(); };
+  const wl = document.getElementById("tm-wowy"); if (wl) wl.onclick = ev => { ev.preventDefault(); openWowy(ab, s, []); };
+}
+/* ---------------- WOWY tab (databallr-style): pick players -> every on/off combination, or 2- to 5-man units ---------------- */
+const wvOut = document.getElementById("wv-out"), wvSeason = document.getElementById("wv-season"), wvTeam = document.getElementById("wv-team");
+let WV = {ab: null, sel: [], mode: "wowy", sort: "p", min: null, more: 0};
+wvSeason.innerHTML = seasonOpts; wvSeason.value = String(LS);
+const wvTeams = s => [...new Set(M.tm.filter(r => r.s === s && r.t === 0).map(r => AB(r.a)))].sort((a, b) => teamName(a, s).localeCompare(teamName(b, s)));
+function wvFillTeams(){ const s = +wvSeason.value, ts = wvTeams(s); if (!ts.includes(WV.ab)) WV.ab = ts.includes("OKC") ? "OKC" : ts[0];
+  wvTeam.innerHTML = ts.map(a => `<option value="${a}" ${a === WV.ab ? "selected" : ""}>${esc(teamName(a, s))}</option>`).join(""); }
+function openWowy(ab, s, sel){ wvSeason.value = String(s); WV = {ab, sel: sel || [], mode: "wowy", sort: "p", min: null, more: 0}; wvFillTeams(); show("wowy"); window.scrollTo({top: 0}); }
+wvSeason.addEventListener("change", () => { WV.sel = []; WV.more = 0; WV.min = null; wvFillTeams(); renderWowy(); });
+wvTeam.addEventListener("change", () => { WV.ab = wvTeam.value; WV.sel = []; WV.more = 0; renderWowy(); });
+function renderWowy(){
+  if (!WV.ab || !wvTeam.options.length) wvFillTeams();
+  const s = +wvSeason.value, ab = WV.ab, ai = DATA.abbrs.indexOf(ab), tn = esc(teamName(ab, s));
+  if (!WOWY){ wvOut.innerHTML = `<div class="msg">${WOWY_ERR ? `Couldn't load the on/off data (${esc(WOWY_ERR)}). wowy.json must be deployed next to index.html (open the site from its Netlify link).` : "Loading on/off data…"}</div>`;
+    if (!WOWY_ERR) loadWowy().then(() => { if (current === "wowy") renderWowy(); }); return; }
+  const e = WOWY[`${s}|${ai}|${TYPE}`];
+  if (!e){ wvOut.innerHTML = `<div class="msg">No ${typeName().toLowerCase()} play-by-play for ${tn} in ${S[s]}.</div>`; return; }
+  if (!LU.has(s) && !LU_ERR.has(s)){ wvOut.innerHTML = `<div class="msg">Loading ${S[s]} lineups…</div>`; loadLineups(s).then(() => { if (current === "wowy") renderWowy(); }); return; }
+  const L = (LU.get(s) || {})[`${ai}|${TYPE}`];
+  if (!L){ wvOut.innerHTML = `<div class="msg">Couldn't load lineups/${S[s]}.json${LU_ERR.has(s) ? ` (${esc(LU_ERR.get(s))})` : ""}. It must be deployed next to index.html.</div>`; return; }
+  const [tot, pl] = e, nm = k => esc(DATA.names[k]), last = k => esc(DATA.names[k].split(" ").slice(1).join(" ") || DATA.names[k]);
+  WV.sel = WV.sel.filter(k => pl.some(x => x[0] === k));
+  const tO = rtg(tot[0], tot[1]), tD = rtg(tot[0], tot[2]);
+  const cls = v => !Number.isFinite(v) || Math.abs(v) < 0.05 ? "" : v > 0 ? "wv-pos" : "wv-neg";
+  const dlt = v => Number.isFinite(v) ? `<span class="wv-d ${cls(v)}">${sgnf(v)}</span>` : "";
+  const cells = v => { const o = rtg(v[0], v[1]), d = rtg(v[0], v[2]), n = netOf(v);
+    return `<td>${Math.round(v[0]).toLocaleString()}</td><td>${fmt(o, 1)}${dlt(o - tO)}</td><td>${fmt(d, 1)}${dlt(tD - d)}</td><td><strong class="${cls(n)}">${sgnf(n)}</strong></td>`; };
+  const badge = (k, on) => `<span class="wv-b ${on ? "on" : "off"}" title="${nm(k)} ${on ? "on" : "off"} the floor">${faceImg(k, "sm")}<i>${on ? "✓" : "✕"}</i><em>${last(k)}</em></span>`;
+  const isW = WV.mode === "wowy", size = isW ? 0 : +WV.mode;
+  const cap = isW ? 5 : size;
+  const picker = pl.filter(x => x[1] >= 10).map(x => { const k = x[0], on = WV.sel.includes(k);
+    return `<button class="wv-p${on ? " sel" : ""}" data-wvp="${k}" ${!on && WV.sel.length >= cap ? "disabled" : ""}>${faceImg(k, "sm")}<span>${nm(k)}</span><small>${Math.round(x[1]).toLocaleString()} poss</small></button>`; }).join("");
+  const modes = [["wowy", "WOWY"], ["2", "2 Man"], ["3", "3 Man"], ["4", "4 Man"], ["5", "5 Man"]].map(([v, l]) => `<button data-wvm="${v}" aria-pressed="${WV.mode === v}">${l}</button>`).join("");
+  const th = (k, l, t) => `<th data-wvs="${k}" class="sortable${WV.sort === k ? " sorted" : ""}" title="${t}">${l}</th>`;
+  const head = `<thead><tr><th class="l">${isW ? "On / off" : size === 5 ? "Lineup" : size + "-man unit"}</th>${th("p", "Poss", "Possessions")}${th("o", "Off", "Points scored per 100 possessions (vs. the team's season)")}${th("d", "Def", "Points allowed per 100 possessions (vs. the team's season; green = fewer allowed)")}${th("n", "Net", "Net rating per 100 possessions")}</tr></thead>`;
+  const key = v => WV.sort === "p" ? v[0] : WV.sort === "o" ? rtg(v[0], v[1]) : WV.sort === "d" ? -rtg(v[0], v[2]) : netOf(v);
+  let body;
+  if (isW){
+    if (!WV.sel.length) body = `<div class="msg">Pick one to five players to see ${tn} with and without them.</div>`;
+    else {
+      const n = WV.sel.length, rows = [];
+      for (let m = (1 << n) - 1; m >= 0; m--){ const on = WV.sel.filter((_, j) => m & (1 << (n - 1 - j))), v = luSum(L, on, WV.sel.filter(k => !on.includes(k))); if (v[0] > 0) rows.push({on, v}); }
+      rows.sort((a, b) => (key(b.v) - key(a.v)) || 0);
+      body = `<div class="tscroll"><table class="wv-t">${head}<tbody>${rows.map(r => `<tr><td class="l"><div class="wv-l">${WV.sel.map(k => badge(k, r.on.includes(k))).join("")}</div></td>${cells(r.v)}</tr>`).join("")}
+        <tr class="wv-tot"><td class="l">${tn}, every possession</td>${cells(tot)}</tr></tbody></table></div>
+        <p class="note">Every on/off combination of the players picked (✓ on the floor, ✕ off); the rest of the roster as it played. Off and Def are per 100 possessions, with the difference from the team's season in small type (green = better). Garbage time out.</p>`;
+    }
+  } else {
+    const early = s === LATEST && INPROG ? Math.min(1, INPROG.team_games / 82) : 1;
+    const minP = WV.min != null ? WV.min : Math.max(10, Math.round((TYPE ? 0.25 : 1) * ({2: 300, 3: 200, 4: 120, 5: 60}[size]) * early));
+    const C = [...luCombos(L, size).entries()].map(([k, v]) => ({ks: k.split(".").map(Number), v})).filter(c => c.v[0] >= minP && WV.sel.every(k => c.ks.includes(k)));
+    C.sort((a, b) => (key(b.v) - key(a.v)) || 0);
+    const shown = C.slice(0, 10 * (1 + WV.more));
+    body = `<div class="controls" style="margin:0 0 10px"><div class="field"><label for="wv-min">Min. possessions</label><input type="number" id="wv-min" min="0" step="10" value="${minP}"></div></div>
+      ${C.length ? `<div class="tscroll"><table class="wv-t">${head}<tbody>${shown.map(c => `<tr><td class="l"><div class="wv-l">${c.ks.map(k => `<span class="wv-b on">${faceImg(k, "sm")}<em>${last(k)}</em></span>`).join("")}</div></td>${cells(c.v)}</tr>`).join("")}
+        <tr class="wv-tot"><td class="l">${tn}, every possession</td>${cells(tot)}</tr></tbody></table></div>
+        ${C.length > shown.length ? `<p style="margin:8px 0 0"><button class="btn" id="wv-more">Show ${Math.min(10, C.length - shown.length)} more</button></p>` : ""}
+        <p class="note">${C.length.toLocaleString()} ${size === 5 ? "lineups" : size + "-man units"} with ${minP.toLocaleString()}+ possessions${WV.sel.length ? ` that include ${WV.sel.map(nm).join(", ")}` : ""}. Pick players above to narrow it down.</p>`
+        : `<div class="msg">No ${size === 5 ? "lineup" : size + "-man unit"} ${WV.sel.length ? "with those players " : ""}reached ${minP.toLocaleString()} possessions. Try a lower minimum.</div>`}`;
+  }
+  wvOut.innerHTML = `<div class="box"><h2>${logoImg(ab, s)} ${tn} <small>${S[s]} · ${typeName().toLowerCase()} · with or without you</small></h2>
+      <div class="seg" role="group" aria-label="WOWY mode" style="margin:0 0 12px">${modes}</div>
+      <div class="wv-lab">Players${WV.sel.length ? ` (${WV.sel.length}) · <a href="#" id="wv-clear">clear</a>` : ` · pick up to ${cap}`}</div>
+      <div class="wv-pick">${picker}</div></div>
+    <div class="box">${body}</div>`;
+  wvOut.querySelectorAll("[data-wvp]").forEach(b => b.onclick = () => { const k = +b.dataset.wvp; WV.sel = WV.sel.includes(k) ? WV.sel.filter(x => x !== k) : WV.sel.concat([k]); WV.more = 0; renderWowy(); });
+  wvOut.querySelectorAll("[data-wvm]").forEach(b => b.onclick = () => { WV.mode = b.dataset.wvm; WV.min = null; WV.more = 0; const c = WV.mode === "wowy" ? 5 : +WV.mode; WV.sel = WV.sel.slice(0, c); renderWowy(); });
+  wvOut.querySelectorAll("[data-wvs]").forEach(t => t.onclick = () => { WV.sort = t.dataset.wvs; renderWowy(); });
+  const cl = document.getElementById("wv-clear"); if (cl) cl.onclick = ev => { ev.preventDefault(); WV.sel = []; renderWowy(); };
+  const mo = document.getElementById("wv-more"); if (mo) mo.onclick = () => { WV.more++; renderWowy(); };
+  const mn = document.getElementById("wv-min"); if (mn) mn.onchange = ev => { WV.min = Math.max(0, +ev.target.value || 0); WV.more = 0; renderWowy(); };
 }
 function bindRosterBack(s){ const bk = document.getElementById("tm-back"); if (bk) bk.onclick = ev => { ev.preventDefault(); tmRoster = null; renderTeams(); window.scrollTo({top: 0}); }; }
 function renderTeams(){
@@ -2685,7 +2720,7 @@ document.addEventListener("click", e => { const a = e.target.closest("[data-meth
 /* ---------------- tabs + season type ---------------- */
 const tabs = [...document.querySelectorAll("nav.tabs button")];
 const renderLiveFeed = () => { renderGames(); if (!gcGame) renderSeason(); };
-const renderers = {home:renderHome, players:renderPlayer, compare:renderCompare, matchup:renderMatchup, method:renderMethod, leaders:renderLeaders, teams:renderTeams, league:renderLeague, games:renderLiveFeed};
+const renderers = {wowy:renderWowy, home:renderHome, players:renderPlayer, compare:renderCompare, matchup:renderMatchup, method:renderMethod, leaders:renderLeaders, teams:renderTeams, league:renderLeague, games:renderLiveFeed};
 let current = "players";
 const stSeg = document.getElementById("season-type");
 document.addEventListener("click", e => {          // any player link opens his profile
@@ -2722,7 +2757,7 @@ tmSeason.value = String(HEAD); fillTeamSelects(); tmSel[0].value = "OKC"; tmSel[
 { muSA.value = String(S.indexOf("2016-17")); fillTeams(muTA, S.indexOf("2016-17"), "GSW");
   muSB.value = String(HEAD); fillTeams(muTB, HEAD, "OKC"); }
 let startTab = "home";   // the site always opens on the front page (a #players style link still works)
-if (/^#(home|players|compare|matchup|season|method|leaders|teams|league|games)$/.test(location.hash)) startTab = location.hash.slice(1) === "season" ? "games" : location.hash.slice(1);
+if (/^#(home|players|compare|matchup|season|method|leaders|teams|wowy|league|games)$/.test(location.hash)) startTab = location.hash.slice(1) === "season" ? "games" : location.hash.slice(1);
 show(startTab);
 document.documentElement.classList.add("ready");      // hides the loading screen
 </script>
