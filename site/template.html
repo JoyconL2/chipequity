@@ -1592,12 +1592,12 @@ function renderRoster(ab, s){
 }
 /* ---------------- WOWY tab (databallr-style): pick players -> every on/off combination, or 2- to 5-man units ---------------- */
 const wvOut = document.getElementById("wv-out"), wvSeason = document.getElementById("wv-season"), wvTeam = document.getElementById("wv-team");
-let WV = {ab: null, sel: [], mode: "wowy", sort: "p", min: null, more: 0};
+let WV = {ab: null, sel: [], mode: "wowy", sort: "p", min: null, more: 0, t: 0};   // t: 0 regular season, 1 playoffs, 2 cumulative
 wvSeason.innerHTML = seasonOpts; wvSeason.value = String(LS);
 const wvTeams = s => [...new Set(M.tm.filter(r => r.s === s && r.t === 0).map(r => AB(r.a)))].sort((a, b) => teamName(a, s).localeCompare(teamName(b, s)));
 function wvFillTeams(){ const s = +wvSeason.value, ts = wvTeams(s); if (!ts.includes(WV.ab)) WV.ab = ts.includes("OKC") ? "OKC" : ts[0];
   wvTeam.innerHTML = ts.map(a => `<option value="${a}" ${a === WV.ab ? "selected" : ""}>${esc(teamName(a, s))}</option>`).join(""); }
-function openWowy(ab, s, sel){ wvSeason.value = String(s); WV = {ab, sel: sel || [], mode: "wowy", sort: "p", min: null, more: 0}; wvFillTeams(); show("wowy"); window.scrollTo({top: 0}); }
+function openWowy(ab, s, sel){ wvSeason.value = String(s); WV = {ab, sel: sel || [], mode: "wowy", sort: "p", min: null, more: 0, t: TYPE}; wvFillTeams(); show("wowy"); window.scrollTo({top: 0}); }
 wvSeason.addEventListener("change", () => { WV.sel = []; WV.more = 0; WV.min = null; wvFillTeams(); renderWowy(); });
 wvTeam.addEventListener("change", () => { WV.ab = wvTeam.value; WV.sel = []; WV.more = 0; renderWowy(); });
 function renderWowy(){
@@ -1605,11 +1605,20 @@ function renderWowy(){
   const s = +wvSeason.value, ab = WV.ab, ai = DATA.abbrs.indexOf(ab), tn = esc(teamName(ab, s));
   if (!WOWY){ wvOut.innerHTML = `<div class="msg">${WOWY_ERR ? `Couldn't load the on/off data (${esc(WOWY_ERR)}). wowy.json must be deployed next to index.html (open the site from its Netlify link).` : "Loading on/off data…"}</div>`;
     if (!WOWY_ERR) loadWowy().then(() => { if (current === "wowy") renderWowy(); }); return; }
-  const e = WOWY[`${s}|${ai}|${TYPE}`];
-  if (!e){ wvOut.innerHTML = `<div class="msg">No ${typeName().toLowerCase()} play-by-play for ${tn} in ${S[s]}.</div>`; return; }
+  const T_ = WV.t, tLab = ["regular season", "playoffs", "regular season + playoffs"][T_];
+  const tSeg = `<div class="seg" role="group" aria-label="Games" style="margin:0 0 12px">${["Regular season", "Playoffs", "Cumulative"].map((l, i) => `<button data-wvt="${i}" aria-pressed="${T_ === i}">${l}</button>`).join("")}</div>`;
+  const bindT = () => wvOut.querySelectorAll("[data-wvt]").forEach(b => b.onclick = () => { WV.t = +b.dataset.wvt; WV.min = null; WV.more = 0; renderWowy(); });
+  const e0 = WOWY[`${s}|${ai}|0`], e1 = WOWY[`${s}|${ai}|1`];
+  let e = T_ === 0 ? e0 : T_ === 1 ? e1 : null;
+  if (T_ === 2 && (e0 || e1)){                     // cumulative: add the two together
+    const tt = [0, 0, 0], pm = new Map();
+    for (const q of [e0, e1]) if (q){ for (let j = 0; j < 3; j++) tt[j] += q[0][j]; for (const x of q[1]){ const y = pm.get(x[0]) || pm.set(x[0], [x[0], 0, 0, 0, 0]).get(x[0]); for (let j = 1; j < 5; j++) y[j] += x[j] || 0; } }
+    e = [tt, [...pm.values()].sort((a, b) => b[1] - a[1])];
+  }
+  if (!e){ wvOut.innerHTML = `<div class="box">${tSeg}<div class="msg">No ${tLab} play-by-play for ${tn} in ${S[s]}${T_ === 1 ? " (they didn't make the playoffs, or the playoffs haven't started)" : ""}.</div></div>`; bindT(); return; }
   if (!LU.has(s) && !LU_ERR.has(s)){ wvOut.innerHTML = `<div class="msg">Loading ${S[s]} lineups…</div>`; loadLineups(s).then(() => { if (current === "wowy") renderWowy(); }); return; }
-  const L = (LU.get(s) || {})[`${ai}|${TYPE}`];
-  if (!L){ wvOut.innerHTML = `<div class="msg">Couldn't load lineups/${S[s]}.json${LU_ERR.has(s) ? ` (${esc(LU_ERR.get(s))})` : ""}. It must be deployed next to index.html.</div>`; return; }
+  const LUs = LU.get(s) || {}, L = T_ === 2 ? [...(LUs[`${ai}|0`] || []), ...(LUs[`${ai}|1`] || [])] : LUs[`${ai}|${T_}`];
+  if (!L || !L.length){ wvOut.innerHTML = `<div class="msg">Couldn't load lineups/${S[s]}.json${LU_ERR.has(s) ? ` (${esc(LU_ERR.get(s))})` : ""}. It must be deployed next to index.html.</div>`; return; }
   const [tot, pl] = e, nm = k => esc(DATA.names[k]), last = k => esc(DATA.names[k].split(" ").slice(1).join(" ") || DATA.names[k]);
   WV.sel = WV.sel.filter(k => pl.some(x => x[0] === k));
   // league average that regular season: every team's points per 100 possessions (wowy.json team totals)
@@ -1637,11 +1646,11 @@ function renderWowy(){
       rows.sort((a, b) => (key(b.v) - key(a.v)) || 0);
       body = `<div class="tscroll"><table class="wv-t">${head}<tbody>${rows.map(r => `<tr><td class="l"><div class="wv-l">${WV.sel.map(k => badge(k, r.on.includes(k))).join("")}</div></td>${cells(r.v)}</tr>`).join("")}
         <tr class="wv-tot"><td class="l">${tn}, every possession</td>${cells(tot)}</tr></tbody></table></div>
-        <p class="note">Every on/off combination of the players picked (✓ on the floor, ✕ off); the rest of the roster as it played. Off and Def are per 100 possessions; the small number is the difference from the ${S[s]} league average (${fmt(lg, 1)} per 100; green = better than average). Garbage time out.</p>`;
+        <p class="note">Every on/off combination of the players picked (✓ on the floor, ✕ off); the rest of the roster as it played. Off and Def are per 100 possessions; the small number is the difference from the ${S[s]} regular-season league average (${fmt(lg, 1)} per 100; green = better than average). Garbage time out.</p>`;
     }
   } else {
     const early = s === LATEST && INPROG ? Math.min(1, INPROG.team_games / 82) : 1;
-    const minP = WV.min != null ? WV.min : Math.max(10, Math.round((TYPE ? 0.25 : 1) * ({2: 300, 3: 200, 4: 120, 5: 60}[size]) * early));
+    const minP = WV.min != null ? WV.min : Math.max(10, Math.round((T_ === 1 ? 0.25 : 1) * ({2: 300, 3: 200, 4: 120, 5: 60}[size]) * early));
     const C = [...luCombos(L, size).entries()].map(([k, v]) => ({ks: k.split(".").map(Number), v})).filter(c => c.v[0] >= minP && WV.sel.every(k => c.ks.includes(k)));
     C.sort((a, b) => (key(b.v) - key(a.v)) || 0);
     const shown = C.slice(0, 10 * (1 + WV.more));
@@ -1649,14 +1658,15 @@ function renderWowy(){
       ${C.length ? `<div class="tscroll"><table class="wv-t">${head}<tbody>${shown.map(c => `<tr><td class="l"><div class="wv-l">${c.ks.map(k => `<span class="wv-b on">${faceImg(k, "sm")}<em>${last(k)}</em></span>`).join("")}</div></td>${cells(c.v)}</tr>`).join("")}
         <tr class="wv-tot"><td class="l">${tn}, every possession</td>${cells(tot)}</tr></tbody></table></div>
         ${C.length > shown.length ? `<p style="margin:8px 0 0"><button class="btn" id="wv-more">Show ${Math.min(10, C.length - shown.length)} more</button></p>` : ""}
-        <p class="note">${C.length.toLocaleString()} ${size === 5 ? "lineups" : size + "-man units"} with ${minP.toLocaleString()}+ possessions${WV.sel.length ? ` that include ${WV.sel.map(nm).join(", ")}` : ""}. Small numbers under Off and Def: vs. the ${S[s]} league average (${fmt(lg, 1)} per 100). Pick players above to narrow it down.</p>`
+        <p class="note">${C.length.toLocaleString()} ${size === 5 ? "lineups" : size + "-man units"} with ${minP.toLocaleString()}+ possessions${WV.sel.length ? ` that include ${WV.sel.map(nm).join(", ")}` : ""}. Small numbers under Off and Def: vs. the ${S[s]} regular-season league average (${fmt(lg, 1)} per 100). Pick players above to narrow it down.</p>`
         : `<div class="msg">No ${size === 5 ? "lineup" : size + "-man unit"} ${WV.sel.length ? "with those players " : ""}reached ${minP.toLocaleString()} possessions. Try a lower minimum.</div>`}`;
   }
-  wvOut.innerHTML = `<div class="box"><h2>${logoImg(ab, s)} ${tn} <small>${S[s]} · ${typeName().toLowerCase()} · with or without you</small></h2>
-      <div class="seg" role="group" aria-label="WOWY mode" style="margin:0 0 12px">${modes}</div>
+  wvOut.innerHTML = `<div class="box"><h2>${logoImg(ab, s)} ${tn} <small>${S[s]} · ${tLab} · with or without you</small></h2>
+      ${tSeg}<div class="seg" role="group" aria-label="WOWY mode" style="margin:0 0 12px">${modes}</div>
       <div class="wv-lab">Players${WV.sel.length ? ` (${WV.sel.length}) · <a href="#" id="wv-clear">clear</a>` : ` · pick up to ${cap}`}</div>
       <div class="wv-pick">${picker}</div></div>
     <div class="box">${body}</div>`;
+  bindT();
   wvOut.querySelectorAll("[data-wvp]").forEach(b => b.onclick = () => { const k = +b.dataset.wvp; WV.sel = WV.sel.includes(k) ? WV.sel.filter(x => x !== k) : WV.sel.concat([k]); WV.more = 0; renderWowy(); });
   wvOut.querySelectorAll("[data-wvm]").forEach(b => b.onclick = () => { WV.mode = b.dataset.wvm; WV.min = null; WV.more = 0; const c = WV.mode === "wowy" ? 5 : +WV.mode; WV.sel = WV.sel.slice(0, c); renderWowy(); });
   wvOut.querySelectorAll("[data-wvs]").forEach(t => t.onclick = () => { WV.sort = t.dataset.wvs; renderWowy(); });
@@ -2733,7 +2743,7 @@ function show(tab){
   current = tab;
   tabs.forEach(b=>b.setAttribute("aria-selected", b.dataset.tab===tab));
   document.querySelectorAll(".panel").forEach(p=>p.hidden = p.id!=="p-"+tab);
-  stSeg.style.visibility = (tab==="home" || tab==="matchup" || tab==="method" || tab==="league" || tab==="games") ? "hidden" : "visible";
+  stSeg.style.visibility = (tab==="home" || tab==="matchup" || tab==="method" || tab==="league" || tab==="games" || tab==="wowy") ? "hidden" : "visible";
   stSeg.hidden = false; document.getElementById("st-both").hidden = true;   // leaders may swap these back
   if (tab!=="games") clearTimeout(gmTimer);
   renderers[tab]();
