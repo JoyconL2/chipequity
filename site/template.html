@@ -1553,15 +1553,16 @@ function loadLineups(s){
   return fetch(`lineups/${S[s]}.json`, {cache: "force-cache"}).then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
     .then(j => { LU.set(s, j); return j; }).catch(e => { LU_ERR.set(s, e.message || "failed"); return null; });
 }
-const luSum = (L, on, off) => { const t = [0, 0, 0];
+// lineup rows: [k1..k5, poss, pts for, pts against (, playoffs: opp offense x poss, opp defense x poss)]
+const luSum = (L, on, off) => { const t = [0, 0, 0, 0, 0];
   for (const r of L){ let ok = true; for (const k of on){ if (r[0]!==k && r[1]!==k && r[2]!==k && r[3]!==k && r[4]!==k){ ok = false; break; } }
     if (ok) for (const k of off){ if (r[0]===k || r[1]===k || r[2]===k || r[3]===k || r[4]===k){ ok = false; break; } }
-    if (ok){ t[0] += r[5]; t[1] += r[6]; t[2] += r[7]; } }
+    if (ok){ t[0] += r[5]; t[1] += r[6]; t[2] += r[7]; t[3] += r[8] || 0; t[4] += r[9] || 0; } }
   return t; };
 function luCombos(L, size){
   const m = new Map(), idx = [[0,1],[0,2],[0,3],[0,4],[1,2],[1,3],[1,4],[2,3],[2,4],[3,4]];
   const sets = size === 2 ? idx : size === 3 ? idx.map(([a,b]) => [0,1,2,3,4].filter(x => x !== a && x !== b)) : size === 4 ? [0,1,2,3,4].map(x => [0,1,2,3,4].filter(y => y !== x)) : [[0,1,2,3,4]];
-  for (const r of L) for (const c of sets){ const key = c.map(j => r[j]).join("."); const v = m.get(key) || m.set(key, [0,0,0]).get(key); v[0] += r[5]; v[1] += r[6]; v[2] += r[7]; }
+  for (const r of L) for (const c of sets){ const key = c.map(j => r[j]).join("."); const v = m.get(key) || m.set(key, [0,0,0,0,0]).get(key); v[0] += r[5]; v[1] += r[6]; v[2] += r[7]; v[3] += r[8] || 0; v[4] += r[9] || 0; }
   return m; }
 function renderRoster(ab, s){
   const ai = DATA.abbrs.indexOf(ab), name = teamName(ab, s), rr = teamRec(ab, s), sr = ai >= 0 ? seasonResult(ai, s) : {txt: "", cls: ""};
@@ -1592,7 +1593,7 @@ function renderRoster(ab, s){
 }
 /* ---------------- WOWY tab (databallr-style): pick players -> every on/off combination, or 2- to 5-man units ---------------- */
 const wvOut = document.getElementById("wv-out"), wvSeason = document.getElementById("wv-season"), wvTeam = document.getElementById("wv-team");
-let WV = {ab: null, sel: [], mode: "wowy", sort: "p", min: null, more: 0, t: 0};   // t: 0 regular season, 1 playoffs, 2 cumulative
+let WV = {ab: null, sel: [], mode: "wowy", sort: "p", min: null, more: 0, t: 0, raw: false};   // t: 0 regular season, 1 playoffs, 2 cumulative
 wvSeason.innerHTML = seasonOpts; wvSeason.value = String(LS);
 const wvTeams = s => [...new Set(M.tm.filter(r => r.s === s && r.t === 0).map(r => AB(r.a)))].sort((a, b) => teamName(a, s).localeCompare(teamName(b, s)));
 function wvFillTeams(){ const s = +wvSeason.value, ts = wvTeams(s); if (!ts.includes(WV.ab)) WV.ab = ts.includes("OKC") ? "OKC" : ts[0];
@@ -1619,14 +1620,17 @@ function renderWowy(){
   if (!LU.has(s) && !LU_ERR.has(s)){ wvOut.innerHTML = `<div class="msg">Loading ${S[s]} lineups…</div>`; loadLineups(s).then(() => { if (current === "wowy") renderWowy(); }); return; }
   const LUs = LU.get(s) || {}, L = T_ === 2 ? [...(LUs[`${ai}|0`] || []), ...(LUs[`${ai}|1`] || [])] : LUs[`${ai}|${T_}`];
   if (!L || !L.length){ wvOut.innerHTML = `<div class="msg">Couldn't load lineups/${S[s]}.json${LU_ERR.has(s) ? ` (${esc(LU_ERR.get(s))})` : ""}. It must be deployed next to index.html.</div>`; return; }
-  const [tot, pl] = e, nm = k => esc(DATA.names[k]), last = k => esc(DATA.names[k].split(" ").slice(1).join(" ") || DATA.names[k]);
+  // playoff possessions, opponent-adjusted (default): + each opponent's regular-season defense vs league to our points,
+  // - its offense vs league from points allowed, so a run through strong teams isn't marked down for it
+  const ADJ = T_ !== 0 && !WV.raw, av = v => ADJ ? [v[0], v[1] + (v[4] || 0) / 100, v[2] - (v[3] || 0) / 100] : v;
+  const tot = T_ === 0 ? e[0] : luSum(L, [], []), pl = e[1], nm = k => esc(DATA.names[k]), last = k => esc(DATA.names[k].split(" ").slice(1).join(" ") || DATA.names[k]);
   WV.sel = WV.sel.filter(k => pl.some(x => x[0] === k));
   // league average that regular season: every team's points per 100 possessions (wowy.json team totals)
   let lp = 0, lpts = 0; for (const a in DATA.abbrs){ const q = WOWY[`${s}|${a}|0`]; if (q){ lp += q[0][0]; lpts += q[0][1]; } }
   const lg = lp > 0 ? 100 * lpts / lp : NaN, tO = lg, tD = lg;
   const cls = v => !Number.isFinite(v) || Math.abs(v) < 0.05 ? "" : v > 0 ? "wv-pos" : "wv-neg";
   const dlt = v => Number.isFinite(v) ? `<span class="wv-d ${cls(v)}">${sgnf(v)}</span>` : "";
-  const cells = v => { const o = rtg(v[0], v[1]), d = rtg(v[0], v[2]), n = netOf(v);
+  const cells = v0 => { const v = av(v0), o = rtg(v[0], v[1]), d = rtg(v[0], v[2]), n = netOf(v);
     return `<td>${Math.round(v[0]).toLocaleString()}</td><td>${fmt(o, 1)}${dlt(o - tO)}</td><td>${fmt(d, 1)}${dlt(tD - d)}</td><td><strong class="${cls(n)}">${sgnf(n)}</strong></td>`; };
   const badge = (k, on) => `<span class="wv-b ${on ? "on" : "off"}" title="${nm(k)} ${on ? "on" : "off"} the floor">${faceImg(k, "sm")}<i>${on ? "✓" : "✕"}</i><em>${last(k)}</em></span>`;
   const isW = WV.mode === "wowy", size = isW ? 0 : +WV.mode;
@@ -1636,7 +1640,7 @@ function renderWowy(){
   const modes = [["wowy", "WOWY"], ["2", "2 Man"], ["3", "3 Man"], ["4", "4 Man"], ["5", "5 Man"]].map(([v, l]) => `<button data-wvm="${v}" aria-pressed="${WV.mode === v}">${l}</button>`).join("");
   const th = (k, l, t) => `<th data-wvs="${k}" class="sortable${WV.sort === k ? " sorted" : ""}" title="${t}">${l}</th>`;
   const head = `<thead><tr><th class="l">${isW ? "On / off" : size === 5 ? "Lineup" : size + "-man unit"}</th>${th("p", "Poss", "Possessions")}${th("o", "Off", "Points scored per 100 possessions (small: vs. league average)")}${th("d", "Def", "Points allowed per 100 possessions (small: vs. league average; green = fewer allowed)")}${th("n", "Net", "Net rating per 100 possessions")}</tr></thead>`;
-  const key = v => WV.sort === "p" ? v[0] : WV.sort === "o" ? rtg(v[0], v[1]) : WV.sort === "d" ? -rtg(v[0], v[2]) : netOf(v);
+  const key = v0 => { const v = av(v0); return WV.sort === "p" ? v[0] : WV.sort === "o" ? rtg(v[0], v[1]) : WV.sort === "d" ? -rtg(v[0], v[2]) : netOf(v); };
   let body;
   if (isW){
     if (!WV.sel.length) body = `<div class="msg">Pick one to five players to see ${tn} with and without them.</div>`;
@@ -1646,7 +1650,7 @@ function renderWowy(){
       rows.sort((a, b) => (key(b.v) - key(a.v)) || 0);
       body = `<div class="tscroll"><table class="wv-t">${head}<tbody>${rows.map(r => `<tr><td class="l"><div class="wv-l">${WV.sel.map(k => badge(k, r.on.includes(k))).join("")}</div></td>${cells(r.v)}</tr>`).join("")}
         <tr class="wv-tot"><td class="l">${tn}, every possession</td>${cells(tot)}</tr></tbody></table></div>
-        <p class="note">Every on/off combination of the players picked (✓ on the floor, ✕ off); the rest of the roster as it played. Off and Def are per 100 possessions; the small number is the difference from the ${S[s]} regular-season league average (${fmt(lg, 1)} per 100; green = better than average). Garbage time out.</p>`;
+        <p class="note">Every on/off combination of the players picked (✓ on the floor, ✕ off); the rest of the roster as it played. Off and Def are per 100 possessions; the small number is the difference from the ${S[s]} regular-season league average (${fmt(lg, 1)} per 100; green = better than average).${ADJ ? ` Playoff possessions are opponent-adjusted: each opponent's ${S[s]} regular-season offense and defense vs. league is taken out${T_ === 2 ? " (regular-season possessions as played)" : ""}.` : ""} Garbage time out.</p>`;
     }
   } else {
     const early = s === LATEST && INPROG ? Math.min(1, INPROG.team_games / 82) : 1;
@@ -1658,15 +1662,16 @@ function renderWowy(){
       ${C.length ? `<div class="tscroll"><table class="wv-t">${head}<tbody>${shown.map(c => `<tr><td class="l"><div class="wv-l">${c.ks.map(k => `<span class="wv-b on">${faceImg(k, "sm")}<em>${last(k)}</em></span>`).join("")}</div></td>${cells(c.v)}</tr>`).join("")}
         <tr class="wv-tot"><td class="l">${tn}, every possession</td>${cells(tot)}</tr></tbody></table></div>
         ${C.length > shown.length ? `<p style="margin:8px 0 0"><button class="btn" id="wv-more">Show ${Math.min(10, C.length - shown.length)} more</button></p>` : ""}
-        <p class="note">${C.length.toLocaleString()} ${size === 5 ? "lineups" : size + "-man units"} with ${minP.toLocaleString()}+ possessions${WV.sel.length ? ` that include ${WV.sel.map(nm).join(", ")}` : ""}. Small numbers under Off and Def: vs. the ${S[s]} regular-season league average (${fmt(lg, 1)} per 100). Pick players above to narrow it down.</p>`
+        <p class="note">${C.length.toLocaleString()} ${size === 5 ? "lineups" : size + "-man units"} with ${minP.toLocaleString()}+ possessions${WV.sel.length ? ` that include ${WV.sel.map(nm).join(", ")}` : ""}. Small numbers under Off and Def: vs. the ${S[s]} regular-season league average (${fmt(lg, 1)} per 100).${ADJ ? ` Playoff possessions are opponent-adjusted: each opponent's ${S[s]} regular-season offense and defense vs. league is taken out${T_ === 2 ? " (regular-season possessions as played)" : ""}.` : ""} Pick players above to narrow it down.</p>`
         : `<div class="msg">No ${size === 5 ? "lineup" : size + "-man unit"} ${WV.sel.length ? "with those players " : ""}reached ${minP.toLocaleString()} possessions. Try a lower minimum.</div>`}`;
   }
-  wvOut.innerHTML = `<div class="box"><h2>${logoImg(ab, s)} ${tn} <small>${S[s]} · ${tLab} · with or without you</small></h2>
-      ${tSeg}<div class="seg" role="group" aria-label="WOWY mode" style="margin:0 0 12px">${modes}</div>
+  wvOut.innerHTML = `<div class="box"><h2>${logoImg(ab, s)} ${tn} <small>${S[s]} · ${tLab}${ADJ ? " · playoffs opponent-adjusted" : ""} · with or without you</small></h2>
+      ${tSeg}${T_ !== 0 ? `<div class="seg sm" role="group" aria-label="Playoff possessions" style="margin:0 0 12px 8px"><button data-wvr="0" aria-pressed="${!WV.raw}" title="Playoff results adjusted for the opponents' regular-season strength">Opponent-adjusted</button><button data-wvr="1" aria-pressed="${WV.raw}">Raw</button></div>` : ""}<div class="seg" role="group" aria-label="WOWY mode" style="margin:0 0 12px">${modes}</div>
       <div class="wv-lab">Players${WV.sel.length ? ` (${WV.sel.length}) · <a href="#" id="wv-clear">clear</a>` : ` · pick up to ${cap}`}</div>
       <div class="wv-pick">${picker}</div></div>
     <div class="box">${body}</div>`;
   bindT();
+  wvOut.querySelectorAll("[data-wvr]").forEach(b => b.onclick = () => { WV.raw = b.dataset.wvr === "1"; renderWowy(); });
   wvOut.querySelectorAll("[data-wvp]").forEach(b => b.onclick = () => { const k = +b.dataset.wvp; WV.sel = WV.sel.includes(k) ? WV.sel.filter(x => x !== k) : WV.sel.concat([k]); WV.more = 0; renderWowy(); });
   wvOut.querySelectorAll("[data-wvm]").forEach(b => b.onclick = () => { WV.mode = b.dataset.wvm; WV.min = null; WV.more = 0; const c = WV.mode === "wowy" ? 5 : +WV.mode; WV.sel = WV.sel.slice(0, c); renderWowy(); });
   wvOut.querySelectorAll("[data-wvs]").forEach(t => t.onclick = () => { WV.sort = t.dataset.wvs; renderWowy(); });
