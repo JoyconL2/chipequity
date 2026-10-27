@@ -41,6 +41,9 @@ def run(args, cwd=".", env=None, out=None):
     log(f"$ ({cwd}) {' '.join(args)}")
     with open(out, "w") if out else open(os.devnull, "w") as f:
         r = subprocess.run(args, cwd=os.path.join(ROOT, cwd), env=e, stdout=f if out else None, stderr=subprocess.STDOUT if out else None)
+    if out and os.path.exists(out):           # pass a step's warnings (e.g. games it couldn't read) up to the run page
+        for ln in open(out, errors="replace"):
+            if ln.startswith("::warning::"): print(ln.rstrip(), flush=True)
     if r.returncode != 0:
         if out: print(open(out).read()[-4000:])
         sys.exit(f"step failed: {' '.join(args)}")

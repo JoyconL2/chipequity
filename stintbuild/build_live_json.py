@@ -47,7 +47,8 @@ def main():
             else: bparts.append(bdf)
     pd.DataFrame(srows, columns=B.COLS).to_csv(out_st, index=False)
     print(f"{season} {stype}: {len(jobs)} games | stints {len(srows)} | failed {len(bad)} | score mismatches {len(warn)}")
-    for x in (bad + warn)[:8]: print("  ", x)
+    for x in bad: print(f"::warning::{season} {stype} stints: {x} (game left out)")
+    for x in warn[:8]: print("  ", x)
     if jobs and len(bad) > len(jobs):                   # every game failed one way or the other: stop here, with the reasons above
         sys.exit(f"no {season} {stype} game could be read")
     if not bparts: sys.exit(f"no {season} {stype} box scores could be built")
