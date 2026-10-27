@@ -1,0 +1,22 @@
+name: debug game file
+on:
+  push:
+    branches: [debug-game]
+    paths: [".github/workflows/debug-game.yml"]
+permissions:
+  contents: write
+jobs:
+  get:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install requests
+      - run: |
+          mkdir -p debug
+          python -c "
+          import sys, json; sys.argv=['x']; sys.path.insert(0,'update'); import fetch_season as f
+          j = f.get(f.CDN + '/liveData/playbyplay/playbyplay_0022600009.json'); json.dump(j, open('debug/pbp_0022600009.json','w'))
+          print('ok', len(j['game']['actions']))"
+      - run: |
+          git config user.name "debug[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add debug && git commit -m "debug: game file" && git push
