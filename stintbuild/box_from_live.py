@@ -56,7 +56,7 @@ def main():
                       for (p, t), v in rows.items()]).fillna(0)
     W.to_csv(out, index=False)
     print(f"{season} {stype}: {len(files)} games ({len(errs)} failed), {len(W)} player-team rows")
-    for g, e in errs[:5]: print("   ", g, e)
+    for g, e in errs: print(f"::warning::{season} {stype} box score: game {g} left out ({e})")
     if files and len(errs) > 0.05 * len(files): sys.exit("too many games failed to parse")
 
 
