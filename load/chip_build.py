@@ -63,7 +63,7 @@ def split(r, o, d):
     O1 = round(o, 1); R1 = float(Decimal(round(r, 2)).quantize(Decimal("0.1"), ROUND_HALF_UP))   # how the site shows the stored total (JS toFixed)
     return O1, round(R1 - O1, 1)
 MINP = {2: 3000, 3: 4500, 4: 6000, 5: 7500}
-rw_rows, rw_n, best = [], {}, {}
+rw_rows, rw_n, best, bestx = [], {}, {}, {}   # bestx: (k, w, kind) -> best window by total (0) / offense (1) / defense (2)
 for w, d in disp.items():
     out = []
     for p, r, o, dd, we, poss in zip(d.player, d.rapm, d.o_rapm, d.d_rapm, d.window_end, d.poss):
@@ -75,6 +75,10 @@ for w, d in disp.items():
         if w >= 2 and poss >= MINP[w]:
             b = best.get((k, w))
             if b is None or v[0] > b[0]: best[(k, w)] = v
+            O1, D1 = split(v[0], v[1], v[2])
+            for kind, val in ((0, v[0]), (1, O1), (2, D1)):
+                b = bestx.get((k, w, kind))
+                if b is None or val > b[0]: bestx[(k, w, kind)] = (val, v[0], O1, D1, si)
     R = pd.DataFrame(out, columns=["k", "s", "w", "o", "d", "r", "poss"])
     R["rank"] = R.groupby("s").r.rank(ascending=False, method="min").astype(int)
     if w <= 3:
@@ -109,7 +113,9 @@ for k, si, v, o, d, poss, rank, n in json.load(open("pcepm_raw.json")):   # play
 PC = pd.DataFrame(pc, columns=["k", "si", "v", "o", "d", "poss", "n"]); PC["rank"] = PC.groupby("si").v.rank(ascending=False, method="min").astype(int)
 D["pcepm"] = [[int(a), int(b), round(c, 2), *split(c, e, f_), int(g_), int(h), int(i)] for a, b, c, e, f_, g_, h, i in zip(PC.k, PC.si, PC.v, PC.o, PC.d, PC.poss, PC["rank"], PC.n)]
 D["rw"] = {"rows": rw_rows, "n": rw_n, "src": "Chip Equity: 65% CEPM ridge regression + 35% lead margin, times share of competitive minutes"}
-D["peak"] = {"ds": DS, "n": pn, "rows": prow}; D["cerm"] = cerm; D["ce"] = {"rows": [], "n": {}}; D["cepeak"] = {"ds": [], "n": [], "rows": []}
+D["peak"] = {"ds": DS, "n": pn, "rows": prow}
+# each player's best 2- to 5-year stretch by total, by offense and by defense, with the window's last season
+D["peakx"] = {"cols": ["k", "w", "kind", "r", "o", "d", "end"], "rows": [[int(k), int(w), kind, round(r, 2), o, d, int(si)] for (k, w, kind), (_, r, o, d, si) in bestx.items()]}; D["cerm"] = cerm; D["ce"] = {"rows": [], "n": {}}; D["cepeak"] = {"ds": [], "n": [], "rows": []}
 json.dump(D, open("../site/data.json", "w"), separators=(",", ":"), allow_nan=False)
 nm = D["names"]; print("rw rows", len(rw_rows), "| peaks", dict(zip(DS, pn)))
 for j, name in enumerate(DS[:4]): print(name, ", ".join(f"{nm[r[0]]} {r[4]:+.2f}" for r in [x for x in prow if x[1] == j][:8]))
