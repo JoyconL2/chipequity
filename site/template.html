@@ -582,6 +582,19 @@ const ONE_PK = (() => { const best = new Map();
   for (const v of (DATA.rw || {rows:[]}).rows){ const [k,s,w,o,d,r,rank,poss] = v; if (w !== 1 || poss < 1500 || s === 0) continue; const b = best.get(k); if (!b || r > b.r) best.set(k, {o, d, r, s, ds:"Peak 1Y CEPM"}); }
   const list = [...best.values()]; M.tieRank(list).forEach(x => { x.n = list.length; }); M.tieRank(list, x => x.o, "orank"); M.tieRank(list, x => x.d, "drank"); return best; })();
 const peakGet = (k, name) => name === "Peak 1Y CEPM" ? (ONE_PK.get(k) || null) : M.peakOf(k, name);
+// single seasons, all-time: every player-season with 1,500+ possessions, ranked by total, offense and defense
+const SEAS_ALL = (() => { const list = [];
+  for (const v of (DATA.rw || {rows:[]}).rows){ const [k,s,w,o,d,r,rank,poss] = v; if (w === 1 && poss >= 1500 && s > 0) list.push({k, s, o, d, r}); }
+  M.tieRank(list); M.tieRank(list, x => x.o, "orank"); M.tieRank(list, x => x.d, "drank"); list.forEach(x => { x.n = list.length; });
+  const by = new Map(); for (const x of list){ const b = by.get(x.k) || by.set(x.k, {}).get(x.k);
+    if (!b.tot || x.r > b.tot.r) b.tot = x; if (!b.off || x.o > b.off.o) b.off = x; if (!b.def || x.d > b.def.d) b.def = x; }
+  return by; })();
+// best 2- to 5-year stretches by total / offense / defense, one per player, ranked within each list (chip_build.py peakx)
+const PKX = (() => { const m = new Map(), lists = new Map();
+  for (const [k, w, kind, r, o, d, end] of (DATA.peakx || {rows: []}).rows){ const x = {k, w, kind, r, o, d, end}; m.set(`${k}|${w}|${kind}`, x); (lists.get(w*3 + kind) || lists.set(w*3 + kind, []).get(w*3 + kind)).push(x); }
+  for (const [key, l] of lists){ const kind = key % 3; M.tieRank(l, kind === 0 ? x => x.r : kind === 1 ? x => x.o : x => x.d); l.forEach(x => { x.n = l.length; }); }
+  return m; })();
+const spanTxt = (w, end) => w === 1 ? S[end] : `${S[end - w + 1]}–${S[end].slice(-2)}`;
 const normNames = DATA.names.map(norm);
 const optLabel = k => { const [lo,hi]=spanOf[k]; return `${DATA.names[k]} (${S[lo].slice(0,4)}–${playingNow(k) ? CUR_SEASON.slice(0,4) : S[hi].slice(0,4)})`; };
 const optionMap = new Map();
@@ -803,12 +816,29 @@ function rwTable(k){
     <p class="mlink"><a href="#" data-method="windows">How it's calculated ›</a></p>`;
 }
 function peakTable(k){
-  const rows = ["Peak 1Y CEPM"].concat(M.PEAK_DS).map(n=>({n, v:peakGet(k,n)})).filter(x=>x.v);
-  if (!rows.length) return `<p class="muted">No peak or decade data for this player.</p>`;
-  const tr = x => `<tr><td class="l">${x.n === "Peak 1Y CEPM" ? `Best single season <span class="muted">(${S[x.v.s]})</span>` : esc(PEAK_LABEL[x.n])}</td><td class="nw"><strong>${pm(x.v.r)}</strong>${pctl(x.v, "on this all-time list")}</td><td class="nw">${pm(x.v.o)}${pctlO(x.v, "on this all-time list")}</td><td class="nw">${pm(x.v.d)}${pctlD(x.v, "on this all-time list")}</td><td class="sub">${ord(x.v.rank)} of ${x.v.n.toLocaleString()}</td></tr>`;
-  const grp = (title, f) => { const g = rows.filter(f); return g.length ? `<tr><td class="l sub" colspan="5" style="padding-top:12px">${title}</td></tr>${g.map(tr).join("")}` : ""; };
-  return `<div class="tscroll"><table><thead><tr><th class="l">Metric</th><th>Total</th><th>Off</th><th>Def</th><th>All-time rank</th></tr></thead><tbody>
-    ${grp("Peak Chip Equity", x=>/^Peak \dY/.test(x.n))}${grp("Decade Chip Equity", x=>/0s Chip Equity$/.test(x.n))}</tbody></table></div>`;
+  const sea = SEAS_ALL.get(k), dec = M.PEAK_DS.filter(n => /0s Chip Equity$/.test(n)).map(n => ({n, v: M.peakOf(k, n)})).filter(x => x.v);
+  const ws = [2, 3, 4, 5].filter(w => PKX.has(`${k}|${w}|0`));
+  if (!sea && !ws.length && !dec.length) return `<p class="muted">No peak or decade data for this player.</p>`;
+  const rk = (v, n) => `<span class="sub">${ord(v)} of ${n.toLocaleString()}</span>`;
+  const q = (rank, n, scope) => pctl({rank, n}, scope);
+  // single seasons (all-time, every player-season)
+  const sRow = (lab, x, crit) => { const cr = crit === "r" ? x.rank : crit === "o" ? x.orank : x.drank, sc = "among every player-season since 1996-97 (1,500+ possessions)";
+    const c = (f, v) => f === crit ? `<strong>${pm(v)}</strong>${q(cr, x.n, sc + (f === "o" ? ", on offense" : f === "d" ? ", on defense" : ""))}` : `<span class="sub">${pm(v)}</span>`;
+    return `<tr><td class="l">${lab}</td><td class="l">${S[x.s]}</td><td class="nw">${c("r", x.r)}</td><td class="nw">${c("o", x.o)}</td><td class="nw">${c("d", x.d)}</td><td>${rk(cr, x.n)}</td></tr>`; };
+  const t1 = sea ? `<h3 class="pk-h">Single seasons <small>all-time · ranked among every player-season with 1,500+ possessions</small></h3>
+    <div class="tscroll"><table><thead><tr><th class="l">Best</th><th class="l">Season</th><th>Total</th><th>Off</th><th>Def</th><th>All-time rank</th></tr></thead><tbody>
+    ${sRow("Best season", sea.tot, "r")}${sRow("Best offensive season", sea.off, "o")}${sRow("Best defensive season", sea.def, "d")}</tbody></table></div>` : "";
+  // aggregate: best stretches and decades, one per player
+  const cell = (x, f, sub) => { if (!x) return `<td>–</td>`; const v = x[f], rank = f === "r" ? x.rank : x.kind != null ? x.rank : f === "o" ? x.orank : x.drank;
+    return `<td class="nw"><strong>${pm(v)}</strong>${q(rank, x.n, "on this all-time list" + (f === "o" ? ", on offense" : f === "d" ? ", on defense" : ""))}<div class="sub">${sub} · ${ord(rank)}</div></td>`; };
+  const wRow = w => { const t = PKX.get(`${k}|${w}|0`), o = PKX.get(`${k}|${w}|1`), d = PKX.get(`${k}|${w}|2`);
+    return `<tr><td class="l">Best ${w}-year stretch</td>${cell(t, "r", spanTxt(w, t.end))}${cell(o, "o", spanTxt(w, o.end))}${cell(d, "d", spanTxt(w, d.end))}</tr>`; };
+  const dRow = x => `<tr><td class="l">${esc(PEAK_LABEL[x.n])}</td>${cell(x.v, "r", "decade")}${cell(x.v, "o", "decade")}${cell(x.v, "d", "decade")}</tr>`;
+  const t2 = (ws.length || dec.length) ? `<h3 class="pk-h">Aggregate <small>best stretches and decades · one per player · all-time ranks</small></h3>
+    <div class="tscroll"><table class="pk-agg"><thead><tr><th class="l">Window</th><th>Best overall</th><th>Best offense</th><th>Best defense</th></tr></thead><tbody>
+    ${ws.map(wRow).join("")}${dec.length ? `<tr><td class="l sub" colspan="4" style="padding-top:12px">Decades</td></tr>${dec.map(dRow).join("")}` : ""}</tbody></table></div>
+    <p class="note">Each column picks its own best window: a player's best offensive stretch can be different years from his best overall one.</p>` : "";
+  return t1 + t2;
 }
 function bestMark(vals, hb, f){
   const shown = vals.map(v=> typeof v === "string" ? v : fmt(v,f)), nums = shown.map(s=>{ const n = parseFloat(String(s).replace(/[,%+]/g,"")); return Number.isNaN(n) ? null : n; });
