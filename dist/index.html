@@ -1956,10 +1956,10 @@ function peakTable(k){
   const q = (rank, n, scope) => pctl({rank, n}, scope);
   // single seasons (all-time, every player-season)
   const sRow = (lab, x, crit) => { const cr = crit === "r" ? x.rank : crit === "o" ? x.orank : x.drank, sc = "among every player-season since 1996-97 (1,500+ possessions)";
-    const c = (f, v) => f === crit ? `<strong>${pm(v)}</strong>${q(cr, x.n, sc + (f === "o" ? ", on offense" : f === "d" ? ", on defense" : ""))}` : `<span class="sub">${pm(v)}</span>`;
-    return `<tr><td class="l">${lab}</td><td class="l">${S[x.s]}</td><td class="nw">${c("r", x.r)}</td><td class="nw">${c("o", x.o)}</td><td class="nw">${c("d", x.d)}</td><td>${rk(cr, x.n)}</td></tr>`; };
+    const c = (f, v) => f === crit ? `<strong>${pm(v)}</strong>${q(cr, x.n, sc + (f === "o" ? ", on offense" : f === "d" ? ", on defense" : ""))}<div class="sub">${ord(cr)} of ${x.n.toLocaleString()}</div>` : `<span class="sub">${pm(v)}</span>`;
+    return `<tr><td class="l">${lab}</td><td class="l">${S[x.s]}</td><td class="nw">${c("r", x.r)}</td><td class="nw">${c("o", x.o)}</td><td class="nw">${c("d", x.d)}</td></tr>`; };
   const t1 = sea ? `<h3 class="pk-h">Single seasons <small>all-time · ranked among every player-season with 1,500+ possessions</small></h3>
-    <div class="tscroll"><table><thead><tr><th class="l">Best</th><th class="l">Season</th><th>Total</th><th>Off</th><th>Def</th><th>All-time rank</th></tr></thead><tbody>
+    <div class="tscroll"><table class="pk-agg"><thead><tr><th class="l">Best</th><th class="l">Season</th><th>Total</th><th>Off</th><th>Def</th></tr></thead><tbody>
     ${sRow("Best season", sea.tot, "r")}${sRow("Best offensive season", sea.off, "o")}${sRow("Best defensive season", sea.def, "d")}</tbody></table></div>` : "";
   // aggregate: best stretches and decades, one per player
   const cell = (x, f, sub) => { if (!x) return `<td>–</td>`; const v = x[f], rank = f === "r" ? x.rank : x.kind != null ? x.rank : f === "o" ? x.orank : x.drank;
@@ -2331,11 +2331,9 @@ function renderPlayer(){
       <div class="stints"><span class="muted" style="margin-right:2px">Teams</span>${stintsNow(k).map(st => `<span class="stint${st.now ? " now" : ""}">${logoImg(st.ab, Math.min(st.s1, LATEST))}${esc(st.ab)} <span class="muted">${stintYrs(st)}</span></span>`).join("")}</div>
       <div class="tiles">${tiles}</div></div></div>
       <p class="note">${stars}${po}</p></div>
-    <div class="grid2">
-      <div class="box"><h2>Peak &amp; decade impact <small>career-level · all-time ranks</small></h2>${peakTable(k)}
-        <p class="mlink"><a href="#" data-method="what">What Chip Equity is and how it's calculated ›</a></p></div>
-      <div class="box"><h2>${esc(STATS[plStat.value].label)}</h2><div id="pl-chart"></div></div>
-    </div>
+    <div class="box"><h2>Peak &amp; decade impact <small>career-level · all-time ranks</small></h2>${peakTable(k)}
+      <p class="mlink"><a href="#" data-method="what">What Chip Equity is and how it's calculated ›</a></p></div>
+    <div class="box"><h2>${esc(STATS[plStat.value].label)}</h2><div id="pl-chart"></div></div>
     ${TYPE === 1 ? `<div class="box" style="margin-top:16px"><h2>Playoff Chip Equity by postseason <small>playoff possessions only · opponent-adjusted lead margin · points per 100 possessions</small></h2>${poTable(k)}</div>`
       : `<div class="box" style="margin-top:16px"><h2>Chip Equity by window <small>single-season (1-yr), 2-year and 3-year Chip Equity ending each season · regular season + playoffs · points per 100 possessions</small></h2>${rwTable(k)}</div>`}
     <div class="box"><h2>Season by season <small>${typeName().toLowerCase()} · ${plMode==="p75"?"per 75 possessions":"per game"} · shooting splits are made / attempted · rTS = true shooting minus that season's league average</small></h2><div class="tscroll"><table class="box-t">
