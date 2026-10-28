@@ -587,7 +587,8 @@ const SEAS_ALL = (() => { const list = [];
   for (const v of (DATA.rw || {rows:[]}).rows){ const [k,s,w,o,d,r,rank,poss] = v; if (w === 1 && poss >= 1500 && s > 0) list.push({k, s, o, d, r}); }
   M.tieRank(list); M.tieRank(list, x => x.o, "orank"); M.tieRank(list, x => x.d, "drank"); list.forEach(x => { x.n = list.length; });
   const by = new Map(); for (const x of list){ const b = by.get(x.k) || by.set(x.k, {}).get(x.k);
-    if (!b.tot || x.r > b.tot.r) b.tot = x; if (!b.off || x.o > b.off.o) b.off = x; if (!b.def || x.d > b.def.d) b.def = x; }
+    const better = (c, f) => !c || x[f] > c[f] || (x[f] === c[f] && x.r > c.r);       // ties: the season with the higher total
+    if (better(b.tot, "r")) b.tot = x; if (better(b.off, "o")) b.off = x; if (better(b.def, "d")) b.def = x; }
   return by; })();
 // best 2- to 5-year stretches by total / offense / defense, one per player, ranked within each list (chip_build.py peakx)
 const PKX = (() => { const m = new Map(), lists = new Map();
@@ -816,7 +817,7 @@ function rwTable(k){
     <p class="mlink"><a href="#" data-method="windows">How it's calculated ›</a></p>`;
 }
 function peakTable(k){
-  const sea = SEAS_ALL.get(k), dec = M.PEAK_DS.filter(n => /0s Chip Equity$/.test(n)).map(n => ({n, v: M.peakOf(k, n)})).filter(x => x.v);
+  const sea = SEAS_ALL.get(k), dec = M.PEAK_DS.filter(n => /^\d{4}s /.test(n)).map(n => ({n, v: M.peakOf(k, n)})).filter(x => x.v);
   const ws = [2, 3, 4, 5].filter(w => PKX.has(`${k}|${w}|0`));
   if (!sea && !ws.length && !dec.length) return `<p class="muted">No peak or decade data for this player.</p>`;
   const rk = (v, n) => `<span class="sub">${ord(v)} of ${n.toLocaleString()}</span>`;
