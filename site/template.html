@@ -596,6 +596,16 @@ const PKX = (() => { const m = new Map(), lists = new Map();
   for (const [key, l] of lists){ const kind = key % 3; M.tieRank(l, kind === 0 ? x => x.r : kind === 1 ? x => x.o : x => x.d); l.forEach(x => { x.n = l.length; }); }
   return m; })();
 const spanTxt = (w, end) => w === 1 ? S[end] : `${S[end - w + 1]}–${S[end].slice(-2)}`;
+// a player's peak on the chosen side (r total / o offense / d defense) with the season or stretch it came from
+function peakWhen(k, name, side = "r"){
+  if (name === "Peak 1Y CEPM"){ const x = side === "r" ? ONE_PK.get(k) : (SEAS_ALL.get(k) || {})[side === "o" ? "off" : "def"];
+    return x ? {r: x.r, o: x.o, d: x.d, when: S[x.s]} : null; }
+  const m = /^Peak (\d)Y/.exec(name);
+  if (m){ const w = +m[1], x = PKX.get(`${k}|${w}|${{r: 0, o: 1, d: 2}[side]}`);
+    if (x) return {r: x.r, o: x.o, d: x.d, when: spanTxt(w, x.end)};
+    const v = M.peakOf(k, name); return v ? {r: v.r, o: v.o, d: v.d, when: ""} : null; }
+  const v = M.peakOf(k, name); return v ? {r: v.r, o: v.o, d: v.d, when: name.slice(0, 5)} : null;
+}
 const normNames = DATA.names.map(norm);
 const optLabel = k => { const [lo,hi]=spanOf[k]; return `${DATA.names[k]} (${S[lo].slice(0,4)}–${playingNow(k) ? CUR_SEASON.slice(0,4) : S[hi].slice(0,4)})`; };
 const optionMap = new Map();
@@ -833,8 +843,8 @@ function peakTable(k){
   const cell = (x, f, sub) => { if (!x) return `<td>–</td>`; const v = x[f], rank = f === "r" ? x.rank : x.kind != null ? x.rank : f === "o" ? x.orank : x.drank;
     return `<td class="nw"><strong>${pm(v)}</strong>${q(rank, x.n, "on this all-time list" + (f === "o" ? ", on offense" : f === "d" ? ", on defense" : ""))}<div class="sub">${sub} · ${ord(rank)}</div></td>`; };
   const wRow = w => { const t = PKX.get(`${k}|${w}|0`), o = PKX.get(`${k}|${w}|1`), d = PKX.get(`${k}|${w}|2`);
-    return `<tr><td class="l">Best ${w}-year stretch</td>${cell(t, "r", spanTxt(w, t.end))}${cell(o, "o", spanTxt(w, o.end))}${cell(d, "d", spanTxt(w, d.end))}</tr>`; };
-  const dRow = x => `<tr><td class="l">${esc(PEAK_LABEL[x.n])}</td>${cell(x.v, "r", "decade")}${cell(x.v, "o", "decade")}${cell(x.v, "d", "decade")}</tr>`;
+    return `<tr><td class="l">Best ${w}-year stretch</td>${cell(t, "r", `${spanTxt(w, t.end)} · o ${pm(t.o)} · d ${pm(t.d)}`)}${cell(o, "o", spanTxt(w, o.end))}${cell(d, "d", spanTxt(w, d.end))}</tr>`; };
+  const dRow = x => `<tr><td class="l">${esc(PEAK_LABEL[x.n])}</td>${cell(x.v, "r", `o ${pm(x.v.o)} · d ${pm(x.v.d)}`)}${cell(x.v, "o", "decade")}${cell(x.v, "d", "decade")}</tr>`;
   const t2 = (ws.length || dec.length) ? `<h3 class="pk-h">Aggregate <small>best stretches and decades · one per player · all-time ranks</small></h3>
     <div class="tscroll"><table class="pk-agg"><thead><tr><th class="l">Window</th><th>Best overall</th><th>Best offense</th><th>Best defense</th></tr></thead><tbody>
     ${ws.map(wRow).join("")}${dec.length ? `<tr><td class="l sub" colspan="4" style="padding-top:12px">Decades</td></tr>${dec.map(dRow).join("")}` : ""}</tbody></table></div>
@@ -1492,19 +1502,20 @@ function renderLeaders(){
   let list = [];
   if (m==="peak"){
     const allV = [];
-    for (let k=0;k<rowsByPlayer.length;k++){ const v = peakGet(k, stat); if (!v) continue; allV.push(v); const rows = rowsByPlayer[k].filter(i=>P.t[i]===0);
+    const PK = ["r","o","d"].includes(LD_SORT) ? LD_SORT : "r";
+    for (let k=0;k<rowsByPlayer.length;k++){ const v = peakWhen(k, stat, PK); if (!v) continue; allV.push(v); const rows = rowsByPlayer[k].filter(i=>P.t[i]===0);
       const g = rows.reduce((a,i)=>a+P.gp[i],0); if (g<min) continue; const last = rows.length ? rows[rows.length-1] : rowsByPlayer[k][rowsByPlayer[k].length-1];
       const h = homeTeamOf(k); list.push({k, v, gp:g, s: h ? h.s : P.s[last], tm: h ? h.ab : AB(P.tm[last])}); }
     // all-time rank on the chosen side of the ball (offense / defense ranks are among the same pool as the total rank)
-    const PK = ["r","o","d"].includes(LD_SORT) ? LD_SORT : "r"; const rankOf = new Map(); M.tieRank(allV.map(v => ({v})), x => x.v[PK], "rk").forEach(x => rankOf.set(x.v, x.rk));
+    const rankOf = new Map(); M.tieRank(allV.map(v => ({v})), x => x.v[PK], "rk").forEach(x => rankOf.set(x.v, x.rk));
     list = M.tieRank(list, x => x.v[PK], "pos").slice(0,n);
     const bp = (key, r) => key === PK ? pctl({rank: rankOf.get(r.v), n: allV.length}, "on this all-time list") : "";
     if (!list.length){ ldOut.innerHTML = `<div class="msg">Nobody qualifies. Try a lower minimum number of games.</div>`; return; }
     ldOut.innerHTML = `<div class="box"><h2>${esc(PEAK_LABEL[stat])}${LD_SORT!=="r"?` · ranked by ${SORT_NAME[LD_SORT]}`:""} <small>all-time · regular season + playoffs</small></h2><div class="tscroll"><table>
-      <thead><tr><th>#</th><th class="l">Player</th><th class="l" title="${CUR_SEASON ? CUR_SEASON + " team for players on a current roster, otherwise the team he played the most games for" : "Team he played the most games for"}">Team</th><th>GP since 1996-97</th>${sth("r","Total")}${sth("o","Off")}${sth("d","Def")}<th>All-time rank${LD_SORT!=="r"?(LD_SORT==="o"?" (off)":" (def)"):""}</th></tr></thead>
+      <thead><tr><th>#</th><th class="l">Player</th><th class="l" title="${CUR_SEASON ? CUR_SEASON + " team for players on a current roster, otherwise the team he played the most games for" : "Team he played the most games for"}">Team</th><th>GP since 1996-97</th><th class="l" title="${PK === "r" ? "The season or stretch of his peak" : `The season or stretch of his best ${PK === "o" ? "offense" : "defense"}`}">${stat === "Peak 1Y CEPM" ? "Season" : /^Peak/.test(stat) ? "Stretch" : "Decade"}</th>${sth("r","Total")}${sth("o","Off")}${sth("d","Def")}<th>All-time rank${LD_SORT!=="r"?(LD_SORT==="o"?" (off)":" (def)"):""}</th></tr></thead>
       <tbody>${list.map((r,i)=>`<tr><td>${r.pos}</td><td class="l"><div class="who">${faceImg(r.k,"sm")}<span class="n">${pLink(r.k, esc(DATA.names[r.k]))}</span></div></td>
-        <td class="l"><div class="who">${logoImg(r.tm, r.s)}${r.tm||""}</div></td><td>${r.gp.toLocaleString()}</td><td class="nw">${sb("r",pm(r.v.r))}${bp("r", r)}</td><td class="nw">${sb("o",pm(r.v.o))}${bp("o", r)}</td><td class="nw">${sb("d",pm(r.v.d))}${bp("d", r)}</td><td class="sub">${ord(rankOf.get(r.v))} of ${r.v.n.toLocaleString()}</td></tr>`).join("")}</tbody>
-      </table></div><p class="note">Click Total, Off or Def to rank by that number.</p><p class="mlink"><a href="#" data-method="windows">How it's calculated ›</a></p></div>`;
+        <td class="l"><div class="who">${logoImg(r.tm, r.s)}${r.tm||""}</div></td><td>${r.gp.toLocaleString()}</td><td class="l nw">${esc(r.v.when || "–")}</td><td class="nw">${sb("r",pm(r.v.r))}${bp("r", r)}</td><td class="nw">${sb("o",pm(r.v.o))}${bp("o", r)}</td><td class="nw">${sb("d",pm(r.v.d))}${bp("d", r)}</td><td class="sub">${ord(rankOf.get(r.v))} of ${allV.length.toLocaleString()}</td></tr>`).join("")}</tbody>
+      </table></div><p class="note">Click Total, Off or Def to rank by that number. Ranked by Off or Def, each player's best offensive or defensive ${stat === "Peak 1Y CEPM" ? "season" : "stretch"} is used, and the ${stat === "Peak 1Y CEPM" ? "Season" : "Stretch"} column shows it.</p><p class="mlink"><a href="#" data-method="windows">How it's calculated ›</a></p></div>`;
     return;
   }
   const rwW = STATS[stat] && STATS[stat].rw;
