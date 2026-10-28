@@ -595,14 +595,15 @@ const PKX = (() => { const m = new Map(), lists = new Map();
   for (const [k, w, kind, r, o, d, end] of (DATA.peakx || {rows: []}).rows){ const x = {k, w, kind, r, o, d, end}; m.set(`${k}|${w}|${kind}`, x); (lists.get(w*3 + kind) || lists.set(w*3 + kind, []).get(w*3 + kind)).push(x); }
   for (const [key, l] of lists){ const kind = key % 3; M.tieRank(l, kind === 0 ? x => x.r : kind === 1 ? x => x.o : x => x.d); l.forEach(x => { x.n = l.length; }); }
   return m; })();
-const spanTxt = (w, end) => w === 1 ? S[end] : `${S[end - w + 1]}–${S[end].slice(-2)}`;
+// a window's seasons: it can't start before 1996-97 or before the player's first season
+const spanTxt = (k, w, end) => { const st = Math.max(0, end - w + 1, spanOf[k] ? spanOf[k][0] : 0); return st >= end ? S[end] : `${S[st]}–${S[end].slice(-2)}`; };
 // a player's peak on the chosen side (r total / o offense / d defense) with the season or stretch it came from
 function peakWhen(k, name, side = "r"){
   if (name === "Peak 1Y CEPM"){ const x = side === "r" ? ONE_PK.get(k) : (SEAS_ALL.get(k) || {})[side === "o" ? "off" : "def"];
     return x ? {r: x.r, o: x.o, d: x.d, when: S[x.s]} : null; }
   const m = /^Peak (\d)Y/.exec(name);
   if (m){ const w = +m[1], x = PKX.get(`${k}|${w}|${{r: 0, o: 1, d: 2}[side]}`);
-    if (x) return {r: x.r, o: x.o, d: x.d, when: spanTxt(w, x.end)};
+    if (x) return {r: x.r, o: x.o, d: x.d, when: spanTxt(k, w, x.end)};
     const v = M.peakOf(k, name); return v ? {r: v.r, o: v.o, d: v.d, when: ""} : null; }
   const v = M.peakOf(k, name); return v ? {r: v.r, o: v.o, d: v.d, when: name.slice(0, 5)} : null;
 }
@@ -843,7 +844,7 @@ function peakTable(k){
   const cell = (x, f, sub) => { if (!x) return `<td>–</td>`; const v = x[f], rank = f === "r" ? x.rank : x.kind != null ? x.rank : f === "o" ? x.orank : x.drank;
     return `<td class="nw"><strong>${pm(v)}</strong>${q(rank, x.n, "on this all-time list" + (f === "o" ? ", on offense" : f === "d" ? ", on defense" : ""))}<div class="sub">${sub} · ${ord(rank)}</div></td>`; };
   const wRow = w => { const t = PKX.get(`${k}|${w}|0`), o = PKX.get(`${k}|${w}|1`), d = PKX.get(`${k}|${w}|2`);
-    return `<tr><td class="l">Best ${w}-year stretch</td>${cell(t, "r", `${spanTxt(w, t.end)} · o ${pm(t.o)} · d ${pm(t.d)}`)}${cell(o, "o", spanTxt(w, o.end))}${cell(d, "d", spanTxt(w, d.end))}</tr>`; };
+    return `<tr><td class="l">Best ${w}-year stretch</td>${cell(t, "r", `${spanTxt(k, w, t.end)} · o ${pm(t.o)} · d ${pm(t.d)}`)}${cell(o, "o", spanTxt(k, w, o.end))}${cell(d, "d", spanTxt(k, w, d.end))}</tr>`; };
   const dRow = x => `<tr><td class="l">${esc(PEAK_LABEL[x.n])}</td>${cell(x.v, "r", `o ${pm(x.v.o)} · d ${pm(x.v.d)}`)}${cell(x.v, "o", "decade")}${cell(x.v, "d", "decade")}</tr>`;
   const t2 = (ws.length || dec.length) ? `<h3 class="pk-h">Aggregate <small>best stretches and decades · one per player · all-time ranks</small></h3>
     <div class="tscroll"><table class="pk-agg"><thead><tr><th class="l">Window</th><th>Best overall</th><th>Best offense</th><th>Best defense</th></tr></thead><tbody>
