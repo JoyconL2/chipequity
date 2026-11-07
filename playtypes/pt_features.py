@@ -4,7 +4,10 @@ D = json.load(open("../site/data.json")); S = D["seasons"]; ids = [int(x) for x 
 P = pd.DataFrame({c: D["P"][c] for c in ("p", "s", "t", "pos")}); P = P[P.t == 0]
 POS = {(ids[k], S[s]): v for k, s, v in zip(P.p, P.s, P.pos)}
 d = pd.read_csv("playtypes.csv").fillna(0); d["pos"] = [POS.get((int(p), s), np.nan) for p, s in zip(d.p, d.season)]
-d = d[d.pos > 300].copy()
+# 300+ possessions; the season being played can set its own early-season minimum: PT_CUR="2026-27:120"
+import os
+cur, cmin = (os.environ.get("PT_CUR", "") + ":").split(":")[:2]
+d = d[(d.pos > 300) | ((d.season == cur) & (d.pos > float(cmin or 300)))].copy()
 lg = d.groupby("season").sum(numeric_only=True)
 for z in ("rim", "mid", "three"):
     lgua = (lg[f"{z}_ua"] / lg[f"{z}_fgm"]).to_dict()

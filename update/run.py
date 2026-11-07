@@ -116,6 +116,17 @@ def main():
     run([PY, "update/add_season.py", "site/data_base.json", CUR, wd, "site/data.json"])
     D = json.load(open(os.path.join(ROOT, "site/data.json"))); inprog = D["inprog"]
 
+    # 3b offensive play types for the season (from the same live files; history is playtypes/playtypes.csv)
+    if glob.glob(os.path.join(wd, "pbp_rs", "*.json")):
+        run([PY, "build_playtypes.py", "--live", os.path.join(wd, "pbp_rs"), CUR, os.path.join(tmp, "pt_cur.csv")], cwd="playtypes", out=os.path.join(tmp, "playtypes.log"))
+        hist = pd.read_csv(os.path.join(ROOT, "playtypes/playtypes.csv")); hist = hist[hist.season != CUR]
+        pd.concat([hist, pd.read_csv(os.path.join(tmp, "pt_cur.csv"))], ignore_index=True).fillna(0).to_csv(os.path.join(ROOT, "playtypes/playtypes.csv"), index=False)
+        rsG = G[G.stype == "rs"]; most_ = int(pd.concat([rsG.home, rsG.away]).value_counts().max()) if len(rsG) else 0
+        ptmin = int(min(300, max(25, round(0.67 * most_ * 25))))          # early season: 25 possessions per game (67% of the most played), up to 300
+        run([PY, "pt_features.py"], cwd="playtypes", env={"PT_CUR": f"{CUR}:{ptmin}"}, out=os.path.join(tmp, "pt_features.log"))
+        run([PY, "pt_to_data.py"], cwd="playtypes", out=os.path.join(tmp, "pt_to_data.log"))
+        log(f"play types: {CUR} added (players with {ptmin}+ possessions)")
+
     # 4  features + priors for windows ending this season
     run([PY, "update/features_season.py", os.path.join(wd, f"box_{CUR}_rs.csv"), CUR, "mymodel/features_rs.csv"])
     env = {"ONLY_END": CUR}
