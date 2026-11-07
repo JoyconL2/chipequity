@@ -13,15 +13,17 @@ def q(ep, **kw):
              VsConference="", VsDivision="", Conference="", Division="", GameScope="", PlayerExperience="", PlayerPosition="",
              StarterBench="", TwoWay=0, ShotClockRange="", PORound=0, TeamID=0)
     p.update(kw)
-    for i in range(4):
+    for i in range(2):
         try:
-            r = requests.get(BASE + ep, params=p, headers=H, timeout=60)
+            r = requests.get(BASE + ep, params=p, headers=H, timeout=30)
             if r.status_code == 200: return r.json()
             print(ep, kw.get("Season"), kw.get("SeasonType"), "HTTP", r.status_code, flush=True)
         except Exception as e: print(ep, kw.get("Season"), type(e).__name__, flush=True)
         time.sleep(5 * (i + 1))
     return None
 os.makedirs("hist80/raw", exist_ok=True); ok = bad = 0
+if not q("leaguedashteamstats", Season="1985-86", SeasonType="Regular Season"):      # quick check before the full run
+    print("::error::stats.nba.com did not answer from this computer"); sys.exit(1)
 years = range(1979, 1997) if len(sys.argv) < 2 else [int(sys.argv[1])]
 for y in years:
     season = f"{y}-{str(y + 1)[-2:]}"
