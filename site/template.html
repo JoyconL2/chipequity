@@ -729,7 +729,7 @@ const teamRec = (ab, s) => { const ti = M.teamRow(DATA.abbrs.indexOf(ab), s, 0);
 const recTxt = (ab, s) => { const t = teamRec(ab, s); return t && t.w!=null ? `${t.w}-${t.l}` : "–"; };
 function seasonResult(abIdx, s){
   const path = M.teamPath(s, abIdx), going = s === LATEST && INPROG && !INPROG.done;   // the season being played
-  if (!path.length) return going ? (INPROG.playoffs ? {txt:"Missed playoffs", cls:""} : {txt:"Season in progress", cls:"muted"}) : {txt:"Missed playoffs", cls:""};
+  if (!path.length) return going ? (INPROG.playoffs ? {txt:"Missed playoffs", cls:""} : {txt:"In progress", cls:"muted"}) : {txt:"Missed playoffs", cls:""};
   if (going && path[path.length-1].w === abIdx && path[path.length-1].round < 4) return {txt:"Still alive", cls:""};
   const last = path[path.length-1];
   if (last.round===4 && last.w===abIdx) return {txt:"Won title", cls:"title"};
