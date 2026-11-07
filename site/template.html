@@ -2073,7 +2073,7 @@ gmDate.addEventListener("change", ()=>{ if (!gmDate.value) return; gcGame = null
 const hmOut = document.getElementById("hm-out");
 let hmGamesLoaded = false;
 function renderHome(){
-  const s = LS, minGp = s === LATEST && INPROG ? ipMinGp() : 40;
+  const s = HEAD, minGp = s === LATEST && INPROG ? ipMinGp() : 40;
   // leaders: single-season Chip Equity, latest season (3-year until players reach the 1,000-possession single-season floor)
   let cand = [], W = 1;
   for (const w of [1, 3]){
