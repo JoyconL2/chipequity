@@ -129,10 +129,12 @@ def main():
     CRS = "../rapm_out/stints_rs.pkl"; CA = "../rapm_out/stints_all.pkl"; common = ["--decay", "1", "--only-end", CUR]
     run([PY, E, RS, "--cache", CRS, "--window", "3", "--prior", "prior_w3.csv", "--out", "new_cepm3_rs.csv", *common], cwd="cepm", out=os.path.join(tmp, "cepm3_rs.log"))
     merge_rows(os.path.join(ROOT, "cepm/cepm3_rs.csv"), os.path.join(ROOT, "cepm/new_cepm3_rs.csv"), CUR, "window_end")
-    # single-season floor for the season being played: 50 possessions per game teams have played (at least 50), reaching
-    # the usual 1,000 by game 20, so single-season numbers exist from the first week (still steadied 40% toward 3 years)
-    tg = 2 * int((G.stype == "rs").sum()) / 30; mp1 = int(min(1000, max(50, round(50 * tg))))
-    log(f"single-season floor {mp1} possessions ({tg:.1f} games per team)")
+    # single-season floor for the season being played: 50 possessions per game, counting 67% of the most games any team
+    # has played (so a player who missed a game or two, or whose team is behind on its schedule, still qualifies),
+    # at least 50 and up to the usual 1,000; still steadied 40% toward 3 years
+    rsG = G[G.stype == "rs"]; most = int(pd.concat([rsG.home, rsG.away]).value_counts().max()) if len(rsG) else 0
+    tg = 0.67 * most; mp1 = int(min(1000, max(50, round(50 * tg))))
+    log(f"single-season floor {mp1} possessions (67% of {most} games, the most any team has played)")
     run([PY, E, ALL, "--cache", CA, "--window", "1", "--prior", "prior_w1.csv", "--out", "new_disp1.csv", "--min-poss", str(mp1), *common], cwd="cepm", out=os.path.join(tmp, "disp1.log"))
     jobs = []
     for w in (2, 3, 4, 5):
