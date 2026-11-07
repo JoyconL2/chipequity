@@ -1061,7 +1061,10 @@ function ptParts(r){        // per-75 volume and points per shot for each play t
   ];
 }
 const PT_AST = [["ast_rim","Rim shots"],["ast_three","Threes"],["ast_mid","Mid-range"],["ast_transition","Transition"]];
-function ptPct(si, f, val){ const pool = (PTSEASON.get(si) || []).filter(r => r[PTC.pos] >= 1000).map(f).filter(Number.isFinite).sort((a,b)=>a-b);
+// percentile pools: 1,000+ possessions; the season being played uses its early-season minimum (ipFloor)
+const poolMin = si => si === LATEST && INPROG ? ipFloor() : 1000;
+const poolTxt = si => `among players with ${poolMin(si).toLocaleString()}+ possessions that season`;
+function ptPct(si, f, val){ const pool = (PTSEASON.get(si) || []).filter(r => r[PTC.pos] >= poolMin(si)).map(f).filter(Number.isFinite).sort((a,b)=>a-b);
   if (!pool.length || !Number.isFinite(val)) return null; let n = 0; for (const x of pool) if (x <= val) n++; return Math.round(100 * n / pool.length); }
 function ptBox(k, si){
   const r = PTMAP.get(k*64 + si); if (!r) return `<p class="muted">No play-by-play play types for ${S[si]}.</p>`;
@@ -1071,10 +1074,10 @@ function ptBox(k, si){
     return `<td class="pt-pps" rowspan="${span}">${n >= 25 && Number.isFinite(d) ? `<strong class="${d>=0?"pos":"neg"}">${(d>=0?"+":"")+d.toFixed(2)}</strong><span class="sub"> on ${n} shots</span>` : `<span class="sub">${n} shots</span>`}</td>`; };
   const rowsH = parts.map((p, i) => { const pc = ptPct(si, q => ptParts(q).find(x=>x.key===p.key).v, p.v);
     const first = i < 2 || p.key.endsWith("_self"), span = i < 2 ? 1 : 2;
-    return `<tr><td class="l">${esc(p.label)}</td><td class="pt-bar"><i style="width:${Math.min(100, p.v/mx*100)}%"></i></td><td><strong>${p.v.toFixed(1)}</strong></td><td>${pc!=null ? pctlQ(Math.min(99,pc), "among players with 1,000+ possessions that season") : "–"}</td>${first ? ppsCell(p, span) : ""}</tr>`; }).join("");
-  const tbl = `<div class="tscroll"><table class="pt-tbl"><thead><tr><th class="l">Play type</th><th></th><th title="Shots per 75 possessions">Per 75</th><th title="Percentile among players with 1,000+ possessions that season">Pct</th><th title="Points per shot against the league average for that play type (half-court rows share one value per zone)">Pts/shot vs lg</th></tr></thead><tbody>${rowsH}</tbody></table></div>`;
+    return `<tr><td class="l">${esc(p.label)}</td><td class="pt-bar"><i style="width:${Math.min(100, p.v/mx*100)}%"></i></td><td><strong>${p.v.toFixed(1)}</strong></td><td>${pc!=null ? pctlQ(Math.min(99,pc), poolTxt(si)) : "–"}</td>${first ? ppsCell(p, span) : ""}</tr>`; }).join("");
+  const tbl = `<div class="tscroll"><table class="pt-tbl"><thead><tr><th class="l">Play type</th><th></th><th title="Shots per 75 possessions">Per 75</th><th title="Percentile ${poolTxt(si)}">Pct</th><th title="Points per shot against the league average for that play type (half-court rows share one value per zone)">Pts/shot vs lg</th></tr></thead><tbody>${rowsH}</tbody></table></div>`;
   const astH = PT_AST.map(([c,l]) => { const v = ptRate(r, r[PTC[c]]), pc = ptPct(si, q => ptRate(q, q[PTC[c]]), v);
-    return `<div class="tile"><div class="v">${v.toFixed(1)}</div><div class="k">${esc(l)} created / 75${pc!=null ? pctlQ(Math.min(99,pc), "among players with 1,000+ possessions that season") : ""}</div></div>`; }).join("");
+    return `<div class="tile"><div class="v">${v.toFixed(1)}</div><div class="k">${esc(l)} created / 75${pc!=null ? pctlQ(Math.min(99,pc), poolTxt(si)) : ""}</div></div>`; }).join("");
   const self = r[PTC.rim_self75] + r[PTC.mid_self75] + r[PTC.three_self75], hc = ptRate(r, r[PTC.rim_fga] + r[PTC.mid_fga] + r[PTC.three_fga]);
   return `<p class="sub" style="margin:0 0 8px">Shots per 75 possessions by play type, and points per shot against the league (pps). ${hc ? `${Math.round(100*self/hc)}% of his half-court shots were self-created.` : ""}</p>
     ${tbl}<h3 style="margin:14px 0 6px;font-size:13px">Shots created for teammates</h3><div class="tiles">${astH}</div>`;
@@ -1087,7 +1090,7 @@ const pctlD = (v, scope) => v && v.drank ? pctl({rank: v.drank, n: v.n}, (scope 
 const DPT = DATA.dpt || {cols:[], rows:[]}, DPC = Object.fromEntries(DPT.cols.map((c,i)=>[c,i]));
 const DMU = DATA.dmu || {cols:[], rows:[]}, DMC = Object.fromEntries(DMU.cols.map((c,i)=>[c,i]));
 const DPTMAP = new Map(), DPTPOOL = new Map(), DMUMAP = new Map(), DMUPOOL = new Map();
-for (const r of DPT.rows){ const key = (r[0]*64 + r[1])*2 + r[2]; DPTMAP.set(key, r); if (r[DPC.pos] >= (r[2] ? 150 : 1000)) (DPTPOOL.get(r[1]*2+r[2]) || DPTPOOL.set(r[1]*2+r[2], []).get(r[1]*2+r[2])).push(r); }
+for (const r of DPT.rows){ const key = (r[0]*64 + r[1])*2 + r[2]; DPTMAP.set(key, r); if (r[DPC.pos] >= (r[2] ? 150 : poolMin(r[1]))) (DPTPOOL.get(r[1]*2+r[2]) || DPTPOOL.set(r[1]*2+r[2], []).get(r[1]*2+r[2])).push(r); }
 for (const r of DMU.rows){ const key = (r[0]*64 + r[1])*2 + r[2]; DMUMAP.set(key, r); if (r[DMC.mposs] >= (r[2] ? 150 : 1000)) (DMUPOOL.get(r[1]*2+r[2]) || DMUPOOL.set(r[1]*2+r[2], []).get(r[1]*2+r[2])).push(r); }
 const CHARGES_FROM = S.indexOf("2010-11");           // the play-by-play marks charges from 2010-11 on
 const NO_CHARGE = new Set(DPT.nocharge || []);        // seasons from NBA.com's live feed, which doesn't label charges
@@ -2736,7 +2739,7 @@ function renderMethod(){
     <ul><li><b>Transition &amp; early offense</b>: a shot within 7 seconds of his team gaining the ball on a defensive rebound or a turnover.</li>
       <li><b>Putbacks &amp; second chances</b>: a shot within 3 seconds of his team's offensive rebound.</li>
       <li><b>Half court</b>, by where the shot came from (shot-chart distance): at the rim (0–4 ft), mid-range (other 2-pointers) and threes. Each is split into <b>self-created</b> and <b>set up</b> using the share of his made shots there that were unassisted (pulled toward the league rate for small samples). Self-created covers drives, pull-ups, isolations and post-ups; set up covers catch-and-shoot shots, cuts, rolls and lobs. The split is estimated for misses, since only made shots record an assist.</li>
-      <li><b>Points per shot (pps)</b> is shown against the league average for that play type and season, and percentiles compare players with 1,000+ possessions that season.</li>
+      <li><b>Points per shot (pps)</b> is shown against the league average for that play type and season, and percentiles compare players with 1,000+ possessions that season (for the season being played, its early-season minimum). The season being played is built every morning from the same NBA.com play-by-play as Chip Equity.</li>
       <li><b>Shots created for teammates</b>: his assists per 75 possessions, split by the shot they created.</li>
       <li><b>Does it help predict?</b> Added to what the model already knows, play types improve the forecast of a player's next-season offensive impact slightly (error 1.356 to 1.340). They aren't part of Chip Equity yet; they're shown for context.</li></ul></div>
 
