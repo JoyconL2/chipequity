@@ -35,3 +35,6 @@ pomodel/player_game.csv
 !base/stints/
 !base/stints/*.xz
 wowy/lineups/
+hist80/raw/
+hist80/*.csv
+hist80/names80.json
