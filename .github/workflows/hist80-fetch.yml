@@ -1,0 +1,18 @@
+name: hist80 fetch
+on:
+  push:
+    branches: [hist80-fetch]
+    paths: [".github/workflows/hist80-fetch.yml", "hist80/fetch_stats.py"]
+permissions:
+  contents: write
+jobs:
+  get:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install requests
+      - run: python hist80/fetch_stats.py
+      - run: |
+          git config user.name "hist80[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add hist80/raw && git commit -m "hist80: raw NBA.com season totals" && git push || echo "nothing to commit"
