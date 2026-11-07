@@ -63,7 +63,10 @@ for f in sorted(glob.glob(os.path.join(R, "career", "*.json"))):
         rows.append(a)
 B = pd.concat(rows, ignore_index=True)
 # seasons where the player logs are complete (1983-84 on); earlier ones come from career totals when present
-miss = {k: (0.0 if (CAREER and k[0] < "1983-84") else v) for k, v in MISS.items()}   # career totals are complete
+miss = dict(MISS)
+if CAREER:                                                   # career totals are complete for the early seasons
+    for sn in T.season.unique():
+        if sn < "1983-84": miss[(sn, 0)] = miss[(sn, 1)] = 0.0
 B = B.fillna(0)
 tb = B.groupby(["TEAM_ID", "season", "t"])[["fga", "fta", "oreb", "tov"]].sum().reset_index()
 T = T.drop(columns=[c for c in ("T_poss",) if c in T]).merge(tb, on=["TEAM_ID", "season", "t"], how="left")
