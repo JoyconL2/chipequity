@@ -217,3 +217,4 @@ table.pk-agg td.nw .sub{font-size:11px;margin-top:2px;white-space:nowrap}
 table.cmp.solo{width:auto;min-width:0!important;margin:0 auto}
 table.cmp.solo td{text-align:center}
 table.cmp.solo td.lbl{text-align:left;padding-right:28px}
+#tm-cmp .controls::before{display:none}
