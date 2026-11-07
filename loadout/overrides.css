@@ -212,3 +212,8 @@ table.wv-t tr.wv-tot td{border-top:2px solid rgba(255,255,255,.18);color:rgba(25
 .pk-h small{text-transform:none;letter-spacing:0;font-weight:400;color:rgba(255,255,255,.55);margin-left:6px}
 table.pk-agg td.nw .sub{font-size:11px;margin-top:2px;white-space:nowrap}
 .pk-h:not(:first-child){margin-top:18px}
+/* Teams: one team picked = centered single-team view; the controls sit inside the comparison box */
+#tm-cmp .controls{margin:0 0 14px;padding:0;border:0;background:none;box-shadow:none}
+table.cmp.solo{width:auto;min-width:0!important;margin:0 auto}
+table.cmp.solo td{text-align:center}
+table.cmp.solo td.lbl{text-align:left;padding-right:28px}
