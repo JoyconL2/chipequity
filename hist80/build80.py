@@ -4,7 +4,7 @@ usage: python build80.py   -> hist80/box80.csv (players), hist80/team80.csv (tea
 import glob, json, os
 import pandas as pd
 
-H = os.path.dirname(os.path.abspath(__file__)); R = os.path.join(H, "raw")
+H = os.path.dirname(os.path.abspath(__file__)); R = os.environ.get("RAW80", os.path.join(H, "raw"))
 
 
 def rs(path):
@@ -31,16 +31,19 @@ for f in sorted(glob.glob(os.path.join(R, "gamelog_T_*.json"))):
     teams.append(a)
 T = pd.concat(teams, ignore_index=True)
 T["T_min"] = T.MIN.where(T.MIN > T.GP * 200, T.GP * 240)   # game-log MIN is team minutes (5 x 48 + OT)
-T["T_poss"] = T.FGA + 0.44 * T.FTA - T.OREB + T.TOV
-T.to_csv(os.path.join(H, "team80.csv"), index=False)
 
 # ---- players: game logs where NBA.com has them, career totals otherwise ----
 rows = []
-have = set()
+have, MISS = set(), {}
+CAREER = bool(glob.glob(os.path.join(R, "career", "*.json")))
 for f in sorted(glob.glob(os.path.join(R, "gamelog_P_*.json"))):
     g = rs(f)
     if not len(g): continue
+    if CAREER and season_of(f) < "1983-84":                  # incomplete logs: use the season totals instead
+        for pid, nm in zip(g.PLAYER_ID, g.PLAYER_NAME): names[int(pid)] = nm
+        continue
     season, t = season_of(f), int(f.endswith("_po.json")); have.add((season, t))
+    MISS[(season, t)] = float(g[["OREB", "TOV", "STL"]].isna().mean().max())
     for pid, nm in zip(g.PLAYER_ID, g.PLAYER_NAME): names[int(pid)] = nm
     a = g.groupby(["PLAYER_ID", "TEAM_ID"]).agg(gp=("GAME_ID", "nunique"), min=("MIN", "sum"), pts=("PTS", "sum"), fgm=("FGM", "sum"), fga=("FGA", "sum"),
         fg3m=("FG3M", "sum"), fg3a=("FG3A", "sum"), ftm=("FTM", "sum"), fta=("FTA", "sum"), oreb=("OREB", "sum"), dreb=("DREB", "sum"),
@@ -52,17 +55,26 @@ for f in sorted(glob.glob(os.path.join(R, "career", "*.json"))):
         if key not in j: continue
         c = pd.DataFrame(j[key]["rowSet"], columns=j[key]["headers"])
         c = c[(c.TEAM_ID != 0) & c.SEASON_ID.isin(T.season.unique())]
-        c = c[[(s, t) not in have for s in c.SEASON_ID]]
+        c = c[[(s, t) not in have or s < "1983-84" for s in c.SEASON_ID]]
         if not len(c): continue
         a = pd.DataFrame({"PLAYER_ID": c.PLAYER_ID, "TEAM_ID": c.TEAM_ID, "gp": c.GP, "min": c.MIN, "pts": c.PTS, "fgm": c.FGM, "fga": c.FGA,
             "fg3m": c.FG3M, "fg3a": c.FG3A, "ftm": c.FTM, "fta": c.FTA, "oreb": c.OREB, "dreb": c.DREB, "ast": c.AST, "stl": c.STL,
             "blk": c.BLK, "tov": c.TOV, "pf": c.PF, "season": c.SEASON_ID, "t": t})
         rows.append(a)
-B = pd.concat(rows, ignore_index=True).fillna(0)
+B = pd.concat(rows, ignore_index=True)
+# seasons where the player logs are complete (1983-84 on); earlier ones come from career totals when present
+miss = {k: (0.0 if (CAREER and k[0] < "1983-84") else v) for k, v in MISS.items()}   # career totals are complete
+B = B.fillna(0)
+tb = B.groupby(["TEAM_ID", "season", "t"])[["fga", "fta", "oreb", "tov"]].sum().reset_index()
+T = T.drop(columns=[c for c in ("T_poss",) if c in T]).merge(tb, on=["TEAM_ID", "season", "t"], how="left")
+T["T_poss"] = T.fga + 0.44 * T.fta - T.oreb + T.tov
+T["complete"] = [miss.get((s, t), 1) < 0.02 for s, t in zip(T.season, T.t)]
+T.to_csv(os.path.join(H, "team80.csv"), index=False)
 B = B.merge(T[["TEAM_ID", "season", "t", "TEAM_ABBREVIATION", "T_min", "T_poss", "PTS", "OPP_PTS"]].rename(columns={"PTS": "T_pts", "OPP_PTS": "T_opp"}),
             on=["TEAM_ID", "season", "t"])
+B = B.merge(T[["TEAM_ID", "season", "t", "complete"]], on=["TEAM_ID", "season", "t"])
 B = B.rename(columns={"PLAYER_ID": "p", "TEAM_ID": "tm"})
 B.to_csv(os.path.join(H, "box80.csv"), index=False)
 json.dump({str(k): v for k, v in names.items()}, open(os.path.join(H, "names80.json"), "w"))
 print("teams", len(T), "rows,", T.season.nunique(), "seasons | players", len(B), "rows,", B.p.nunique(), "players | names", len(names))
-print(B.groupby(["season", "t"]).size().unstack().to_string())
+print(B[B.complete].groupby(["season", "t"]).size().unstack().to_string())
