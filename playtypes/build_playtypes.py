@@ -58,6 +58,31 @@ def events_cdn(y):
         elif a == "rebound": out.append((g, per, t, "reb", team, p1, None, None, None, None))
         elif a == "turnover": out.append((g, per, t, "tov", team, p1, None, None, None, None))
     return out
+def events_live(folder):
+    """the season being played, from the NBA.com live play-by-play files the daily update downloads
+    (same format as events_cdn; repaired first by stintbuild/live_fix.py, like the stints and box scores)"""
+    import glob, json, os
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "stintbuild"))
+    from live_fix import fix
+    out = []
+    for f in sorted(glob.glob(os.path.join(folder, "*.json"))):
+        try: A = json.load(open(f))["game"]["actions"]
+        except Exception: continue
+        A, _ = fix(A); g = int(os.path.basename(f).split(".")[0][-10:])
+        for r in A:
+            a = r.get("actionType"); per = int(r.get("period") or 0)
+            m_ = re.match(r"PT(\d+)M([\d.]+)S", str(r.get("clock") or "")); rem = int(m_.group(1)) * 60 + float(m_.group(2)) if m_ else 0
+            t = (720 if per <= 4 else 300) - rem; team = int(r["teamId"]) if r.get("teamId") else None; p1 = int(r["personId"]) if r.get("personId") else None
+            if a in ("2pt", "3pt"):
+                made = r.get("shotResult") == "Made"; ds = int(r["shotDistance"]) if r.get("shotDistance") is not None else (24 if a == "3pt" else 8)
+                ast = int(r["assistPersonId"]) if made and r.get("assistPersonId") else None
+                out.append((g, per, t, "fga", team, p1, made, 3 if a == "3pt" else 2, ds, ast))
+            elif a == "freethrow":
+                st = str(r.get("subType")); made = r.get("shotResult") == "Made"; last = st in ("1 of 1", "2 of 2", "3 of 3")
+                out.append((g, per, t, "ft", team, p1, made, last, None, None))
+            elif a == "rebound": out.append((g, per, t, "reb", team, p1, None, None, None, None))
+            elif a == "turnover": out.append((g, per, t, "tov", team, p1, None, None, None, None))
+    return out
 def profile(events, season):
     acc = {}; ast = {}
     def add(p, cat, made, pts):
@@ -97,6 +122,9 @@ def profile(events, season):
         r = rows.setdefault(p, {"p": p, "season": season}); r[f"ast_{cat}"] = n
     return list(rows.values())
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["--live"]:                   # --live <folder of playbyplay json> <season> <out csv>
+        folder, season, out = sys.argv[2:5]; ev = events_live(folder); rows = profile(ev, season)
+        pd.DataFrame(rows).fillna(0).to_csv(out, index=False); print(season, len(ev), "events", len(rows), "players"); sys.exit(0)
     years = [int(a) for a in sys.argv[1:]] or list(range(1996, 2026))
     allrows = []
     for y in years:
