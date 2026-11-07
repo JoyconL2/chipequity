@@ -21,5 +21,5 @@ jobs:
           foreach ($p in $c) { $v = & $p -c "import sys; print(sys.version_info[1])" 2>$null; if ($LASTEXITCODE -eq 0 -and [int]$v -ge 10 -and [int]$v -le 13) { Split-Path $p | Out-File -Append -Encoding utf8 $env:GITHUB_PATH; (Join-Path (Split-Path $p) "Scripts") | Out-File -Append -Encoding utf8 $env:GITHUB_PATH; Write-Output "using $p"; exit 0 } }
           Write-Output "::error::Python 3.10-3.13 not found"; exit 1
       - run: python -m pip install --quiet requests
-      - run: python hist80/fetch_stats.py
+      - run: python hist80/fetch_career.py
       - run: python hist80/commit.py
