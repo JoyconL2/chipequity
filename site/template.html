@@ -1578,7 +1578,7 @@ const teamsIn = s => M.tm.filter(r=>r.s===s && r.t===TYPE);
 function fillTeamSelects(){
   const s = +tmSeason.value, list = teamsIn(s).slice().sort((a,b)=>teamName(AB(a.a),s).localeCompare(teamName(AB(b.a),s)));
   tmSel.forEach((sel,j)=>{ const prev = sel.value;
-    sel.innerHTML = (j>1?`<option value="">None</option>`:"") + list.map(t=>`<option value="${AB(t.a)}">${esc(teamName(AB(t.a),s))}</option>`).join("");
+    sel.innerHTML = `<option value="">${j ? "None" : "Pick a team"}</option>` + list.map(t=>`<option value="${AB(t.a)}">${esc(teamName(AB(t.a),s))}</option>`).join("");
     if ([...sel.options].some(o=>o.value===prev)) sel.value = prev; });
 }
 /* ---- full rosters + on/off + WOWY (team pages; data in wowy.json, loaded the first time a team is opened) ---- */
@@ -1727,10 +1727,11 @@ function renderWowy(){
   const mn = document.getElementById("wv-min"); if (mn) mn.onchange = ev => { WV.min = Math.max(0, +ev.target.value || 0); WV.more = 0; renderWowy(); };
 }
 function bindRosterBack(s){ const bk = document.getElementById("tm-back"); if (bk) bk.onclick = ev => { ev.preventDefault(); tmRoster = null; renderTeams(); window.scrollTo({top: 0}); }; }
+const TM_PANEL = document.getElementById("p-teams"), TM_CTL = TM_PANEL.querySelector(".controls");
 function renderTeams(){
   const s = +tmSeason.value, all = teamsIn(s);
   tmSel.forEach(x => { const f = x.closest(".field"); if (f) f.hidden = !!tmRoster; });     // team pickers hide on a team's own page
-  if (tmRoster){ renderRoster(tmRoster, s); return; }
+  if (tmRoster){ if (TM_CTL.parentNode !== TM_PANEL) TM_PANEL.insertBefore(TM_CTL, tmOut); renderRoster(tmRoster, s); return; }
   if (!all.length){ tmOut.innerHTML = `<div class="msg">No ${typeName().toLowerCase()} team data for ${S[s]}.</div>`; return; }
   const picks = [...new Set(tmSel.map(x=>x.value).filter(Boolean))].map(ab=>all.find(t=>AB(t.a)===ab)).filter(Boolean);
   const recOf = t => { const rr = teamRec(AB(t.a), s); return rr && rr.w!=null ? `${rr.w}-${rr.l}` : "–"; };
@@ -1741,6 +1742,9 @@ function renderTeams(){
     <tbody>${sorted.map((t,i)=>{ const ab=AB(t.a), sr=seasonResult(t.a, s); return `<tr><td>${i+1}</td><td class="l"><a href="#" class="who n" data-roster="${ab}">${logoImg(ab,s)}<span class="n">${esc(teamName(ab,s))}</span></a></td><td>${recOf(t)}</td>
       <td class="l"><span class="res ${sr.cls}">${sr.txt}</span></td><td>${fmt(t.off,1)}</td><td>${fmt(t.def,1)}</td><td><strong>${t.net>0?"+":""}${fmt(t.net,1)}</strong></td><td>${fmt(t.pace,1)}</td><td>${fmt(t.ts,"pct")}</td><td>${fmt(t.ts-M.lgTS(s),"rel")}</td><td>${fmt(t.ppg,1)}</td><td>${fmt(t.oppg,1)}</td></tr>`; }).join("")}</tbody></table></div>
     </div>`;
+  const solo = picks.length === 1;
+  html += `<div class="box" id="tm-cmp"><h2>${solo ? esc(teamName(AB(picks[0].a), s)) : "Team comparison"}, ${S[s]} <small>${typeName()}${picks.length ? "" : " · pick one team for its stats and top performers, or 2 to 4 to compare them"}</small></h2><div id="tm-cfg-slot"></div>`;
+  if (!picks.length) html += `</div>`;
   if (picks.length){
     const heads = picks.map(t=>{ const ab=AB(t.a); return `<td>${logoImg(ab,s,"lg")}<div class="nm"><a href="#" data-roster="${ab}" class="plink">${esc(teamName(ab,s))}</a></div><div class="yr">${S[s]} · ${recOf(t)}</div></td>`; }).join("");
     const defs = [["Record",t=>recOf(t),null,null],["Win %",t=>{const rr=teamRec(AB(t.a),s); return rr? rr.wpct : NaN;},"pct",true],["Playoff result",t=>seasonResult(t.a, s).txt,null,null],
@@ -1748,9 +1752,9 @@ function renderTeams(){
       ["Pace",t=>t.pace,1,null],["True shooting",t=>t.ts,"pct",true],["rTS (vs. league)",t=>t.ts - M.lgTS(s),"rel",true],["Effective FG%",t=>t.efg,"pct",true],
       ["Turnover rate",t=>t.tov/100,"pct",false],["Off. rebound rate",t=>t.oreb/100,"pct",true],["3-point attempt share",t=>t.par3/100,"pct",null]];
     const canSim = picks.length===2 && TYPE===0;
-    html += `<div class="box"><h2>Team comparison, ${S[s]} <small>${typeName()}</small></h2><div class="tscroll"><table class="cmp" style="min-width:${130+picks.length*125}px"><tr class="head"><td class="lbl"></td>${heads}</tr>
+    html += `<div class="tscroll"><table class="cmp${solo ? " solo" : ""}" style="min-width:${130+picks.length*125}px"><tr class="head"><td class="lbl"></td>${heads}</tr>
       ${defs.map(([lbl,f,ff,hb])=>`<tr><td class="lbl">${lbl}</td>${bestMark(picks.map(f),hb,ff)}</tr>`).join("")}</table></div>
-      <p class="note">▲ marks the better team.</p>
+      ${solo ? "" : `<p class="note">▲ marks the better team.</p>`}
       ${canSim?`<button class="btn" id="tm-sim">Simulate a playoff series between these two</button>`:""}`;
     // top performers per picked team: regular season, by 3-year Chip Equity ending this season, among players with
     // real minutes (15+ per game) and enough games (early in a season: half the games teams have played)
@@ -1768,7 +1772,9 @@ function renderTeams(){
       </tbody></table></div></div>`;
   }
   html = html.replace(`All teams by net rating, ${S[s]} <small>`, `All teams by net rating, ${S[s]} <small>click a team for its full roster, on/off and WOWY · `);
+  if (TM_CTL.parentNode !== TM_PANEL) TM_PANEL.insertBefore(TM_CTL, tmOut);      // keep the controls safe while the output is rebuilt
   tmOut.innerHTML = html;
+  const slot = document.getElementById("tm-cfg-slot"); if (slot) slot.appendChild(TM_CTL);
   tmOut.querySelectorAll("[data-roster]").forEach(a => a.addEventListener("click", ev => { ev.preventDefault(); tmRoster = a.dataset.roster; WY = {on: null, off: [], size: 3, sort: "p", min: null}; renderTeams(); window.scrollTo({top: 0}); loadWowy(); }));
   const sim = document.getElementById("tm-sim");
   if (sim) sim.addEventListener("click", ()=> openMatchup(AB(picks[0].a), s, AB(picks[1].a), s));
@@ -2823,7 +2829,7 @@ cvCum.addEventListener("click", ()=>setCepmView("cum")); cvPo.addEventListener("
 plQ.value = optLabel(findPlayer("LeBron James"));
 cmIn[0].value = optLabel(findPlayer("LeBron James")); cmIn[1].value = optLabel(findPlayer("Kevin Durant"));
 ldMode.value = "peak"; ldStatOptions();
-tmSeason.value = String(HEAD); fillTeamSelects(); tmSel[0].value = "OKC"; tmSel[1].value = "SAS";
+tmSeason.value = String(HEAD); fillTeamSelects();
 { muSA.value = String(S.indexOf("2016-17")); fillTeams(muTA, S.indexOf("2016-17"), "GSW");
   muSB.value = String(HEAD); fillTeams(muTB, HEAD, "OKC"); }
 let startTab = "home";   // the site always opens on the front page (a #players style link still works)
