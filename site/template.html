@@ -1734,6 +1734,12 @@ function renderTeams(){
   const picks = [...new Set(tmSel.map(x=>x.value).filter(Boolean))].map(ab=>all.find(t=>AB(t.a)===ab)).filter(Boolean);
   const recOf = t => { const rr = teamRec(AB(t.a), s); return rr && rr.w!=null ? `${rr.w}-${rr.l}` : "–"; };
   let html = "";
+  const sorted = all.slice().sort((a,b)=>b.net-a.net);
+  html += `<div class="box"><h2>All teams by net rating, ${S[s]} <small>${typeName()}</small></h2><div class="tscroll"><table>
+    <thead><tr><th>#</th><th class="l">Team</th><th>W-L</th><th class="l">Playoffs</th><th>Off</th><th>Def</th><th>Net</th><th>Pace</th><th>TS%</th><th>rTS</th><th>PPG</th><th>Opp PPG</th></tr></thead>
+    <tbody>${sorted.map((t,i)=>{ const ab=AB(t.a), sr=seasonResult(t.a, s); return `<tr><td>${i+1}</td><td class="l"><a href="#" class="who n" data-roster="${ab}">${logoImg(ab,s)}<span class="n">${esc(teamName(ab,s))}</span></a></td><td>${recOf(t)}</td>
+      <td class="l"><span class="res ${sr.cls}">${sr.txt}</span></td><td>${fmt(t.off,1)}</td><td>${fmt(t.def,1)}</td><td><strong>${t.net>0?"+":""}${fmt(t.net,1)}</strong></td><td>${fmt(t.pace,1)}</td><td>${fmt(t.ts,"pct")}</td><td>${fmt(t.ts-M.lgTS(s),"rel")}</td><td>${fmt(t.ppg,1)}</td><td>${fmt(t.oppg,1)}</td></tr>`; }).join("")}</tbody></table></div>
+    </div>`;
   if (picks.length){
     const heads = picks.map(t=>{ const ab=AB(t.a); return `<td>${logoImg(ab,s,"lg")}<div class="nm"><a href="#" data-roster="${ab}" class="plink">${esc(teamName(ab,s))}</a></div><div class="yr">${S[s]} · ${recOf(t)}</div></td>`; }).join("");
     const defs = [["Record",t=>recOf(t),null,null],["Win %",t=>{const rr=teamRec(AB(t.a),s); return rr? rr.wpct : NaN;},"pct",true],["Playoff result",t=>seasonResult(t.a, s).txt,null,null],
@@ -1741,25 +1747,25 @@ function renderTeams(){
       ["Pace",t=>t.pace,1,null],["True shooting",t=>t.ts,"pct",true],["rTS (vs. league)",t=>t.ts - M.lgTS(s),"rel",true],["Effective FG%",t=>t.efg,"pct",true],
       ["Turnover rate",t=>t.tov/100,"pct",false],["Off. rebound rate",t=>t.oreb/100,"pct",true],["3-point attempt share",t=>t.par3/100,"pct",null]];
     const canSim = picks.length===2 && TYPE===0;
-    html += `<div class="box"><h2>${S[s]} <small>${typeName()}</small></h2><div class="tscroll"><table class="cmp" style="min-width:${130+picks.length*125}px"><tr class="head"><td class="lbl"></td>${heads}</tr>
+    html += `<div class="box"><h2>Team comparison, ${S[s]} <small>${typeName()}</small></h2><div class="tscroll"><table class="cmp" style="min-width:${130+picks.length*125}px"><tr class="head"><td class="lbl"></td>${heads}</tr>
       ${defs.map(([lbl,f,ff,hb])=>`<tr><td class="lbl">${lbl}</td>${bestMark(picks.map(f),hb,ff)}</tr>`).join("")}</table></div>
       <p class="note">▲ marks the better team.</p>
-      ${canSim?`<button class="btn" id="tm-sim">Simulate a playoff series between these two</button>`:""}</div>`;
-    // top performers per picked team (regular season)
-    const t3 = picks.map(p => { const ti = M.teamRow(p.a, s, 0); return { ab: AB(p.a), ro: ti>=0 ? M.roster(ti) : null }; });
-    html += `<div class="box"><h2>Top performers <small>${S[s]} regular season</small></h2><div class="tscroll"><table>
-      <thead><tr><th class="l">Team</th><th class="l">Player</th><th>MPG</th><th>PTS</th><th>REB</th><th>AST</th><th>TS%</th><th>3-yr Chip Equity</th><th>Off</th><th>Def</th></tr></thead><tbody>
-      ${t3.map(({ab, ro}) => (ro && ro.top3Info.length ? ro.top3Info : []).map((p,j)=>{ const k=P.p[p.i], a=agg([p.i]), c = M.rwOf(k, s, 3);
+      ${canSim?`<button class="btn" id="tm-sim">Simulate a playoff series between these two</button>`:""}`;
+    // top performers per picked team: regular season, by 3-year Chip Equity ending this season, among players with
+    // real minutes (15+ per game) and enough games (early in a season: half the games teams have played)
+    const minGp = s === LATEST && INPROG ? ipMinGp() : 20;
+    const t3 = picks.map(p => { const ab = AB(p.a), rows = [];
+      for (let i = 0; i < NP; i++) if (P.s[i] === s && P.t[i] === 0 && P.tm[i] === p.a && P.gp[i] >= minGp && P.sec[i] / 60 / Math.max(1, P.gp[i]) >= 15) rows.push(i);
+      const top = rows.map(i => ({i, c: M.rwOf(P.p[i], s, 3)})).filter(x => x.c).sort((x, y) => y.c.r - x.c.r).slice(0, 3);
+      return {ab, top}; });
+    html += `<h3 class="pk-h" style="margin-top:18px">Top performers <small>${S[s]} regular season · ranked by 3-year Chip Equity · ${minGp}+ games, 15+ minutes</small></h3><div class="tscroll"><table>
+      <thead><tr><th class="l">Team</th><th class="l">Player</th><th>GP</th><th>MPG</th><th>PTS</th><th>REB</th><th>AST</th><th>TS%</th><th>3-yr Chip Equity</th><th>Off</th><th>Def</th></tr></thead><tbody>
+      ${t3.map(({ab, top}) => top.length ? top.map(({i, c}) => { const k = P.p[i], a = agg([i]);
         return `<tr><td class="l"><div class="who">${logoImg(ab,s)}${ab}</div></td><td class="l"><div class="who">${faceImg(k,"sm")}<span class="n">${pLink(k, esc(DATA.names[k]))}</span></div></td>
-          <td>${fmt(val(a,"MPG"),1)}</td><td>${fmt(val(a,"PPG"),1)}</td><td>${fmt(val(a,"RPG"),1)}</td><td>${fmt(val(a,"APG"),1)}</td><td>${fmt(val(a,"TS"),"pct")}</td><td class="nw"><strong>${pm(c?c.r:NaN)}</strong>${pctl(c)}</td><td class="nw">${pm(c?c.o:NaN)}${pctlO(c)}</td><td class="nw">${pm(c?c.d:NaN)}${pctlD(c)}</td></tr>`; }).join("")).join("")}
+          <td>${P.gp[i]}</td><td>${fmt(val(a,"MPG"),1)}</td><td>${fmt(val(a,"PPG"),1)}</td><td>${fmt(val(a,"RPG"),1)}</td><td>${fmt(val(a,"APG"),1)}</td><td>${fmt(val(a,"TS"),"pct")}</td><td class="nw"><strong>${pm(c.r)}</strong>${pctl(c)}</td><td class="nw">${pm(c.o)}${pctlO(c)}</td><td class="nw">${pm(c.d)}${pctlD(c)}</td></tr>`; }).join("")
+        : `<tr><td class="l"><div class="who">${logoImg(ab,s)}${ab}</div></td><td class="l muted" colspan="10">No player with ${minGp}+ games and 15+ minutes yet</td></tr>`).join("")}
       </tbody></table></div></div>`;
   }
-  const sorted = all.slice().sort((a,b)=>b.net-a.net);
-  html += `<div class="box"><h2>All teams by net rating, ${S[s]} <small>${typeName()}</small></h2><div class="tscroll"><table>
-    <thead><tr><th>#</th><th class="l">Team</th><th>W-L</th><th class="l">Playoffs</th><th>Off</th><th>Def</th><th>Net</th><th>Pace</th><th>TS%</th><th>rTS</th><th>PPG</th><th>Opp PPG</th></tr></thead>
-    <tbody>${sorted.map((t,i)=>{ const ab=AB(t.a), sr=seasonResult(t.a, s); return `<tr><td>${i+1}</td><td class="l"><a href="#" class="who n" data-roster="${ab}">${logoImg(ab,s)}<span class="n">${esc(teamName(ab,s))}</span></a></td><td>${recOf(t)}</td>
-      <td class="l"><span class="res ${sr.cls}">${sr.txt}</span></td><td>${fmt(t.off,1)}</td><td>${fmt(t.def,1)}</td><td><strong>${t.net>0?"+":""}${fmt(t.net,1)}</strong></td><td>${fmt(t.pace,1)}</td><td>${fmt(t.ts,"pct")}</td><td>${fmt(t.ts-M.lgTS(s),"rel")}</td><td>${fmt(t.ppg,1)}</td><td>${fmt(t.oppg,1)}</td></tr>`; }).join("")}</tbody></table></div>
-    </div>`;
   html = html.replace(`All teams by net rating, ${S[s]} <small>`, `All teams by net rating, ${S[s]} <small>click a team for its full roster, on/off and WOWY · `);
   tmOut.innerHTML = html;
   tmOut.querySelectorAll("[data-roster]").forEach(a => a.addEventListener("click", ev => { ev.preventDefault(); tmRoster = a.dataset.roster; WY = {on: null, off: [], size: 3, sort: "p", min: null}; renderTeams(); window.scrollTo({top: 0}); loadWowy(); }));
