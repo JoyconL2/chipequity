@@ -218,3 +218,11 @@ table.cmp.solo{width:auto;min-width:0!important;margin:0 auto}
 table.cmp.solo td{text-align:center}
 table.cmp.solo td.lbl{text-align:left;padding-right:28px}
 #tm-cmp .controls::before{display:none}
+/* season page (one player, one season) */
+.ps-nav{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px;margin:0 0 12px}
+.ps-nav .ps-step{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ps-nav select{min-width:0}
+.pname .ps-yr{color:var(--ink-2,inherit);font-weight:600;opacity:.75;margin-left:4px}
+#p-players .stints .stint .res{margin-left:2px}
+/* player chart: total / offense / defense and 1- to 5-year window */
+.pl-cectl{display:flex;flex-wrap:wrap;gap:8px 12px;margin:0 0 10px}

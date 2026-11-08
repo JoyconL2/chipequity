@@ -132,14 +132,14 @@ function buildModel(DATA, PARAMS_IN){
     return {o:m("o"), d:m("d"), r:m("r"), label: v.length>1 ? v.map(x=>x.ds.slice(0,5)).join("/") : v[0].ds.slice(0,5)};
   }
 
-  /* 2-year and 3-year Chip Equity windows (our Chip Equity, regular season only). A window "ending" in season s covers s and the
+  /* 1- to 5-year Chip Equity windows (our Chip Equity, regular season only). A window "ending" in season s covers s and the
      season(s) before it. Stored per player per ending season. */
   const RW = DATA.rw || {rows:[], n:{}};
   const rwMap = new Map();
-  for (const [k,s,w,o,d,r,rank,poss] of RW.rows) rwMap.set((k*64+s)*4+w, {o,d,r,rank,poss,s,w,n:RW.n[s+"_"+w]||null});
-  { const g = new Map(); for (const v of rwMap.values()){ const key = v.s*4 + v.w; (g.get(key) || g.set(key, []).get(key)).push(v); }
+  for (const [k,s,w,o,d,r,rank,poss] of RW.rows) rwMap.set((k*64+s)*8+w, {o,d,r,rank,poss,s,w,n:RW.n[s+"_"+w]||null});
+  { const g = new Map(); for (const v of rwMap.values()){ const key = v.s*8 + v.w; (g.get(key) || g.set(key, []).get(key)).push(v); }
     for (const l of g.values()){ tieRank(l); tieRank(l, v => v.o, "orank"); tieRank(l, v => v.d, "drank"); l.forEach(v => v.n = l.length); } }
-  const rwOf = (k, s, w) => rwMap.get((k*64+s)*4+w) || null;
+  const rwOf = (k, s, w) => rwMap.get((k*64+s)*8+w) || null;
   // regular-season-only 3-year Chip Equity used by the playoff model (the displayed numbers include playoff games)
   const rwmMap = new Map(); for (const [k,s,r] of (DATA.rwm||[])) rwmMap.set(k*64+s, r);
   const rwmOf = (k, s) => rwmMap.has(k*64+s) ? rwmMap.get(k*64+s) : null;
