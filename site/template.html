@@ -419,7 +419,8 @@ td.sub{color:var(--ink-3);font-size:12px}
   </section>
   <section class="panel" id="p-wowy" hidden>
     <div class="controls">
-      <div class="field"><label for="wv-season">Season</label><select id="wv-season"></select></div>
+      <div class="field"><label for="wv-season">From</label><select id="wv-season"></select></div>
+      <div class="field"><label for="wv-season2">Through</label><select id="wv-season2"></select></div>
       <div class="field"><label for="wv-team">Team</label><select id="wv-team"></select></div>
     </div>
     <div id="wv-out"></div>
@@ -574,7 +575,7 @@ const stintYrs = st => { if (!st.now) return yrSpan(st.s0, st.s1); if (st.s0 > L
 const playingNow = k => !!(curTeamOf(k) && CUR_SEASON && S[LATEST] !== CUR_SEASON);
 const curTeamName = ab => { try { const t = CUR && CUR.ready() && CUR.state().teams[ab]; if (t && t.name) return t.name; } catch(e){} return teamName(ab, LATEST); };
 // any player name can open his profile
-const pLink = (k, html) => k == null || k < 0 ? html : `<a href="#" class="plink" data-player="${k}">${html}</a>`;
+const pLink = (k, html, s) => k == null || k < 0 ? html : `<a href="#" class="plink" data-player="${k}"${s != null && s >= 0 ? ` data-season="${s}"` : ""}>${html}</a>`;
 
 /* ---------------- players index + search ---------------- */
 const rowsByPlayer = M.rowsByPlayer;
@@ -669,6 +670,10 @@ const STATS = {
   PCE:{label:"Playoff Chip Equity (that postseason)", po:true, fmt:"pm"},
   O3:{label:"3-year offensive Chip Equity (offensive Chip Equity)", rw:3, part:"o", fmt:"pm"}, D3:{label:"3-year defensive Chip Equity (defensive Chip Equity)", rw:3, part:"d", fmt:"pm"},
   O2:{label:"2-year offensive Chip Equity (offensive Chip Equity)", rw:2, part:"o", fmt:"pm"}, D2:{label:"2-year defensive Chip Equity (defensive Chip Equity)", rw:2, part:"d", fmt:"pm"},
+  RW4:{label:"4-year Chip Equity (window ending that season)", rw:4, fmt:"pm"}, RW5:{label:"5-year Chip Equity (window ending that season)", rw:5, fmt:"pm"},
+  O1:{label:"Single-season offensive Chip Equity", rw:1, part:"o", fmt:"pm"}, D1:{label:"Single-season defensive Chip Equity", rw:1, part:"d", fmt:"pm"},
+  O4:{label:"4-year offensive Chip Equity", rw:4, part:"o", fmt:"pm"}, D4:{label:"4-year defensive Chip Equity", rw:4, part:"d", fmt:"pm"},
+  O5:{label:"5-year offensive Chip Equity", rw:5, part:"o", fmt:"pm"}, D5:{label:"5-year defensive Chip Equity", rw:5, part:"d", fmt:"pm"},
   PPG:{label:"Points per game", f:a=>a.pts/a.gp, fmt:1}, RPG:{label:"Rebounds per game", f:a=>a.reb/a.gp, fmt:1},
   APG:{label:"Assists per game", f:a=>a.ast/a.gp, fmt:1}, SPG:{label:"Steals per game", f:a=>a.stl/a.gp, fmt:1},
   BPG:{label:"Blocks per game", f:a=>a.blk/a.gp, fmt:1}, MPG:{label:"Minutes per game", f:a=>a.sec/60/a.gp, fmt:1},
@@ -719,7 +724,7 @@ function fmt(v, f){
   return v.toFixed(f);
 }
 function statOptions(sel, keys, def){ sel.innerHTML = keys.map(k=>`<option value="${k}" ${k===def?"selected":""}>${STATS[k].label}</option>`).join(""); }
-const CHART_KEYS = ["RW3","RW1","RW2","O3","D3","PPG","PTS75","RPG","REB75","APG","AST75","SPG","BPG","MPG","3PM","TS","RTS","USG"];
+const CHART_KEYS = ["RW3","RW1","RW2","RW4","RW5","O1","O2","O3","O4","O5","D1","D2","D3","D4","D5","PPG","PTS75","RPG","REB75","APG","AST75","SPG","BPG","MPG","3PM","TS","RTS","USG"];
 // per-game vs per-75 stat sets for tables
 const MODE_KEYS = { pg:["PPG","RPG","APG","SPG","BPG","3PM"], p75:["PTS75","REB75","AST75","STL75","BLK75","3PM75"] };
 const MODE_HEAD = { pg:["PTS","REB","AST","STL","BLK","3PM"], p75:["PTS/75","REB/75","AST/75","STL/75","BLK/75","3PM/75"] };
@@ -823,11 +828,12 @@ const PEAK_LABEL = {"Peak 2Y CEPM":"Best 2-year Chip Equity","Peak 3Y CEPM":"Bes
 const PEAK_HEAD = "Peak 3Y CEPM";   // the headline peak used for career comparisons
 function rwTable(k){
   const by = new Map();
-  for (const w of [1,2,3]) for (const v of M.rwSeries(k, w)) { const e = by.get(v.s) || {}; e[w] = v; by.set(v.s, e); }
+  for (const w of [1,2,3,4,5]) for (const v of M.rwSeries(k, w)) { const e = by.get(v.s) || {}; e[w] = v; by.set(v.s, e); }
+  const c45 = (s, v, w) => v ? `<td class="sub">${rwSpan(s,w)}</td><td class="nw" title="offense ${pm(v.o)} · defense ${pm(v.d)}${v.rank ? " · " + ord(v.rank) + " that season" : ""}"><strong>${pm(v.r)}</strong>${pctl(v)}</td>` : `<td></td><td>–</td>`;
   if (!by.size) return `<p class="muted">No Chip Equity windows for this player.</p>`;
   const cell = v => v ? `<td class="nw">${pm(v.o)}${pctlO(v)}</td><td class="nw">${pm(v.d)}${pctlD(v)}</td><td class="nw"><strong>${pm(v.r)}</strong>${pctl(v)}</td><td class="sub">${v.rank?ord(v.rank):"–"}</td>` : `<td>–</td><td>–</td><td>–</td><td></td>`;
-  const rows = [...by.entries()].sort((a,b)=>b[0]-a[0]).map(([s,e]) => `<tr><td>${S[s]}${ipTag(s)}</td>${cell(e[1])}<td class="sub">${rwSpan(s,2)}</td>${cell(e[2])}<td class="sub">${rwSpan(s,3)}</td>${cell(e[3])}</tr>`).join("");
-  return `<div class="tscroll"><table><thead><tr><th>Season</th><th>Off</th><th>Def</th><th title="Chip Equity for that season alone (steadied 40% toward the 3-year window)">1-yr</th><th>Rank</th><th>Span</th><th>Off</th><th>Def</th><th>2-yr</th><th>Rank</th><th>Span</th><th>Off</th><th>Def</th><th>3-yr</th><th>Rank</th></tr></thead><tbody>${rows}</tbody></table></div>
+  const rows = [...by.entries()].sort((a,b)=>b[0]-a[0]).map(([s,e]) => `<tr><td>${seasonLink(k, s, S[s])}${ipTag(s)}</td>${cell(e[1])}<td class="sub">${rwSpan(s,2)}</td>${cell(e[2])}<td class="sub">${rwSpan(s,3)}</td>${cell(e[3])}${c45(s, e[4], 4)}${c45(s, e[5], 5)}</tr>`).join("");
+  return `<div class="tscroll"><table><thead><tr><th>Season</th><th>Off</th><th>Def</th><th title="Chip Equity for that season alone (steadied 40% toward the 3-year window)">1-yr</th><th>Rank</th><th>Span</th><th>Off</th><th>Def</th><th>2-yr</th><th>Rank</th><th>Span</th><th>Off</th><th>Def</th><th>3-yr</th><th>Rank</th><th>Span</th><th title="Hover a value for offense / defense">4-yr</th><th>Span</th><th title="Hover a value for offense / defense">5-yr</th></tr></thead><tbody>${rows}</tbody></table></div>
     <p class="mlink"><a href="#" data-method="windows">How it's calculated ›</a></p>`;
 }
 function peakTable(k){
@@ -839,7 +845,7 @@ function peakTable(k){
   // single seasons (all-time, every player-season)
   const sRow = (lab, x, crit) => { const cr = crit === "r" ? x.rank : crit === "o" ? x.orank : x.drank, sc = "among every player-season since 1996-97 (1,500+ possessions)";
     const c = (f, v) => f === crit ? `<strong>${pm(v)}</strong>${q(cr, x.n, sc + (f === "o" ? ", on offense" : f === "d" ? ", on defense" : ""))}<div class="sub">${ord(cr)} of ${x.n.toLocaleString()}</div>` : `<span class="sub">${pm(v)}</span>`;
-    return `<tr><td class="l">${lab}</td><td class="l">${S[x.s]}</td><td class="nw">${c("r", x.r)}</td><td class="nw">${c("o", x.o)}</td><td class="nw">${c("d", x.d)}</td></tr>`; };
+    return `<tr><td class="l">${lab}</td><td class="l">${seasonLink(k, x.s, S[x.s])}</td><td class="nw">${c("r", x.r)}</td><td class="nw">${c("o", x.o)}</td><td class="nw">${c("d", x.d)}</td></tr>`; };
   const t1 = sea ? `<h3 class="pk-h">Single seasons <small>all-time · ranked among every player-season with 1,500+ possessions</small></h3>
     <div class="tscroll"><table class="pk-agg"><thead><tr><th class="l">Best</th><th class="l">Season</th><th>Total</th><th>Off</th><th>Def</th></tr></thead><tbody>
     ${sRow("Best season", sea.tot, "r")}${sRow("Best offensive season", sea.off, "o")}${sRow("Best defensive season", sea.def, "d")}</tbody></table></div>` : "";
@@ -910,8 +916,8 @@ function lineOf(rows){
   return {...t, ts, pts75:p75(t.pts), reb75:p75(t.reb), ast75:p75(t.ast), stl75:p75(t.stl), blk75:p75(t.blk), tov75:p75(t.tov), mpg: t.sec/60/Math.max(1,t.gp),
           rtsOpp: t.tsa ? (ts - t.tsBase/t.tsa)*100 : NaN, onORtg:onO, roRtg: t.onOff ? onO - t.ortgBase/t.onOff : NaN};
 }
-function playoffSeriesBox(k){
-  const rows = (pslByPlayer.get(k) || []).slice().sort((a,b)=> M.SERIES[a[1]].s - M.SERIES[b[1]].s || M.SERIES[a[1]].round - M.SERIES[b[1]].round);
+function playoffSeriesBox(k, only = null){
+  const rows = (pslByPlayer.get(k) || []).filter(r => only == null || M.SERIES[r[1]].s === only).slice().sort((a,b)=> M.SERIES[a[1]].s - M.SERIES[b[1]].s || M.SERIES[a[1]].round - M.SERIES[b[1]].round);
   if (!rows.length) return "";
   const bySeason = new Map(); for (const r of rows){ const s = M.SERIES[r[1]].s; (bySeason.get(s) || bySeason.set(s, []).get(s)).push(r); }
   let body = "";
@@ -996,7 +1002,7 @@ function renderPoCepm(m){
   const teamCell = e => { const t = pcepmTeam.get(e.k*64 + e.s), ab = t!=null ? AB(t) : ""; return `<td class="l"><div class="who">${ab ? logoImg(ab, e.s) : ""}${ab}</div></td>`; };
   ldOut.innerHTML = `<div class="box"><h2>${head} <small>${sub}</small></h2><div class="tscroll"><table>
     <thead><tr><th>#</th><th class="l">Player</th>${career ? sth("n","Postseasons") : `<th class="l">Team</th>${m==="best"?"<th>Season</th>":""}`}${sth("p","Playoff poss.")}${sth("r","Playoff Chip Equity")}${sth("o","Off")}${sth("d","Def")}${career ? sth("b","Best run") : `<th>Rank that year${K!=="r" ? ` (${SORT_NAME[K]})` : ""}</th>`}</tr></thead><tbody>
-    ${shown.map((e,i)=>`<tr><td>${e.pos}</td><td class="l"><div class="who">${faceImg(e.k,"sm")}${pLink(e.k, esc(DATA.names[e.k]))}</div></td>${career ? `<td class="nw">${sb("n", e.n)}${pc("n", e)}</td>` : teamCell(e) + (m==="best" ? `<td>${S[e.s]}</td>` : "")}<td class="nw">${sb("p", e.p.toLocaleString())}${pc("p", e)}</td><td class="nw">${sb("r",pm(e.r))}${pc("r", e)}</td><td class="nw">${sb("o",pm(e.o))}${pc("o", e)}</td><td class="nw">${sb("d",pm(e.d))}${pc("d", e)}</td>${career ? `<td class="l sub nw">${sb("b", `${S[e.best[1]]} ${pm(e.best[2])}`)}${pc("b", e)}</td>` : `<td class="sub">${ord(e.yrk)} of ${yrN.get(e.s).toLocaleString()}</td>`}</tr>`).join("")}</tbody></table></div>
+    ${shown.map((e,i)=>`<tr><td>${e.pos}</td><td class="l"><div class="who">${faceImg(e.k,"sm")}${pLink(e.k, esc(DATA.names[e.k]), career ? null : e.s)}</div></td>${career ? `<td class="nw">${sb("n", e.n)}${pc("n", e)}</td>` : teamCell(e) + (m==="best" ? `<td>${S[e.s]}</td>` : "")}<td class="nw">${sb("p", e.p.toLocaleString())}${pc("p", e)}</td><td class="nw">${sb("r",pm(e.r))}${pc("r", e)}</td><td class="nw">${sb("o",pm(e.o))}${pc("o", e)}</td><td class="nw">${sb("d",pm(e.d))}${pc("d", e)}</td>${career ? `<td class="l sub nw">${sb("b", `${S[e.best[1]]} ${pm(e.best[2])}`)}${pc("b", e)}</td>` : `<td class="sub">${ord(e.yrk)} of ${yrN.get(e.s).toLocaleString()}</td>`}</tr>`).join("")}</tbody></table></div>
     <p class="note">Click any column with an arrow to rank by it.</p><p class="mlink"><a href="#" data-method="po">How it's calculated ›</a></p></div>`;
 }
 let TITLE_RUNS = null;
@@ -1018,7 +1024,7 @@ function renderTitles(){
         <div class="tile"><div class="v">${sgn1(r.fieldSrs)}</div><div class="k">Avg opponent SRS</div></div>
         <div class="tile"><div class="v">${sgn1(r.fieldDef)}</div><div class="k">Opp DRtg vs league</div></div></div>
       ${r.partial ? `<p class="note" style="margin:6px 0 0">Play-by-play covers ${r.gamesWithLines} of their ${r.w + r.l} playoff games${S[r.s]==="2025-26" ? " (the archive ends May 10, 2026)" : ""}, so the leading-player line and series nets use those games. Team totals and the ranking use every game.</p>` : ""}
-      ${r.lead ? `<div class="tr-lead">${faceImg(r.lead.k, "sm")}<div><strong>${pLink(r.lead.k, esc(DATA.names[r.lead.k]))}</strong> <span class="muted">· Playoff Chip Equity</span> <strong>${pm(r.lead.pc.v)}</strong> <span class="muted">(${ord(r.lead.pc.rank)} of ${r.lead.pc.n} that postseason; offensive Chip Equity ${pm(r.lead.pc.o)}, defensive Chip Equity ${pm(r.lead.pc.d)}) ·${L.pts75.toFixed(1)} pts, ${L.reb75.toFixed(1)} reb, ${L.ast75.toFixed(1)} ast per 75 · TS ${(L.ts*100).toFixed(1)}% · opp-adj rTS ${sgn1(L.rtsOpp)} · roRTG ${sgn1(L.roRtg)}</span></div></div>` : ""}
+      ${r.lead ? `<div class="tr-lead">${faceImg(r.lead.k, "sm")}<div><strong>${pLink(r.lead.k, esc(DATA.names[r.lead.k]), r.s)}</strong> <span class="muted">· Playoff Chip Equity</span> <strong>${pm(r.lead.pc.v)}</strong> <span class="muted">(${ord(r.lead.pc.rank)} of ${r.lead.pc.n} that postseason; offensive Chip Equity ${pm(r.lead.pc.o)}, defensive Chip Equity ${pm(r.lead.pc.d)}) ·${L.pts75.toFixed(1)} pts, ${L.reb75.toFixed(1)} reb, ${L.ast75.toFixed(1)} ast per 75 · TS ${(L.ts*100).toFixed(1)}% · opp-adj rTS ${sgn1(L.rtsOpp)} · roRTG ${sgn1(L.roRtg)}</span></div></div>` : ""}
       <details class="how"><summary>Who they beat</summary><div class="tscroll"><table>
         <thead><tr><th>Round</th><th class="l">Opponent</th><th class="l">Result</th><th>ORtg</th><th>DRtg</th><th>Net</th><th>SRS</th><th>Series net</th></tr></thead>
         <tbody>${oppRows}</tbody></table></div></details></div>`; };
@@ -1186,6 +1192,8 @@ async function playerLive(k){
 function renderPlayer(){
   syncPlStat(); syncCurTeams();
   const k = findPlayer(plQ.value);
+  plStat.closest(".field").hidden = false;
+  if (k >= 0 && PL_SEASON != null){ if ((rowsByPlayer[k] || []).some(i => P.s[i] === PL_SEASON)) return renderPlayerSeason(k, PL_SEASON); PL_SEASON = null; }
   if (k<0){ plOut.innerHTML = `<div class="msg">No player matches “${esc(plQ.value)}”. Try a last name, like Curry or Jokic.</div>`; return; }
   const rows = playerRows(k);
   if (!rows.length){ plOut.innerHTML = `<div class="msg">${esc(DATA.names[k])} has no ${typeName().toLowerCase()} games in this data.</div>`; return; }
@@ -1203,7 +1211,7 @@ function renderPlayer(){
     + tile(fmt(val(a,"TS"),"pct"),"True shooting") + tile(fmt(val(a,"RTS"),"rel"),"rTS vs. league")
     + tile(a.gp.toLocaleString(),"Games") + (res.titles ? tile(res.titles,"Titles") : "");
   const body = rows.map(i=>{ const r=agg([i]); const tab = AB(P.tm[i]), sr = seasonResult(P.tm[i], P.s[i]);
-    return `<tr><td>${S[P.s[i]]}${ipTag(P.s[i])}</td><td class="l"><div class="who">${playerTeams(k, P.s[i], tab).map(([a,n]) => `${logoImg(a, P.s[i])}<span title="${n ? n + " games" : ""}">${a||""}</span>`).join(" ")}</div></td><td class="sub">${recTxt(tab,P.s[i])}</td><td class="l"><span class="res ${sr.cls}">${sr.txt}</span></td><td>${r.gp}</td>
+    return `<tr><td>${seasonLink(k, P.s[i], S[P.s[i]])}${ipTag(P.s[i])}</td><td class="l"><div class="who">${playerTeams(k, P.s[i], tab).map(([a,n]) => `${logoImg(a, P.s[i])}<span title="${n ? n + " games" : ""}">${a||""}</span>`).join(" ")}</div></td><td class="sub">${recTxt(tab,P.s[i])}</td><td class="l"><span class="res ${sr.cls}">${sr.txt}</span></td><td>${r.gp}</td>
     <td>${fmt(val(r,"MPG"),1)}</td>${boxCells(boxSum([i]), r)}<td>${fmt(val(r,"USG"),1)}</td>${TYPE === 1 ? (v => v ? `<td class="nw"><strong>${pm(v.r)}</strong>${pctl(v, `with 300+ possessions in the ${S[P.s[i]]} playoffs`)}</td><td class="nw">${pm(v.o)}${pctlO(v, `with 300+ possessions in the ${S[P.s[i]]} playoffs`)}</td><td class="nw">${pm(v.d)}${pctlD(v, `with 300+ possessions in the ${S[P.s[i]]} playoffs`)}</td>` : `<td>–</td><td>–</td><td>–</td>`)(POC.get(k*64 + P.s[i])) : `<td class="nw">${pm(rowVal(i,"RW1"))}${pctl(M.rwOf(P.p[i], P.s[i], 1))}</td><td class="nw"><strong>${pm(rowVal(i,"RW2"))}</strong>${pctl(M.rwOf(P.p[i], P.s[i], 2))}</td><td class="nw">${pm(rowVal(i,"RW3"))}${pctl(M.rwOf(P.p[i], P.s[i], 3))}</td><td class="nw">${pm(rowVal(i,"O3"))}${pctlO(M.rwOf(P.p[i], P.s[i], 3))}</td><td class="nw">${pm(rowVal(i,"D3"))}${pctlD(M.rwOf(P.p[i], P.s[i], 3))}</td>`}</tr>`; }).join("")
     + (rows.length > 1 ? `<tr class="car"><td><b>Career</b></td><td></td><td></td><td></td><td>${a.gp}</td><td>${fmt(val(a,"MPG"),1)}</td>${boxCells(boxSum(rows), a)}<td>${fmt(val(a,"USG"),1)}</td>${TYPE === 1 ? "<td></td><td></td><td></td>" : "<td></td><td></td><td></td><td></td><td></td>"}</tr>` : "");
   const stars = TYPE === 1 ? (PC ? `Career playoff Chip Equity ${pm(PC.r)} (offense ${pm(PC.o)}, defense ${pm(PC.d)}) over ${PC.seasons} postseason${PC.seasons > 1 ? "s" : ""} and ${Math.round(PC.p).toLocaleString()} playoff possessions${PC.rank ? `, ${ord(PC.rank)} of ${PC.n.toLocaleString()} players with 2,000+` : ""}. Best postseason: ${S[PC.best.s]}, ${pm(PC.best.r)}.` : "No playoff Chip Equity for this player (a postseason needs 300+ playoff possessions).")
@@ -1218,10 +1226,10 @@ function renderPlayer(){
       <p class="note">${stars}${po}</p></div>
     <div class="box"><h2>Peak &amp; decade impact <small>career-level · all-time ranks</small></h2>${peakTable(k)}
       <p class="mlink"><a href="#" data-method="what">What Chip Equity is and how it's calculated ›</a></p></div>
-    <div class="box"><h2>${esc(STATS[plStat.value].label)}</h2><div id="pl-chart"></div></div>
+    <div class="box"><h2>${esc(STATS[plStat.value].label)}</h2>${(st0 => st0 && st0.rw ? `<div class="pl-cectl"><div class="seg sm" role="group" aria-label="Side of the ball">${[["r","Total"],["o","Offense"],["d","Defense"]].map(([q,l])=>`<button data-ceside="${q}" aria-pressed="${(st0.part||"r")===q}">${l}</button>`).join("")}</div><div class="seg sm" role="group" aria-label="Window">${[1,2,3,4,5].map(w=>`<button data-cew="${w}" aria-pressed="${st0.rw===w}">${w}-yr</button>`).join("")}</div></div>` : "")(STATS[plStat.value])}<div id="pl-chart"></div></div>
     ${TYPE === 1 ? `<div class="box" style="margin-top:16px"><h2>Playoff Chip Equity by postseason <small>playoff possessions only · opponent-adjusted lead margin · points per 100 possessions</small></h2>${poTable(k)}</div>`
-      : `<div class="box" style="margin-top:16px"><h2>Chip Equity by window <small>single-season (1-yr), 2-year and 3-year Chip Equity ending each season · regular season + playoffs · points per 100 possessions</small></h2>${rwTable(k)}</div>`}
-    <div class="box"><h2>Season by season <small>${typeName().toLowerCase()} · ${plMode==="p75"?"per 75 possessions":"per game"} · shooting splits are made / attempted · rTS = true shooting minus that season's league average</small></h2><div class="tscroll"><table class="box-t">
+      : `<div class="box" style="margin-top:16px"><h2>Chip Equity by window <small>single-season (1-yr) and 2- to 5-year Chip Equity ending each season · click a season for its own page · regular season + playoffs · points per 100 possessions</small></h2>${rwTable(k)}</div>`}
+    <div class="box"><h2>Season by season <small>click a season for its own page · ${typeName().toLowerCase()} · ${plMode==="p75"?"per 75 possessions":"per game"} · shooting splits are made / attempted · rTS = true shooting minus that season's league average</small></h2><div class="tscroll"><table class="box-t">
       <thead><tr><th>Season</th><th class="l">Team</th><th>Team W-L</th><th class="l">Playoffs</th><th>GP</th><th>MPG</th>${BOX_HEAD}<th>USG</th>${TYPE === 1 ? `<th title="Chip Equity on that postseason's playoff possessions only">Playoff Chip Equity</th><th>Off</th><th>Def</th>` : `<th title="Chip Equity fit on that season alone">1-yr Chip Equity</th><th>2-yr Chip Equity</th><th>3-yr Chip Equity</th><th title="3-year offensive Chip Equity">3-yr offensive Chip Equity</th><th title="3-year defensive Chip Equity">3-yr defensive Chip Equity</th>`}</tr></thead>
       <tbody>${body}</tbody></table></div></div>
     ${TYPE === 0 ? (() => { const ss = rows.map(i=>P.s[i]).filter((s, j, a) => a.indexOf(s) === j && PTMAP.has(k*64+s)); if (!ss.length) return "";
@@ -1236,14 +1244,78 @@ function renderPlayer(){
   const bands = []; for (const i of rows){ const s0 = P.s[i], tl = playerTeams(k, s0, AB(P.tm[i])), tot = tl.reduce((a,t)=>a+(t[1]||0),0) || 1;
     let x = s0 - 0.5; for (const [ab, n] of tl){ const x1 = x + (tl.length > 1 ? (n||0)/tot : 1), last = bands[bands.length-1];
       if (last && last.ab === ab && Math.abs(last.x1 - x) < 1e-6) { last.x1 = x1; last.s1 = s0; } else bands.push({ab, x0: x, x1, s0, s1: s0}); x = x1; } }
+  { const st0 = STATS[plStat.value], ceKey = (q, w) => (q === "r" ? "RW" : q === "o" ? "O" : "D") + w;
+    const setCe = (q, w) => { const key = ceKey(q, w); if (![...plStat.options].some(o => o.value === key)) plStat.insertAdjacentHTML("beforeend", `<option value="${key}">${STATS[key].label}</option>`); plStat.value = key; const y = window.scrollY; renderPlayer(); window.scrollTo({top: y}); };
+    plOut.querySelectorAll("[data-ceside]").forEach(b => b.onclick = () => setCe(b.dataset.ceside, st0.rw));
+    plOut.querySelectorAll("[data-cew]").forEach(b => b.onclick = () => setCe(st0.part || "r", +b.dataset.cew)); }
   const ptSel = document.getElementById("pt-season"); if (ptSel) ptSel.onchange = () => { document.getElementById("pt-out").innerHTML = ptBox(k, +ptSel.value); };
   const dSel = document.getElementById("dpt-season"); if (dSel) dSel.onchange = () => { document.getElementById("dpt-out").innerHTML = defBox(k, +dSel.value); };
   lineChart(document.getElementById("pl-chart"), [{name:DATA.names[k], pts: rows.map(i=>({x:P.s[i], y:rowVal(i,plStat.value), sub:playerTeams(k, P.s[i], AB(P.tm[i])).map(t=>t[0]).join("/")}))}], STATS[plStat.value], {bands});
   if (TYPE === 0 && typeof CUR !== "undefined" && CUR && Date.now() >= +CUR.seasonStart){
     const prof = plOut.querySelector(".box"); if (prof){ prof.insertAdjacentHTML("afterend", `<div id="pl-live"></div>`); playerLive(k); } }
 }
-plQ.addEventListener("change", renderPlayer);
-plQ.addEventListener("keydown", e=>{ if(e.key==="Enter") renderPlayer(); });
+
+/* ---------------- ONE PLAYER, ONE SEASON ---------------- */
+// any player link that carries a season (a season list, a roster, a box score) opens this page instead of the career
+let PL_SEASON = null;
+function openPlayer(k, s = null){ plQ.value = optLabel(k); PL_SEASON = s; if (current !== "players") show("players"); else renderPlayer(); window.scrollTo({top: 0}); }
+const seasonLink = (k, s, html) => `<a href="#" class="plink" data-player="${k}" data-season="${s}" title="${esc(DATA.names[k])}, ${S[s]} season">${html}</a>`;
+function renderPlayerSeason(k, s){
+  plStat.closest(".field").hidden = true;
+  const all = rowsByPlayer[k] || [], rsR = all.filter(i => P.s[i] === s && P.t[i] === 0), poR = all.filter(i => P.s[i] === s && P.t[i] === 1);
+  const seasons = [...new Set(all.map(i => P.s[i]))].sort((a, b) => a - b), j = seasons.indexOf(s);
+  const main = rsR.length ? rsR[0] : poR[0], tl = playerTeams(k, s, AB(P.tm[main]));
+  const a = rsR.length ? agg(rsR) : null, c1 = M.rwOf(k, s, 1), pc = POC.get(k*64 + s);
+  const tile = (v, lab, cls = "") => `<div class="tile ${cls}"><div class="v">${v}</div><div class="k">${lab}</div></div>`;
+  const yr = `among players with enough possessions in ${S[s]}`, poSc = `with 300+ possessions in the ${S[s]} playoffs`;
+  const tiles = (c1 ? tile(pm(c1.r) + pctl(c1, yr), `${S[s]} Chip Equity${c1.rank ? ` · ${ord(c1.rank)} of ${c1.n || "–"}` : ""}`, "hero") + tile(`${pm(c1.o)}${pctlO(c1, yr)} / ${pm(c1.d)}${pctlD(c1, yr)}`, "Offense / defense")
+      : tile("–", s === LATEST && INPROG ? `${S[s]} Chip Equity: needs ${ipFloor().toLocaleString()} possessions so far` : `${S[s]} Chip Equity: not enough possessions`, "hero"))
+    + (pc ? tile(pm(pc.r) + pctl(pc, poSc), `Playoff Chip Equity · ${ord(pc.rank)} of ${pc.n}`) : "")
+    + (a ? tile(`${fmt(val(a,"PPG"),1)} / ${fmt(val(a,"RPG"),1)} / ${fmt(val(a,"APG"),1)}`, "Points / rebounds / assists") + tile(fmt(val(a,"TS"),"pct"), `True shooting · ${fmt(val(a,"RTS"),"rel")} vs. league`)
+      + tile(`${a.gp} · ${fmt(val(a,"MPG"),1)}`, "Games · minutes per game") : "");
+  const teamLine = tl.map(([t, n]) => { const ai = DATA.abbrs.indexOf(t), sr = ai >= 0 ? seasonResult(ai, s) : {txt: "", cls: ""};
+    return `<span class="stint">${logoImg(t, s)}${esc(teamName(t, s))} <span class="muted">${recTxt(t, s)}${tl.length > 1 && n ? ` · ${n} games` : ""}</span>${sr.txt ? ` <span class="res ${sr.cls}">${sr.txt}</span>` : ""}</span>`; }).join("");
+  // where it sits in his career
+  const mine = M.rwSeries(k, 1).filter(v => v.s !== LATEST || !INPROG).sort((x, y) => y.r - x.r), myRank = c1 ? mine.findIndex(v => v.s === s) + 1 : 0;
+  const ctx = c1 && mine.length > 1 && myRank > 0 ? `${myRank === 1 ? "His best season" : `His ${ord(myRank)}-best season`} by single-season Chip Equity, of ${mine.length}${mine.length && myRank !== 1 ? ` (best: ${seasonLink(k, mine[0].s, S[mine[0].s])}, ${pm(mine[0].r)})` : ""}.` : "";
+  const nav = `<div class="ps-nav"><a href="#" class="plink" data-player="${k}">‹ ${esc(DATA.names[k])}'s career</a><span class="ps-step">${j > 0 ? seasonLink(k, seasons[j-1], "‹ " + S[seasons[j-1]]) : ""}
+    <select id="ps-season" aria-label="Season">${seasons.slice().reverse().map(x => `<option value="${x}" ${x === s ? "selected" : ""}>${S[x]}</option>`).join("")}</select>${j < seasons.length - 1 ? seasonLink(k, seasons[j+1], S[seasons[j+1]] + " ›") : ""}</span></div>`;
+  // Chip Equity: every window ending this season, plus the postseason
+  const wins = [1,2,3,4,5].map(w => ({w, v: M.rwOf(k, s, w)})).filter(x => x.v);
+  const wRow = ({w, v}) => `<tr><td class="l">${w === 1 ? "Single season" : w + "-year"}</td><td class="l sub">${w === 1 ? S[s] : rwSpan(s, w)}</td><td class="nw"><strong>${pm(v.r)}</strong>${pctl(v)}</td><td class="nw">${pm(v.o)}${pctlO(v)}</td><td class="nw">${pm(v.d)}${pctlD(v)}</td><td class="sub">${v.rank ? ord(v.rank) + " of " + v.n : "–"}</td></tr>`;
+  const poRow = pc ? `<tr><td class="l">Playoffs</td><td class="l sub">${S[s]} postseason</td><td class="nw"><strong>${pm(pc.r)}</strong>${pctl(pc, poSc)}</td><td>${pm(pc.o)}</td><td>${pm(pc.d)}</td><td class="sub">${ord(pc.rank)} of ${pc.n}</td></tr>` : "";
+  const ceBox = wins.length || pc ? `<div class="box"><h2>Chip Equity <small>windows ending ${S[s]} · regular season + playoffs (the playoffs row: playoff possessions only) · points per 100 possessions</small></h2><div class="tscroll"><table>
+    <thead><tr><th class="l">Window</th><th class="l">Seasons</th><th>Total</th><th>Off</th><th>Def</th><th>Rank</th></tr></thead><tbody>${wins.map(wRow).join("")}${poRow}</tbody></table></div><p class="mlink"><a href="#" data-method="windows">How it's calculated ›</a></p></div>` : "";
+  const boxRow = (lab, rows) => { if (!rows.length) return ""; const r = agg(rows); return `<tr><td class="l">${lab}</td><td>${r.gp}</td><td>${fmt(val(r,"MPG"),1)}</td>${boxCells(boxSum(rows), r)}<td>${fmt(val(r,"USG"),1)}</td></tr>`; };
+  const boxBox = `<div class="box"><h2>Stats <small>${S[s]} · ${plMode === "p75" ? "per 75 possessions" : "per game"} · rTS = true shooting minus the league average</small></h2><div class="tscroll"><table class="box-t">
+    <thead><tr><th class="l"></th><th>GP</th><th>MPG</th>${BOX_HEAD}<th>USG</th></tr></thead><tbody>${boxRow("Regular season", rsR)}${boxRow("Playoffs", poR)}</tbody></table></div></div>`;
+  const ptB = PTMAP.has(k*64 + s) ? `<div class="box"><h2>Play types <small>${S[s]} regular season · from play-by-play and shot charts</small></h2>${ptBox(k, s)}<p class="mlink"><a href="#" data-method="pt">How play types are measured ›</a></p></div>` : "";
+  const dptB = DPTMAP.has((k*64 + s)*2 + TYPE) ? `<div class="box"><h2>Defensive play types <small>${S[s]} ${typeName().toLowerCase()}</small></h2>${defBox(k, s)}<p class="mlink"><a href="#" data-method="dpt">How defensive play types are measured ›</a></p></div>` : "";
+  const live = s === LATEST && TYPE === 0 && typeof CUR !== "undefined" && CUR && Date.now() >= +CUR.seasonStart;
+  plOut.innerHTML = nav + `<div class="box"><div class="profile">${faceImg(k)}<div style="min-width:0">
+      <h2 class="pname">${esc(DATA.names[k])} <span class="ps-yr">${S[s]}</span>${ipTag(s)}</h2>
+      <div class="stints">${teamLine}</div>
+      <div class="tiles">${tiles}</div></div></div>${ctx ? `<p class="note">${ctx}</p>` : ""}</div>${live ? `<div id="pl-live"></div>` : ""}
+    ${ceBox}${boxBox}
+    <div class="box"><h2>On / off <small>${S[s]} · team net rating per 100 possessions with him on vs. off the floor · garbage time out</small></h2><div id="ps-onoff"><div class="msg">Loading on/off…</div></div></div>
+    ${ptB}${dptB}${playoffSeriesBox(k, s)}`;
+  const sel = document.getElementById("ps-season"); sel.onchange = () => openPlayer(k, +sel.value);
+  const fillOnOff = () => {
+    const el = document.getElementById("ps-onoff"); if (!el || PL_SEASON !== s) return;
+    if (!WOWY){ if (WOWY_ERR) el.innerHTML = `<div class="msg">Couldn't load the on/off data (${esc(WOWY_ERR)}).</div>`; else loadWowy().then(fillOnOff); return; }
+    const rows = [];
+    for (const [t] of tl){ const ai = DATA.abbrs.indexOf(t);
+      for (const ty of [0, 1]){ const e = WOWY[`${s}|${ai}|${ty}`], x = e && e[1].find(y => y[0] === k); if (!x) continue;
+        const tot = e[0], on = netOf(x.slice(1)), off = netOf([tot[0] - x[1], tot[1] - x[2], tot[2] - x[3]]);
+        rows.push(`<tr><td class="l"><div class="who">${logoImg(t, s)}${t}</div></td><td class="l">${ty ? "Playoffs" : "Regular season"}</td><td>${Math.round(x[1]).toLocaleString()}</td><td>${sgnf(on)}</td><td>${sgnf(off)}</td><td><strong>${sgnf(on - off)}</strong></td><td class="l"><a href="#" data-wvopen="${t}|${ty}">Open WOWY ›</a></td></tr>`); } }
+    el.innerHTML = rows.length ? `<div class="tscroll"><table><thead><tr><th class="l">Team</th><th class="l">Games</th><th>Poss</th><th>On</th><th>Off</th><th>On − off</th><th></th></tr></thead><tbody>${rows.join("")}</tbody></table></div>
+      <p class="note">Open WOWY to see that team with and without him alongside any of his teammates, or his best 2- to 5-man units.</p>` : `<div class="msg">No on/off data for ${S[s]}.</div>`;
+    el.querySelectorAll("[data-wvopen]").forEach(b => b.onclick = ev => { ev.preventDefault(); const [t, ty] = b.dataset.wvopen.split("|"); openWowy(t, s, [k]); WV.t = +ty; renderWowy(); }); };
+  fillOnOff();
+  if (live) playerLive(k);
+}
+plQ.addEventListener("change", () => { PL_SEASON = null; renderPlayer(); });
+plQ.addEventListener("keydown", e=>{ if(e.key==="Enter"){ PL_SEASON = null; renderPlayer(); } });
 plStat.addEventListener("change", renderPlayer);
 
 /* ---------------- COMPARE ---------------- */
@@ -1288,7 +1360,7 @@ function renderCompare(){
     else { const v = M.rwOf(it.k, it.s, 3); Object.assign(it, {v, r:v?v.r:NaN, o:v?v.o:NaN, d:v?v.d:NaN}); } });
   // the Impact box follows the chart stat: headline, chips and bars show only that stat
   const sk = cmStat.value, st = STATS[sk], isCepm = !!st.rw, part = st.part || "r";
-  const PEAK_FOR = {2:"Peak 2Y CEPM", 3:"Peak 3Y CEPM"};
+  const PEAK_FOR = {2:"Peak 2Y CEPM", 3:"Peak 3Y CEPM", 4:"Peak 4Y CEPM", 5:"Peak 5Y CEPM"};
   const statOf = it => {
     if (isCepm){
       if (career && st.rw === 1){ let b = null; for (const v of M.rwSeries(it.k, 1)) if (!b || v[part] > b[part]) b = v;
@@ -1329,7 +1401,7 @@ function renderCompare(){
   const keys = MODE_KEYS[cmMode], labels = ["Points","Rebounds","Assists","Steals","Blocks","3-pointers made"];
   const heads = ok.map(it=>{ const last=it.rows[it.rows.length-1], ab=AB(P.tm[last]);
     const yrs = career ? `${S[P.s[it.rows[0]]]} to ${S[P.s[last]]}` : S[it.s];
-    return `<td>${faceImg(it.k)}<div class="nm">${pLink(it.k, esc(DATA.names[it.k]))}</div><div class="tl">${career ? stintsNow(it.k).map(st => `<span title="${esc(st.now ? curTeamName(st.ab) : teamName(st.ab, st.s1))} ${stintYrs(st)}">${logoImg(st.ab, Math.min(st.s1, LATEST))}</span>`).join("") : playerTeams(it.k, it.s, ab).map(([a]) => logoImg(a, it.s) + esc(teamName(a, it.s))).join(" / ")}</div><div class="yr">${yrs}</div></td>`; }).join("");
+    return `<td>${faceImg(it.k)}<div class="nm">${pLink(it.k, esc(DATA.names[it.k]), career ? null : it.s)}</div><div class="tl">${career ? stintsNow(it.k).map(st => `<span title="${esc(st.now ? curTeamName(st.ab) : teamName(st.ab, st.s1))} ${stintYrs(st)}">${logoImg(st.ab, Math.min(st.s1, LATEST))}</span>`).join("") : playerTeams(it.k, it.s, ab).map(([a]) => logoImg(a, it.s) + esc(teamName(a, it.s))).join(" / ")}</div><div class="yr">${yrs}</div></td>`; }).join("");
   const pkv = (n,f="r") => it => { const v = M.peakOf(it.k,n); return v ? v[f] : NaN; };
   const decRow = n => [PEAK_LABEL[n], it => { const v = M.peakOf(it.k,n); return v ? `${pm(v.r)} (${ord(v.rank)})` : "–"; }, null, true];
   const rowDefs = career
@@ -1415,7 +1487,7 @@ function renderMatchup(){
   const tape = r.tape.map(t=>`<tr><td class="${t.better==="A"?"best":""}" style="text-align:right">${t.a}${t.ra?` <span class="muted">${ord(t.ra)}</span>`:""}</td>
       <td style="text-align:center;color:var(--ink-2);white-space:normal">${t.label}</td><td class="${t.better==="B"?"best":""}" style="text-align:left">${t.b}${t.rb?` <span class="muted">${ord(t.rb)}</span>`:""}</td></tr>`).join("");
   const top3Rows = ro => ro.top3Info.length ? ro.top3Info.map(p=>{ const i=p.i, k=P.p[i], a=agg([i]);
-    return `<tr><td class="l"><div class="who">${faceImg(k,"sm")}<span class="n">${pLink(k, esc(DATA.names[k]))}</span></div></td>
+    return `<tr><td class="l"><div class="who">${faceImg(k,"sm")}<span class="n">${pLink(k, esc(DATA.names[k]), P.s[i])}</span></div></td>
       <td>${fmt(val(a,"MPG"),1)}</td><td>${fmt(val(a,"PPG"),1)}</td><td>${fmt(val(a,"RPG"),1)}</td><td>${fmt(val(a,"APG"),1)}</td><td>${fmt(val(a,"TS"),"pct")}</td>${(c => `<td class="nw"><strong>${pm(c?c.r:NaN)}</strong>${pctl(c)}</td><td class="nw">${pm(c?c.o:NaN)}${pctlO(c)}</td><td class="nw">${pm(c?c.d:NaN)}${pctlD(c)}</td>`)(M.rwOf(k, P.s[i], 3))}<td class="sub">${pm(p.r3)}</td></tr>`; }).join("")
     : `<tr><td colspan="10" class="muted">No data for this team.</td></tr>`;
   const keyBox = x => { const ro = x==="A"?r.rA:r.rB;
@@ -1563,7 +1635,7 @@ function renderLeaders(){
   const valCells = r => rwW ? `<td class="nw">${sb("r",pm(r.rv.r))}${bpl("r", r)}</td><td class="nw">${sb("o",pm(r.rv.o))}${bpl("o", r)}</td><td class="nw">${sb("d",pm(r.rv.d))}${bpl("d", r)}</td>` : `<td><strong>${fmt(r.v,f)}</strong></td>`;
   ldOut.innerHTML = `<div class="box"><h2>${esc(title)}${rwW && LD_SORT!=="r"?` · ranked by ${SORT_NAME[LD_SORT]}`:""} <small>${isC ? "regular season + playoffs" : typeName()}</small></h2><div class="tscroll"><table>
     <thead><tr><th>#</th><th class="l">Player</th><th class="l">Team</th><th class="l">${m==="season"||m==="best"?(rwW?"Window":"Season"):"Years"}</th><th>GP</th>${rwW ? sth("r",esc(head))+sth("o","Off")+sth("d","Def") : `<th>${esc(head)}</th>`}</tr></thead>
-    <tbody>${list.map((r,i)=>`<tr><td>${r.pos}</td><td class="l"><div class="who">${faceImg(r.k,"sm")}<span class="n">${pLink(r.k, esc(DATA.names[r.k]))}</span></div></td>
+    <tbody>${list.map((r,i)=>`<tr><td>${r.pos}</td><td class="l"><div class="who">${faceImg(r.k,"sm")}<span class="n">${pLink(r.k, esc(DATA.names[r.k]), m==="season" || m==="best" ? r.s : null)}</span></div></td>
       <td class="l"><div class="who">${logoImg(r.tm, r.s)}${r.tm||""}</div></td><td class="l">${m==="season"||m==="best"?(rwW?rwSpan(r.s,rwW):S[r.s]):r.span}</td><td>${r.gp.toLocaleString()}</td>${valCells(r)}</tr>`).join("")}</tbody>
     </table></div><p class="note">${rwW ? "Click a column to rank by it." : "Click a column to sort."}</p>${rwW ? `<p class="mlink"><a href="#" data-method="windows">How it's calculated ›</a></p>` : ""}</div>`;
 }
@@ -1627,7 +1699,7 @@ function renderRoster(ab, s){
   const rows = pl.map(x => { const k = x[0], i = (rowsByPlayer[k] || []).find(j => P.s[j] === s && P.t[j] === TYPE), a = i != null ? agg([i]) : null;
     const tl = playerTeams(k, s, i != null ? AB(P.tm[i]) : ab), traded = tl.length > 1, gpHere = traded ? (tl.find(t => t[0] === ab) || [])[1] : null;
     const c = M.rwOf(k, s, 1), onN = netOf(x.slice(1)), offN = netOf(off(x));
-    return `<tr><td class="l"><div class="who">${faceImg(k, "sm")}<span class="n">${pLink(k, esc(DATA.names[k]))}</span></div></td>
+    return `<tr><td class="l"><div class="who">${faceImg(k, "sm")}<span class="n">${pLink(k, esc(DATA.names[k]), s)}</span></div></td>
       <td>${a ? (traded && gpHere ? gpHere : a.gp) : "–"}</td><td>${a ? fmt(val(a, "MPG"), 1) : "–"}${traded ? `<sup title="Season totals across all his ${S[s]} teams">†</sup>` : ""}</td><td>${a ? fmt(val(a, "PPG"), 1) : "–"}</td><td>${a ? fmt(val(a, "RPG"), 1) : "–"}</td><td>${a ? fmt(val(a, "APG"), 1) : "–"}</td><td>${a ? fmt(val(a, "TS"), "pct") : "–"}</td>
       <td><strong>${pm(c ? c.r : NaN)}</strong></td><td>${Math.round(x[1]).toLocaleString()}</td><td>${sgnf(onN)}</td><td>${sgnf(offN)}</td><td><strong>${sgnf(onN - offN)}</strong></td></tr>`; }).join("");
   tmOut.innerHTML = head + `
@@ -1639,41 +1711,55 @@ function renderRoster(ab, s){
   const wl = document.getElementById("tm-wowy"); if (wl) wl.onclick = ev => { ev.preventDefault(); openWowy(ab, s, []); };
 }
 /* ---------------- WOWY tab (databallr-style): pick players -> every on/off combination, or 2- to 5-man units ---------------- */
-const wvOut = document.getElementById("wv-out"), wvSeason = document.getElementById("wv-season"), wvTeam = document.getElementById("wv-team");
+const wvOut = document.getElementById("wv-out"), wvSeason = document.getElementById("wv-season"), wvSeason2 = document.getElementById("wv-season2"), wvTeam = document.getElementById("wv-team");
 let WV = {ab: null, sel: [], mode: "wowy", sort: "p", min: null, more: 0, t: 0, raw: false};   // t: 0 regular season, 1 playoffs, 2 cumulative
-wvSeason.innerHTML = seasonOpts; wvSeason.value = String(LS);
+wvSeason.innerHTML = seasonOpts; wvSeason.value = String(LS); wvSeason2.innerHTML = seasonOpts; wvSeason2.value = String(LS);
 const wvTeams = s => [...new Set(M.tm.filter(r => r.s === s && r.t === 0).map(r => AB(r.a)))].sort((a, b) => teamName(a, s).localeCompare(teamName(b, s)));
-function wvFillTeams(){ const s = +wvSeason.value, ts = wvTeams(s); if (!ts.includes(WV.ab)) WV.ab = ts.includes("OKC") ? "OKC" : ts[0];
+function wvFillTeams(){ const s = Math.max(+wvSeason.value, +wvSeason2.value), ts = wvTeams(s);
+  if (!ts.includes(WV.ab)){ const fid = DATA.teamIds[DATA.abbrs.indexOf(WV.ab)], same = ts.find(a => DATA.teamIds[DATA.abbrs.indexOf(a)] === fid);   // relocated: same franchise
+    WV.ab = same || (ts.includes("OKC") ? "OKC" : ts[0]); }
   wvTeam.innerHTML = ts.map(a => `<option value="${a}" ${a === WV.ab ? "selected" : ""}>${esc(teamName(a, s))}</option>`).join(""); }
-function openWowy(ab, s, sel){ wvSeason.value = String(s); WV = {ab, sel: sel || [], mode: "wowy", sort: "p", min: null, more: 0, t: TYPE}; wvFillTeams(); show("wowy"); window.scrollTo({top: 0}); }
-wvSeason.addEventListener("change", () => { WV.sel = []; WV.more = 0; WV.min = null; wvFillTeams(); renderWowy(); });
+function openWowy(ab, s, sel){ wvSeason.value = String(s); wvSeason2.value = String(s); WV = {ab, sel: sel || [], mode: "wowy", sort: "p", min: null, more: 0, t: TYPE}; wvFillTeams(); show("wowy"); window.scrollTo({top: 0}); }
+// a range: From .. Through, same franchise (relocations included); a single season when they match
+let wvFrom = +wvSeason.value;
+wvSeason.addEventListener("change", () => { const f = +wvSeason.value; if (+wvSeason2.value === wvFrom || +wvSeason2.value < f) wvSeason2.value = String(f); wvFrom = f; WV.more = 0; WV.min = null; wvFillTeams(); renderWowy(); });
+wvSeason2.addEventListener("change", () => { if (+wvSeason2.value < +wvSeason.value){ wvSeason.value = wvSeason2.value; wvFrom = +wvSeason.value; } WV.more = 0; WV.min = null; wvFillTeams(); renderWowy(); });
 wvTeam.addEventListener("change", () => { WV.ab = wvTeam.value; WV.sel = []; WV.more = 0; renderWowy(); });
 function renderWowy(){
   if (!WV.ab || !wvTeam.options.length) wvFillTeams();
-  const s = +wvSeason.value, ab = WV.ab, ai = DATA.abbrs.indexOf(ab), tn = esc(teamName(ab, s));
+  const s0 = Math.min(+wvSeason.value, +wvSeason2.value), s = Math.max(+wvSeason.value, +wvSeason2.value), ab = WV.ab, ai = DATA.abbrs.indexOf(ab), tn = esc(teamName(ab, s)), fid = DATA.teamIds[ai];
+  const SR = []; for (let x = s0; x <= s; x++) SR.push(x);
+  const span = s0 === s ? S[s] : `${S[s0]} to ${S[s]}`, multi = s0 !== s;
+  const aisOf = x => DATA.abbrs.map((_, i) => i).filter(i => DATA.teamIds[i] === fid && (WOWY[`${x}|${i}|0`] || WOWY[`${x}|${i}|1`]));
   if (!WOWY){ wvOut.innerHTML = `<div class="msg">${WOWY_ERR ? `Couldn't load the on/off data (${esc(WOWY_ERR)}). wowy.json must be deployed next to index.html (open the site from its Netlify link).` : "Loading on/off data…"}</div>`;
     if (!WOWY_ERR) loadWowy().then(() => { if (current === "wowy") renderWowy(); }); return; }
   const T_ = WV.t, tLab = ["regular season", "playoffs", "regular season + playoffs"][T_];
   const tSeg = `<div class="seg" role="group" aria-label="Games" style="margin:0 0 12px">${["Regular season", "Playoffs", "Cumulative"].map((l, i) => `<button data-wvt="${i}" aria-pressed="${T_ === i}">${l}</button>`).join("")}</div>`;
   const bindT = () => wvOut.querySelectorAll("[data-wvt]").forEach(b => b.onclick = () => { WV.t = +b.dataset.wvt; WV.min = null; WV.more = 0; renderWowy(); });
-  const e0 = WOWY[`${s}|${ai}|0`], e1 = WOWY[`${s}|${ai}|1`];
+  const mergeE = ty => { const tt = [0, 0, 0], mp = new Map(); let any = false;
+    for (const x of SR) for (const i of aisOf(x)){ const q = WOWY[`${x}|${i}|${ty}`]; if (!q) continue; any = true; for (let j = 0; j < 3; j++) tt[j] += q[0][j];
+      for (const y of q[1]){ const z = mp.get(y[0]) || mp.set(y[0], [y[0], 0, 0, 0, 0]).get(y[0]); for (let j = 1; j < 5; j++) z[j] += y[j] || 0; } }
+    return any ? [tt, [...mp.values()].sort((a, b) => b[1] - a[1])] : null; };
+  const e0 = mergeE(0), e1 = mergeE(1);
   let e = T_ === 0 ? e0 : T_ === 1 ? e1 : null;
   if (T_ === 2 && (e0 || e1)){                     // cumulative: add the two together
     const tt = [0, 0, 0], pm = new Map();
     for (const q of [e0, e1]) if (q){ for (let j = 0; j < 3; j++) tt[j] += q[0][j]; for (const x of q[1]){ const y = pm.get(x[0]) || pm.set(x[0], [x[0], 0, 0, 0, 0]).get(x[0]); for (let j = 1; j < 5; j++) y[j] += x[j] || 0; } }
     e = [tt, [...pm.values()].sort((a, b) => b[1] - a[1])];
   }
-  if (!e){ wvOut.innerHTML = `<div class="box">${tSeg}<div class="msg">No ${tLab} play-by-play for ${tn} in ${S[s]}${T_ === 1 ? " (they didn't make the playoffs, or the playoffs haven't started)" : ""}.</div></div>`; bindT(); return; }
-  if (!LU.has(s) && !LU_ERR.has(s)){ wvOut.innerHTML = `<div class="msg">Loading ${S[s]} lineups…</div>`; loadLineups(s).then(() => { if (current === "wowy") renderWowy(); }); return; }
-  const LUs = LU.get(s) || {}, L = T_ === 2 ? [...(LUs[`${ai}|0`] || []), ...(LUs[`${ai}|1`] || [])] : LUs[`${ai}|${T_}`];
-  if (!L || !L.length){ wvOut.innerHTML = `<div class="msg">Couldn't load lineups/${S[s]}.json${LU_ERR.has(s) ? ` (${esc(LU_ERR.get(s))})` : ""}. It must be deployed next to index.html.</div>`; return; }
+  if (!e){ wvOut.innerHTML = `<div class="box">${tSeg}<div class="msg">No ${tLab} play-by-play for ${tn} in ${span}${T_ === 1 ? ` (they didn't make the playoffs${multi ? " in those seasons" : ", or the playoffs haven't started"})` : ""}.</div></div>`; bindT(); return; }
+  const need = SR.filter(x => !LU.has(x) && !LU_ERR.has(x));
+  if (need.length){ wvOut.innerHTML = `<div class="msg">Loading ${need.length > 1 ? need.length + " seasons of" : S[need[0]]} lineups…</div>`; Promise.all(need.map(loadLineups)).then(() => { if (current === "wowy") renderWowy(); }); return; }
+  const L = []; for (const x of SR){ const Lx = LU.get(x) || {}; for (const i of aisOf(x)) for (const ty of (T_ === 2 ? [0, 1] : [T_])){ const r = Lx[`${i}|${ty}`]; if (r) for (const q of r) L.push(q); } }
+  const bad = SR.find(x => LU_ERR.has(x));
+  if (!L.length){ wvOut.innerHTML = `<div class="msg">Couldn't load lineups/${S[bad != null ? bad : s]}.json${bad != null ? ` (${esc(LU_ERR.get(bad))})` : ""}. It must be deployed next to index.html.</div>`; return; }
   // playoff possessions, opponent-adjusted (default): + each opponent's regular-season defense vs league to our points,
   // - its offense vs league from points allowed, so a run through strong teams isn't marked down for it
   const ADJ = T_ !== 0 && !WV.raw, av = v => ADJ ? [v[0], v[1] + (v[4] || 0) / 100, v[2] - (v[3] || 0) / 100] : v;
   const tot = T_ === 0 ? e[0] : luSum(L, [], []), pl = e[1], nm = k => esc(DATA.names[k]), last = k => esc(DATA.names[k].split(" ").slice(1).join(" ") || DATA.names[k]);
   WV.sel = WV.sel.filter(k => pl.some(x => x[0] === k));
   // league average that regular season: every team's points per 100 possessions (wowy.json team totals)
-  let lp = 0, lpts = 0; for (const a in DATA.abbrs){ const q = WOWY[`${s}|${a}|0`]; if (q){ lp += q[0][0]; lpts += q[0][1]; } }
+  let lp = 0, lpts = 0; for (const x of SR) for (const a in DATA.abbrs){ const q = WOWY[`${x}|${a}|0`]; if (q){ lp += q[0][0]; lpts += q[0][1]; } }
   const lg = lp > 0 ? 100 * lpts / lp : NaN, tO = lg, tD = lg;
   const cls = v => !Number.isFinite(v) || Math.abs(v) < 0.05 ? "" : v > 0 ? "wv-pos" : "wv-neg";
   const dlt = v => Number.isFinite(v) ? `<span class="wv-d ${cls(v)}">${sgnf(v)}</span>` : "";
@@ -1696,23 +1782,23 @@ function renderWowy(){
       for (let m = (1 << n) - 1; m >= 0; m--){ const on = WV.sel.filter((_, j) => m & (1 << (n - 1 - j))), v = luSum(L, on, WV.sel.filter(k => !on.includes(k))); if (v[0] > 0) rows.push({on, v}); }
       rows.sort((a, b) => (key(b.v) - key(a.v)) || 0);
       body = `<div class="tscroll"><table class="wv-t">${head}<tbody>${rows.map(r => `<tr><td class="l"><div class="wv-l">${WV.sel.map(k => badge(k, r.on.includes(k))).join("")}</div></td>${cells(r.v)}</tr>`).join("")}
-        <tr class="wv-tot"><td class="l">${tn}, every possession</td>${cells(tot)}</tr></tbody></table></div>
-        <p class="note">Every on/off combination of the players picked (✓ on the floor, ✕ off); the rest of the roster as it played. Off and Def are per 100 possessions; the small number is the difference from the ${S[s]} regular-season league average (${fmt(lg, 1)} per 100; green = better than average).${ADJ ? ` Playoff possessions are opponent-adjusted: each opponent's ${S[s]} regular-season offense and defense vs. league is taken out${T_ === 2 ? " (regular-season possessions as played)" : ""}.` : ""} Garbage time out.</p>`;
+        <tr class="wv-tot"><td class="l">${tn}, every possession${multi ? `, ${span}` : ""}</td>${cells(tot)}</tr></tbody></table></div>
+        <p class="note">Every on/off combination of the players picked (✓ on the floor, ✕ off); the rest of the roster as it played. Off and Def are per 100 possessions; the small number is the difference from the ${span} regular-season league average (${fmt(lg, 1)} per 100; green = better than average).${ADJ ? ` Playoff possessions are opponent-adjusted: each opponent's regular-season offense and defense vs. league that season is taken out${T_ === 2 ? " (regular-season possessions as played)" : ""}.` : ""} Garbage time out.</p>`;
     }
   } else {
-    const early = s === LATEST && INPROG ? Math.min(1, INPROG.team_games / 82) : 1;
+    const early = SR.reduce((t, x) => t + (x === LATEST && INPROG ? Math.min(1, INPROG.team_games / 82) : 1), 0);   // seasons' worth of games
     const minP = WV.min != null ? WV.min : Math.max(10, Math.round((T_ === 1 ? 0.25 : 1) * ({2: 300, 3: 200, 4: 120, 5: 60}[size]) * early));
     const C = [...luCombos(L, size).entries()].map(([k, v]) => ({ks: k.split(".").map(Number), v})).filter(c => c.v[0] >= minP && WV.sel.every(k => c.ks.includes(k)));
     C.sort((a, b) => (key(b.v) - key(a.v)) || 0);
     const shown = C.slice(0, 10 * (1 + WV.more));
     body = `<div class="controls" style="margin:0 0 10px"><div class="field"><label for="wv-min">Min. possessions</label><input type="number" id="wv-min" min="0" step="10" value="${minP}"></div></div>
       ${C.length ? `<div class="tscroll"><table class="wv-t">${head}<tbody>${shown.map(c => `<tr><td class="l"><div class="wv-l">${c.ks.map(k => `<span class="wv-b on">${faceImg(k, "sm")}<em>${last(k)}</em></span>`).join("")}</div></td>${cells(c.v)}</tr>`).join("")}
-        <tr class="wv-tot"><td class="l">${tn}, every possession</td>${cells(tot)}</tr></tbody></table></div>
+        <tr class="wv-tot"><td class="l">${tn}, every possession${multi ? `, ${span}` : ""}</td>${cells(tot)}</tr></tbody></table></div>
         ${C.length > shown.length ? `<p style="margin:8px 0 0"><button class="btn" id="wv-more">Show ${Math.min(10, C.length - shown.length)} more</button></p>` : ""}
-        <p class="note">${C.length.toLocaleString()} ${size === 5 ? "lineups" : size + "-man units"} with ${minP.toLocaleString()}+ possessions${WV.sel.length ? ` that include ${WV.sel.map(nm).join(", ")}` : ""}. Small numbers under Off and Def: vs. the ${S[s]} regular-season league average (${fmt(lg, 1)} per 100).${ADJ ? ` Playoff possessions are opponent-adjusted: each opponent's ${S[s]} regular-season offense and defense vs. league is taken out${T_ === 2 ? " (regular-season possessions as played)" : ""}.` : ""} Pick players above to narrow it down.</p>`
+        <p class="note">${C.length.toLocaleString()} ${size === 5 ? "lineups" : size + "-man units"} with ${minP.toLocaleString()}+ possessions${WV.sel.length ? ` that include ${WV.sel.map(nm).join(", ")}` : ""}. Small numbers under Off and Def: vs. the ${span} regular-season league average (${fmt(lg, 1)} per 100).${ADJ ? ` Playoff possessions are opponent-adjusted: each opponent's regular-season offense and defense vs. league that season is taken out${T_ === 2 ? " (regular-season possessions as played)" : ""}.` : ""} Pick players above to narrow it down.</p>`
         : `<div class="msg">No ${size === 5 ? "lineup" : size + "-man unit"} ${WV.sel.length ? "with those players " : ""}reached ${minP.toLocaleString()} possessions. Try a lower minimum.</div>`}`;
   }
-  wvOut.innerHTML = `<div class="box"><h2>${logoImg(ab, s)} ${tn} <small>${S[s]} · ${tLab}${ADJ ? " · playoffs opponent-adjusted" : ""} · with or without you</small></h2>
+  wvOut.innerHTML = `<div class="box"><h2>${logoImg(ab, s)} ${tn} <small>${span} · ${tLab}${ADJ ? " · playoffs opponent-adjusted" : ""} · with or without you</small></h2>
       ${tSeg}${T_ !== 0 ? `<div class="seg sm" role="group" aria-label="Playoff possessions" style="margin:0 0 12px 8px"><button data-wvr="0" aria-pressed="${!WV.raw}" title="Playoff results adjusted for the opponents' regular-season strength">Opponent-adjusted</button><button data-wvr="1" aria-pressed="${WV.raw}">Raw</button></div>` : ""}<div class="seg" role="group" aria-label="WOWY mode" style="margin:0 0 12px">${modes}</div>
       <div class="wv-lab">Players${WV.sel.length ? ` (${WV.sel.length}) · <a href="#" id="wv-clear">clear</a>` : ` · pick up to ${cap}`}</div>
       <div class="wv-pick">${picker}</div></div>
@@ -1766,7 +1852,7 @@ function renderTeams(){
     html += `<h3 class="pk-h" style="margin-top:18px">Top performers <small>${S[s]} regular season · ranked by 3-year Chip Equity · ${minGp}+ games, 15+ minutes</small></h3><div class="tscroll"><table>
       <thead><tr><th class="l">Team</th><th class="l">Player</th><th>GP</th><th>MPG</th><th>PTS</th><th>REB</th><th>AST</th><th>TS%</th><th>3-yr Chip Equity</th><th>Off</th><th>Def</th></tr></thead><tbody>
       ${t3.map(({ab, top}) => top.length ? top.map(({i, c}) => { const k = P.p[i], a = agg([i]);
-        return `<tr><td class="l"><div class="who">${logoImg(ab,s)}${ab}</div></td><td class="l"><div class="who">${faceImg(k,"sm")}<span class="n">${pLink(k, esc(DATA.names[k]))}</span></div></td>
+        return `<tr><td class="l"><div class="who">${logoImg(ab,s)}${ab}</div></td><td class="l"><div class="who">${faceImg(k,"sm")}<span class="n">${pLink(k, esc(DATA.names[k]), s)}</span></div></td>
           <td>${P.gp[i]}</td><td>${fmt(val(a,"MPG"),1)}</td><td>${fmt(val(a,"PPG"),1)}</td><td>${fmt(val(a,"RPG"),1)}</td><td>${fmt(val(a,"APG"),1)}</td><td>${fmt(val(a,"TS"),"pct")}</td><td class="nw"><strong>${pm(c.r)}</strong>${pctl(c)}</td><td class="nw">${pm(c.o)}${pctlO(c)}</td><td class="nw">${pm(c.d)}${pctlD(c)}</td></tr>`; }).join("")
         : `<tr><td class="l"><div class="who">${logoImg(ab,s)}${ab}</div></td><td class="l muted" colspan="10">No player with ${minGp}+ games and 15+ minutes yet</td></tr>`).join("")}
       </tbody></table></div></div>`;
@@ -2028,7 +2114,7 @@ async function renderGameCenter(useCache){
   const boxTable = (side, t) => { const rows = (d.box[side] || []); if (!rows.length) return "";
     const sorted = rows.slice().sort((a,b) => (b.starter - a.starter) || ((+b.pts||0) - (+a.pts||0)));
     return `<div class="box"><h2>${esc(t.name)} <small>box score</small></h2><div class="tscroll"><table class="bx"><thead><tr><th class="l">Player</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>FG</th><th>3PT</th><th>FT</th><th>STL</th><th>BLK</th><th>TO</th><th>+/-</th></tr></thead><tbody>
-      ${sorted.map(p => `<tr class="${p.starter ? "" : "bench"}"><td class="l"><div class="who">${liveFace(p.img, p.nbaName || p.name, p.pid)}<span>${pLink(p.pid != null && KOF_PID.has(+p.pid) ? KOF_PID.get(+p.pid) : nameIdx.get(norm(p.nbaName || p.name || "")), esc(p.name))}</span></div></td><td>${esc(p.min)}</td><td><strong>${esc(p.pts)}</strong></td><td>${esc(p.reb)}</td><td>${esc(p.ast)}</td><td>${esc(p.fg)}</td><td>${esc(p.tp)}</td><td>${esc(p.ft)}</td><td>${esc(p.stl)}</td><td>${esc(p.blk)}</td><td>${esc(p.tov)}</td><td>${esc(p.pm)}</td></tr>`).join("")}</tbody></table></div></div>`; };
+      ${sorted.map(p => `<tr class="${p.starter ? "" : "bench"}"><td class="l"><div class="who">${liveFace(p.img, p.nbaName || p.name, p.pid)}<span>${pLink(p.pid != null && KOF_PID.has(+p.pid) ? KOF_PID.get(+p.pid) : nameIdx.get(norm(p.nbaName || p.name || "")), esc(p.name), LATEST)}</span></div></td><td>${esc(p.min)}</td><td><strong>${esc(p.pts)}</strong></td><td>${esc(p.reb)}</td><td>${esc(p.ast)}</td><td>${esc(p.fg)}</td><td>${esc(p.tp)}</td><td>${esc(p.ft)}</td><td>${esc(p.stl)}</td><td>${esc(p.blk)}</td><td>${esc(p.tov)}</td><td>${esc(p.pm)}</td></tr>`).join("")}</tbody></table></div></div>`; };
   const boxes = (d.box.away.length || d.box.home.length) ? `<div class="grid2">${boxTable("away", g.away)}${boxTable("home", g.home)}</div>` : "";
 
   // play-by-play list (newest first)
@@ -2083,7 +2169,7 @@ function renderHome(){
   }
   cand.sort((a,b)=>b.v-a.v);
   M.tieRank(cand, x => x.v, "pos");
-  const lead = cand.slice(0,5).map((r,j)=>`<div class="hrow"><span class="n">${r.pos}</span>${faceImg(r.k,"sm")}<span>${pLink(r.k, esc(DATA.names[r.k]))} <span class="muted">${esc(r.tm)} · o ${pm(r.o)} · d ${pm(r.d)}</span></span><span class="v">${pm(r.v)}${pctl(r.rv)}</span></div>`).join("");
+  const lead = cand.slice(0,5).map((r,j)=>`<div class="hrow"><span class="n">${r.pos}</span>${faceImg(r.k,"sm")}<span>${pLink(r.k, esc(DATA.names[r.k]), r.rv ? r.rv.s : null)} <span class="muted">${esc(r.tm)} · o ${pm(r.o)} · d ${pm(r.d)}</span></span><span class="v">${pm(r.v)}${pctl(r.rv)}</span></div>`).join("");
   // teams: best net rating
   const teams = M.tm.filter(r=>r.s===s && r.t===0).sort((a,b)=>b.net-a.net);
   const tms = teams.slice(0,5).map((r,j)=>`<div class="hrow"><span class="n">${j+1}</span>${logoImg(AB(r.a), s)}<span>${esc(teamName(AB(r.a), s))} <span class="muted">${r.w}-${r.l}</span></span><span class="v">${r.net>=0?"+":""}${r.net.toFixed(1)}</span></div>`).join("");
@@ -2146,7 +2232,7 @@ function renderHome(){
     c.addEventListener("click", e => { if (e.target.closest("input,button,a")) return; go(); });
     c.addEventListener("keydown", e => { if (e.key==="Enter"){ e.preventDefault(); go(); } }); });
   attachSuggest(document.getElementById("hm-q"));
-  const q = document.getElementById("hm-q"), goP = () => { if (findPlayer(q.value) < 0) return; plQ.value = q.value; show("players"); window.scrollTo({top:0}); };
+  const q = document.getElementById("hm-q"), goP = () => { if (findPlayer(q.value) < 0) return; plQ.value = q.value; PL_SEASON = null; show("players"); window.scrollTo({top:0}); };
   document.getElementById("hm-go").onclick = goP; q.addEventListener("keydown", e => { if (e.key==="Enter") goP(); }); q.addEventListener("change", goP);
   loadHomeGames();
 }
@@ -2576,7 +2662,7 @@ async function renderSeason(){
   seOut.querySelectorAll("[data-team]").forEach(b => b.addEventListener("click", () => { seTeam = b.dataset.team; renderSeason(); document.getElementById("se-wrap").scrollIntoView({block:"start"}); }));
   const back = document.getElementById("tp-back"); if (back) back.onclick = e => { e.preventDefault(); seTeam = null; renderSeason(); };
   for (const [id, v] of [["se-v-cur", "cur"], ["se-v-last", "last"]]){ const b = document.getElementById(id); if (b) b.onclick = () => { SE_VIEW = v; const y = window.scrollY; renderSeason().then(() => window.scrollTo({top: y})); }; }
-  seOut.querySelectorAll("[data-player]").forEach(a => a.addEventListener("click", e => { e.preventDefault(); plQ.value = optLabel(+a.dataset.player); show("players"); window.scrollTo({top:0}); }));
+  seOut.querySelectorAll("[data-player]").forEach(a => a.addEventListener("click", e => { e.preventDefault(); openPlayer(+a.dataset.player, a.dataset.season != null ? +a.dataset.season : null); }));
 }
 // projected starting five: the healthy players with the most starts last season (ties: minutes) whose positions
 // fit one of the allowed shapes; G = PG/SG/G, F = SF/PF/F, C = C; hybrid listings (G-F, F-C) can fill either spot
@@ -2611,7 +2697,7 @@ function teamProfile(ab){
   const ai = DATA.abbrs.indexOf(ab), ti = M.teamRow(ai, LS, 0), r = ti >= 0 ? M.tm[ti] : null, res = ai >= 0 ? seasonResult(ai, LS) : {txt:""};
   const L = r ? M.leagueOf(r) : null, PRALL = projectAll(), PRJ = PRALL ? PRALL[ab] : null;
   const sgn = v => v==null || Number.isNaN(v) ? "–" : (v>=0?"+":"") + v.toFixed(1);
-  const nameCell = p => p.k != null ? `<a href="#" data-player="${p.k}" class="n">${esc(p.name)}</a>` : `<span class="n">${esc(p.name)}</span>`;
+  const nameCell = p => p.k != null ? `<a href="#" data-player="${p.k}" data-season="${LATEST}" class="n">${esc(p.name)}</a>` : `<span class="n">${esc(p.name)}</span>`;
   const face = p => p.k != null ? faceImg(p.k, "sm") : `<span class="face sm"></span>`;
   // projected starting five: the healthy players who started the most games last season (anywhere), ties by minutes
   const healthy = ps.filter(p => !p.seasonOut && !p.tw);
@@ -2801,7 +2887,7 @@ let current = "players";
 const stSeg = document.getElementById("season-type");
 document.addEventListener("click", e => {          // any player link opens his profile
   const a = e.target.closest && e.target.closest("[data-player]"); if (!a || e.defaultPrevented) return;
-  e.preventDefault(); plQ.value = optLabel(+a.dataset.player); show("players"); renderPlayer(); window.scrollTo({top:0});
+  e.preventDefault(); openPlayer(+a.dataset.player, a.dataset.season != null ? +a.dataset.season : null);
 });
 function show(tab){
   current = tab;

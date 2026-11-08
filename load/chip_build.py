@@ -10,7 +10,7 @@ Lead margin is also adjusted for teammates: - 0.5 x the four teammates' 3-year o
 Playoff-only Chip Equity (pcepm) = (0.65 x playoff-only regression + 0.35 x opponent-adjusted playoff lead margin
 x n/(n+1000)) x playoff competitive share.
 Single seasons are steadied 40% toward the 3-season window (first full window 1996-99 for the first two seasons).
-Writes data.json rw (1-3 year rows), peak (best 2-5 year windows + decades), cerm (playoff model, regular season only)
+Writes data.json rw (1-5 year rows), peak (best 2-5 year windows + decades), cerm (playoff model, regular season only)
 and empties the old Chip Equity layer (ce, cepeak)."""
 import json, numpy as np, pandas as pd
 from decimal import Decimal, ROUND_HALF_UP
@@ -81,7 +81,7 @@ for w, d in disp.items():
                 if b is None or val > b[0]: bestx[(k, w, kind)] = (val, v[0], O1, D1, si)
     R = pd.DataFrame(out, columns=["k", "s", "w", "o", "d", "r", "poss"])
     R["rank"] = R.groupby("s").r.rank(ascending=False, method="min").astype(int)
-    if w <= 3:
+    if w <= 5:
         for s_, gg in R.groupby("s"): rw_n[f"{s_}_{w}"] = int(len(gg))
         rw_rows += [[int(a), int(b_), int(c_), *split(r_, o, dd_), round(r_, 2), int(rk), int(round(ps))] for a, b_, c_, o, dd_, r_, ps, rk in zip(R.k, R.s, R.w, R.o, R.d, R.r, R.poss, R["rank"])]
 DS = D["peak"]["ds"]; prow, pn = [], []
