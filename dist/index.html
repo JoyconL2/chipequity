@@ -3181,6 +3181,16 @@ async function detailESPN(g){
   const score = side => { const c = (comp.competitors || []).find(x => x.homeAway === side); return c && c.score != null ? +c.score : null; };
   return { plays, box, state: st ? st.state : g.state, status: st ? st.shortDetail : g.status, homeScore: score("home"), awayScore: score("away") };
 }
+// NBA.com game id for a game listed from ESPN: this season's schedule (loaded once), matched on teams and tip-off time
+let NBA_SCHED = null;
+async function nbaGidFor(g){
+  if (!NBA_SCHED) NBA_SCHED = getJSON("https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json").then(j => {
+    const out = []; for (const d of j.leagueSchedule.gameDates) for (const x of d.games) out.push({id: x.gameId, h: x.homeTeam.teamTricode, a: x.awayTeam.teamTricode, t: new Date(x.gameDateTimeUTC || x.gameDateUTC).getTime()});
+    return out; }).catch(e => { NBA_SCHED = null; throw e; });
+  const L = await NBA_SCHED, t = g.start.getTime();
+  const m = L.find(x => x.h === g.home.ab && x.a === g.away.ab && Math.abs(x.t - t) < 18 * 3600e3);
+  return m ? m.id : null;
+}
 // one play's video on NBA.com (opens there; clips stay on NBA.com)
 const playVideo = (gid, ev, title) => { const yy = +String(gid).slice(3, 5), season = `20${yy}-${String(yy + 1).padStart(2, "0")}`;
   return `https://www.nba.com/stats/events/?GameEventID=${encodeURIComponent(ev)}&GameID=${encodeURIComponent(gid)}&Season=${season}&flag=1&sct=plot&title=${encodeURIComponent(title || "")}`; };
@@ -3227,7 +3237,11 @@ async function renderGameCenter(useCache){
   if (!gmOut.innerHTML) gmOut.innerHTML = `<button class="btn gc-back" id="gc-back">‹ All games</button><div class="msg">Loading play-by-play…</div>`;
   const bb = document.getElementById("gc-back"); if (bb) bb.onclick = closeGame;
   let d = useCache && gcData ? gcData : null, err = null;
-  if (!d) { try { d = g.src === "nba" ? await detailNBA(g) : await detailESPN(g); } catch (e) { err = e; } }
+  if (!d) { try {
+    // games listed from ESPN: find the NBA.com game id too, so the play-by-play comes from NBA.com with a video link per play
+    if (g.src !== "nba" && g.nbaGid === undefined) g.nbaGid = await nbaGidFor(g).catch(() => null);
+    d = g.src === "nba" ? await detailNBA(g) : g.nbaGid ? await detailNBA({...g, id: g.nbaGid}).catch(() => detailESPN(g)) : await detailESPN(g);
+  } catch (e) { err = e; } }
   if (gcGame !== g) return;           // user navigated away while loading
   if (!d) { gmOut.innerHTML = `<button class="btn gc-back" id="gc-back">‹ All games</button><div class="msg">Couldn't load play-by-play for this game. ${esc(err ? err.message : "")} <a href="#" id="gc-retry">Try again</a></div>`;
     document.getElementById("gc-back").onclick = closeGame; document.getElementById("gc-retry").onclick = e => { e.preventDefault(); gmOut.innerHTML=""; renderGameCenter(); }; return; }
@@ -3286,7 +3300,7 @@ async function renderGameCenter(useCache){
   const fresh = new Set(); if (gcSeen.size) for (const p of plays) if (!gcSeen.has(p.id)) fresh.add(p.id);
   plays.forEach(p => gcSeen.add(p.id));
   const rows = shown.map(p => { const sep = p.period !== lastPer ? `<div class="qsep">${perName(p.period)}</div>` : ""; lastPer = p.period;
-    return `${sep}<div class="pl ${p.scoring ? "score" : ""} ${fresh.has(p.id) ? "new" : ""}"><span class="t">${perName(p.period)} ${clockTxt(p.left)}</span><span class="tm">${esc(p.team || "")}</span><span class="pf">${p.who || p.img || p.nbaId ? liveFace(p.img, p.who, p.nbaId) : ""}</span><span class="tx">${esc(p.text)}${p.vid && g.src === "nba" ? ` <a class="vid" href="${playVideo(g.id, p.id, p.text)}" target="_blank" rel="noopener" title="Watch this play on NBA.com">▶ Watch</a>` : ""}</span><span class="sc">${p.away}–${p.home}</span></div>`; }).join("");
+    return `${sep}<div class="pl ${p.scoring ? "score" : ""} ${fresh.has(p.id) ? "new" : ""}"><span class="t">${perName(p.period)} ${clockTxt(p.left)}</span><span class="tm">${esc(p.team || "")}</span><span class="pf">${p.who || p.img || p.nbaId ? liveFace(p.img, p.who, p.nbaId) : ""}</span><span class="tx">${esc(p.text)}${p.vid && (g.src === "nba" || g.nbaGid) ? ` <a class="vid" href="${playVideo(g.src === "nba" ? g.id : g.nbaGid, p.id, p.text)}" target="_blank" rel="noopener" title="Watch this play on NBA.com">▶ Watch</a>` : ""}</span><span class="sc">${p.away}–${p.home}</span></div>`; }).join("");
   const opt = (v, l, cur) => `<option value="${v}" ${String(cur) === String(v) ? "selected" : ""}>${l}</option>`;
   const pbp = `<div class="box"><h2>Play-by-play <small>newest first · ${plays.length} plays · score shown ${esc(g.away.ab)}–${esc(g.home.ab)}</small></h2>
     <div class="pbp-filters">
