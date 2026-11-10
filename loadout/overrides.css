@@ -226,3 +226,8 @@ table.cmp.solo td.lbl{text-align:left;padding-right:28px}
 #p-players .stints .stint .res{margin-left:2px}
 /* player chart: total / offense / defense and 1- to 5-year window */
 .pl-cectl{display:flex;flex-wrap:wrap;gap:8px 12px;margin:0 0 10px}
+/* highlights (YouTube searches) and single-play video links (NBA.com) */
+.hl-links{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;margin:6px 0 2px;font-size:13px}
+.hl-links a{font-weight:600}
+.hl-links .sub{font-size:12px}
+.pl .tx a.vid{font-size:12px;font-weight:600;white-space:nowrap;margin-left:4px}

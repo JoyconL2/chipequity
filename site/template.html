@@ -1221,7 +1221,7 @@ function renderPlayer(){
     <div class="box"><div class="profile">${faceImg(k)}<div style="min-width:0">
       <h2 class="pname">${esc(DATA.names[k])}</h2>
       <div class="teamline">${(h => h ? (h.now ? `${logoImg(h.ab, LATEST)}${esc(curTeamName(h.ab))}` : `${logoImg(h.ab, h.s)}${esc(teamName(h.ab, h.s))}`) : `${logoImg(ab, P.s[last])}${esc(teamName(ab,P.s[last]))}`)(homeTeamOf(k))} <span class="muted">· ${S[P.s[rows[0]]]} to ${playingNow(k) && TYPE === 0 ? CUR_SEASON : S[P.s[last]]} · ${typeName()}${plMode==="p75"?" · per 75 possessions":""}</span></div>
-      <div class="stints"><span class="muted" style="margin-right:2px">Teams</span>${stintsNow(k).map(st => `<span class="stint${st.now ? " now" : ""}">${logoImg(st.ab, Math.min(st.s1, LATEST))}${esc(st.ab)} <span class="muted">${stintYrs(st)}</span></span>`).join("")}</div>
+      <div class="stints"><span class="muted" style="margin-right:2px">Teams</span>${stintsNow(k).map(st => `<span class="stint${st.now ? " now" : ""}">${logoImg(st.ab, Math.min(st.s1, LATEST))}${esc(st.ab)} <span class="muted">${stintYrs(st)}</span></span>`).join("")}</div>${hlLinks(k)}
       <div class="tiles">${tiles}</div></div></div>
       <p class="note">${stars}${po}</p></div>
     <div class="box"><h2>Peak &amp; decade impact <small>career-level · all-time ranks</small></h2>${peakTable(k)}
@@ -1294,7 +1294,7 @@ function renderPlayerSeason(k, s){
   const live = s === LATEST && TYPE === 0 && typeof CUR !== "undefined" && CUR && Date.now() >= +CUR.seasonStart;
   plOut.innerHTML = nav + `<div class="box"><div class="profile">${faceImg(k)}<div style="min-width:0">
       <h2 class="pname">${esc(DATA.names[k])} <span class="ps-yr">${S[s]}</span>${ipTag(s)}</h2>
-      <div class="stints">${teamLine}</div>
+      <div class="stints">${teamLine}</div>${hlLinks(k, s, poR.length > 0)}
       <div class="tiles">${tiles}</div></div></div>${ctx ? `<p class="note">${ctx}</p>` : ""}</div>${live ? `<div id="pl-live"></div>` : ""}
     ${ceBox}${boxBox}
     <div class="box"><h2>On / off <small>${S[s]} · team net rating per 100 possessions with him on vs. off the floor · garbage time out</small></h2><div id="ps-onoff"><div class="msg">Loading on/off…</div></div></div>
@@ -2030,6 +2030,15 @@ async function detailESPN(g){
   const score = side => { const c = (comp.competitors || []).find(x => x.homeAway === side); return c && c.score != null ? +c.score : null; };
   return { plays, box, state: st ? st.state : g.state, status: st ? st.shortDetail : g.status, homeScore: score("home"), awayScore: score("away") };
 }
+// one play's video on NBA.com (opens there; clips stay on NBA.com)
+const playVideo = (gid, ev, title) => { const yy = +String(gid).slice(3, 5), season = `20${yy}-${String(yy + 1).padStart(2, "0")}`;
+  return `https://www.nba.com/stats/events/?GameEventID=${encodeURIComponent(ev)}&GameID=${encodeURIComponent(gid)}&Season=${season}&flag=1&sct=plot&title=${encodeURIComponent(title || "")}`; };
+// highlight searches on YouTube for a player (a season, its playoffs, or the career)
+const ytSearch = q => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+function hlLinks(k, s = null, po = false){
+  const n = DATA.names[k], a = (q, l) => `<a href="${ytSearch(q)}" target="_blank" rel="noopener">${l}</a>`;
+  return `<div class="hl-links"><span class="muted">▶ Highlights</span>${s == null ? a(`${n} career highlights`, "Career") + a(`${n} best plays`, "Best plays")
+    : a(`${n} ${S[s]} highlights`, `${S[s]} season`) + (po ? a(`${n} ${S[s]} playoff highlights`, `${S[s]} playoffs`) : "")}<span class="muted sub">on YouTube</span></div>`; }
 async function detailNBA(g){
   const [pb, bx] = await Promise.all([
     getJSON(`https://cdn.nba.com/static/json/liveData/playbyplay/playbyplay_${g.id}.json`),
@@ -2038,7 +2047,8 @@ async function detailNBA(g){
   const plays = ((pb.game && pb.game.actions) || []).map(a => { const h = a.scoreHome != null && a.scoreHome !== "" ? +a.scoreHome : ph, w = a.scoreAway != null && a.scoreAway !== "" ? +a.scoreAway : pa;
     const scoring = h !== ph || w !== pa; ph = h; pa = w;
     return { id: String(a.actionNumber), period: a.period || 1, left: clockSec(a.clock), text: a.description || a.actionType || "", team: a.teamTricode || null, home: h, away: w, scoring,
-      who: a.playerName || a.playerNameI || null, nbaId: a.personId && +a.personId > 0 ? a.personId : null }; });
+      who: a.playerName || a.playerNameI || null, nbaId: a.personId && +a.personId > 0 ? a.personId : null,
+      vid: +a.personId > 0 && ["2pt", "3pt", "freethrow", "turnover", "block", "steal"].includes(a.actionType) }; });
   const box = {home: [], away: []};
   const mins = m => { const s = clockSec(m); return s ? String(Math.round(s/60)) : "0"; };
   if (bx && bx.game) for (const side of ["home","away"]) {
@@ -2125,7 +2135,7 @@ async function renderGameCenter(useCache){
   const fresh = new Set(); if (gcSeen.size) for (const p of plays) if (!gcSeen.has(p.id)) fresh.add(p.id);
   plays.forEach(p => gcSeen.add(p.id));
   const rows = shown.map(p => { const sep = p.period !== lastPer ? `<div class="qsep">${perName(p.period)}</div>` : ""; lastPer = p.period;
-    return `${sep}<div class="pl ${p.scoring ? "score" : ""} ${fresh.has(p.id) ? "new" : ""}"><span class="t">${perName(p.period)} ${clockTxt(p.left)}</span><span class="tm">${esc(p.team || "")}</span><span class="pf">${p.who || p.img || p.nbaId ? liveFace(p.img, p.who, p.nbaId) : ""}</span><span class="tx">${esc(p.text)}</span><span class="sc">${p.away}–${p.home}</span></div>`; }).join("");
+    return `${sep}<div class="pl ${p.scoring ? "score" : ""} ${fresh.has(p.id) ? "new" : ""}"><span class="t">${perName(p.period)} ${clockTxt(p.left)}</span><span class="tm">${esc(p.team || "")}</span><span class="pf">${p.who || p.img || p.nbaId ? liveFace(p.img, p.who, p.nbaId) : ""}</span><span class="tx">${esc(p.text)}${p.vid && g.src === "nba" ? ` <a class="vid" href="${playVideo(g.id, p.id, p.text)}" target="_blank" rel="noopener" title="Watch this play on NBA.com">▶ Watch</a>` : ""}</span><span class="sc">${p.away}–${p.home}</span></div>`; }).join("");
   const opt = (v, l, cur) => `<option value="${v}" ${String(cur) === String(v) ? "selected" : ""}>${l}</option>`;
   const pbp = `<div class="box"><h2>Play-by-play <small>newest first · ${plays.length} plays · score shown ${esc(g.away.ab)}–${esc(g.home.ab)}</small></h2>
     <div class="pbp-filters">
