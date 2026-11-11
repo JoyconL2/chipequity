@@ -2033,12 +2033,26 @@ async function detailESPN(g){
 // NBA.com game id for a game listed from ESPN: this season's schedule (loaded once), matched on teams and tip-off time
 let NBA_SCHED = null;
 async function nbaGidFor(g){
-  if (!NBA_SCHED) NBA_SCHED = getJSON("https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json").then(j => {
+  if (!NBA_SCHED && (typeof CUR === "undefined" || !CUR || g.start >= CUR.seasonStart)) NBA_SCHED = getJSON("https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json").then(j => {
     const out = []; for (const d of j.leagueSchedule.gameDates) for (const x of d.games) out.push({id: x.gameId, h: x.homeTeam.teamTricode, a: x.awayTeam.teamTricode, t: new Date(x.gameDateTimeUTC || x.gameDateUTC).getTime()});
     return out; }).catch(e => { NBA_SCHED = null; throw e; });
-  const L = await NBA_SCHED, t = g.start.getTime();
-  const m = L.find(x => x.h === g.home.ab && x.a === g.away.ab && Math.abs(x.t - t) < 18 * 3600e3);
-  return m ? m.id : null;
+  const t = g.start.getTime();
+  if (typeof CUR === "undefined" || !CUR || g.start >= CUR.seasonStart) {
+    const L = await NBA_SCHED, m = L.find(x => x.h === g.home.ab && x.a === g.away.ab && Math.abs(x.t - t) < 18 * 3600e3);
+    if (m) return m.id; }
+  // past seasons: the game ids NBA.com lists for that season (gids/<season>.json: [id, date (ET), home, away]), 2019-20 on
+  const et = g.start.toLocaleDateString("en-CA", {timeZone: "America/New_York"}), y = +et.slice(0, 4), mo = +et.slice(5, 7);
+  const y0 = mo >= 8 ? y : y - 1, near = d => Math.abs(new Date(d + "T12:00:00Z") - new Date(et + "T12:00:00Z")) <= 864e5;
+  for (const sy of [y0, y0 - 1]) {                           // the 2020 bubble ran into October
+    const L = await pastGids(`${sy}-${String((sy + 1) % 100).padStart(2, "0")}`); if (!L) continue;
+    const m = L.find(x => x[2] === g.home.ab && x[3] === g.away.ab && near(x[1])); if (m) return m[0]; }
+  return null;
+}
+const PAST_GIDS = new Map();
+function pastGids(season){
+  if (season < "2019-20") return Promise.resolve(null);     // NBA.com's play-by-play feed starts in 2019-20
+  if (!PAST_GIDS.has(season)) PAST_GIDS.set(season, fetch(`gids/${season}.json`, {cache: "force-cache"}).then(r => r.ok ? r.json() : null).catch(() => null));
+  return PAST_GIDS.get(season);
 }
 // one play's video on NBA.com (opens there; clips stay on NBA.com)
 const playVideo = (gid, ev, title) => { const yy = +String(gid).slice(3, 5), season = `20${yy}-${String(yy + 1).padStart(2, "0")}`;
@@ -2107,6 +2121,7 @@ async function renderGameCenter(useCache){
       <div class="gc-team">${logoBig(g.away)}<div class="nm">${esc(g.away.name)}</div><div class="rec">${esc(g.away.rec || "")} · away</div></div>
       <div class="gc-score">${d.state === "pre" ? "vs" : `${as} – ${hs}`}<small class="${live ? "live" : ""}">${live ? "● Live · " : ""}${esc(d.status || "")}</small></div>
       <div class="gc-team">${logoBig(g.home)}<div class="nm">${esc(g.home.name)}</div><div class="rec">${esc(g.home.rec || "")} · home</div></div></div>
+    ${d.state === "post" ? `<div class="hl-links gc-hl"><span class="muted">▶ Game highlights</span><a href="${ytSearch(`${g.away.name} vs ${g.home.name} full game highlights ${g.start.toLocaleDateString("en-US", {month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York"})}`)}" target="_blank" rel="noopener">YouTube</a>${g.src === "nba" || g.nbaGid ? `<a href="https://www.nba.com/game/${g.src === "nba" ? g.id : g.nbaGid}" target="_blank" rel="noopener">NBA.com</a>` : ""}</div>` : ""}
     <div class="gc-wp"><span>${esc(g.away.ab)} ${pctTxt(1-wpNow)}</span><div class="bar"><i style="width:${(1-wpNow)*100}%;background:var(--s2)"></i><i style="width:${wpNow*100}%;background:var(--s1)"></i></div><span>${esc(g.home.ab)} ${pctTxt(wpNow)}</span></div>
     ${live ? `<p class="note" style="margin-bottom:0">Updates every 15 seconds.</p>` : ""}</div>`;
 
