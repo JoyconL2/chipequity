@@ -1897,9 +1897,6 @@ lgStat.addEventListener("change", renderLeague);
 
 /* ---------------- GAMES (live feed) ---------------- */
 const gmOut = document.getElementById("gm-out"), gmDate = document.getElementById("gm-date");
-// the model's record picking this season's games (winner = the side it favored before tip-off)
-const LATEST_NAME = () => DATA.seasons[DATA.seasons.length - 1];
-const MODEL_REC = {w: 116, l: 44, through: "Nov 10"};
 const ESPN_FIX = {GS:"GSW", NY:"NYK", SA:"SAS", NO:"NOP", UTAH:"UTA", WSH:"WAS", PHO:"PHX", BRK:"BKN", CHO:"CHA"};
 const ymd = d => `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`;
 const isoDay = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
@@ -1913,6 +1910,32 @@ async function feedESPN(day){
     const side = h => { const x = c.competitors.find(q=>q.homeAway===h), ab = ESPN_FIX[x.team.abbreviation] || x.team.abbreviation;
       return {ab, tid:x.team.id, name:x.team.shortDisplayName || x.team.displayName, score: st.state==="pre" ? null : +x.score, rec:(x.records&&x.records[0]&&x.records[0].summary)||"", logo:x.team.logo}; };
     return {id:e.id, src:"espn", start:new Date(e.date), state:st.state, status:st.shortDetail, home:side("home"), away:side("away")}; });
+}
+// the model's record this season, counted in the browser from every finished game on ESPN's scoreboard:
+// a game counts as right when the side the site favors (the same pick shown on each game card) won
+let REC_P = null; const REC_DAYS = new Map();
+function modelRecord(){
+  if (REC_P) return REC_P;
+  REC_P = (async () => {
+    if (typeof CUR === "undefined" || !CUR) throw new Error("no season model");
+    if (!CUR.ready()) await CUR.ensure();
+    const today = new Date(); today.setHours(12, 0, 0, 0); const days = [];
+    for (let d = new Date(CUR.seasonStart); d <= today; d.setDate(d.getDate() + 1)) { const x = new Date(d); x.setHours(12, 0, 0, 0); days.push(x); }
+    const lists = await Promise.all(days.map(d => REC_DAYS.has(isoDay(d)) ? REC_DAYS.get(isoDay(d)) : feedESPN(d).then(L => { if (isoDay(d) !== isoDay(today)) REC_DAYS.set(isoDay(d), L); return L; }).catch(() => null)));
+    let w = 0, l = 0, last = null, gaps = 0;
+    lists.forEach((L, i) => { if (!L) { gaps++; return; }
+      for (const g of L) { if (g.state !== "post" || g.start < CUR.seasonStart || g.home.score == null) continue;
+        const p = gamePred(g); if (!p) continue;
+        ((p.pHome >= 0.5) === (g.home.score > g.away.score)) ? w++ : l++; last = days[i]; } });
+    if (!w && !l) throw new Error("no finished games found");
+    return {w, l, last, gaps};
+  })();
+  REC_P.catch(() => { REC_P = null; });
+  return REC_P;
+}
+function fillRec(r){
+  const txt = r ? `${r.w}-${r.l} <span class="muted">(${(100 * r.w / (r.w + r.l)).toFixed(1)}% of games picked right, through ${r.last.toLocaleDateString(undefined, {month: "short", day: "numeric"})}${r.gaps ? `; ${r.gaps} day${r.gaps > 1 ? "s" : ""} couldn't be loaded` : ""})</span>` : `<span class="muted">couldn't be counted right now (the game feed didn't load)</span>`;
+  document.querySelectorAll(".m-rec").forEach(e => { e.innerHTML = txt; });
 }
 async function feedNBA(day){
   const today = new Date(); if (isoDay(day) !== isoDay(today)) throw new Error("NBA feed only has today");
@@ -1967,7 +1990,8 @@ async function renderGames(){
     else pred = `<div class="pred"><span class="muted">${live ? "Live" : done ? "Final" : "Upcoming"}</span><span>Play-by-play ›</span></div>`;
     return `<div class="game" tabindex="0" role="button" data-gid="${esc(g.id)}" aria-label="${esc(g.away.name)} at ${esc(g.home.name)}: open play-by-play"><div class="gh"><span class="${live?"live":""}">${live ? "LIVE · " + esc(g.status) : done ? esc(g.status) : esc(tip)}</span><span>${esc(g.away.ab)} @ ${esc(g.home.ab)}</span></div>${row(g.away,"away")}${row(g.home,"home")}${pred}</div>`;
   };
-  const recBox = `<div class="box gm-rec"><b>Model record, ${esc(LATEST_NAME())}:</b> ${MODEL_REC.w}-${MODEL_REC.l} <span class="muted">(${(100 * MODEL_REC.w / (MODEL_REC.w + MODEL_REC.l)).toFixed(1)}% of games picked right, through ${esc(MODEL_REC.through)})</span></div>`;
+  const recBox = `<div class="box gm-rec"><b>Model record, ${esc(DATA.seasons[DATA.seasons.length - 1])}:</b> <span class="m-rec">counting…</span></div>`;
+  modelRecord().then(fillRec, () => fillRec(null));
   gmOut.innerHTML = recBox + `<div class="box"><h2>${esc(when)} <small>${games.length} game${games.length>1?"s":""} · live from ${gmSource}${games.some(g=>g.state==="in")?" · updates every 30 seconds":""}</small></h2>
     <div class="games">${games.map(card).join("")}</div>
     <p class="note">Times are in your time zone.</p></div>`;
@@ -2809,6 +2833,7 @@ function teamProfile(ab){
 const mOut = document.getElementById("me-out");
 const METHOD_TXT = /*__METHODTXT__*/"";
 function renderMethod(){
+  setTimeout(() => modelRecord().then(fillRec, () => fillRec(null)), 0);
   if (mOut.dataset.done) return;
   if (!BT) BT = { full: M.backtest(), base: M.backtest({wTop:0, wLuck:0, wRot:0, k:1, hca:4}), dOff: M.backtest({wTop:0}) };
   const NB = M.backtest({wTop:0, wLuck:0, wAv:0, wRot:0, wPO:0});
@@ -2843,7 +2868,7 @@ function renderMethod(){
 
   <div class="box" id="m-read"><h2>5. How we know it works</h2>
     <p>Every version of the model was tested on seasons it never saw: it was fit on all the other seasons, then asked to predict the missing one.</p>
-    <ul><li><b>This season's games:</b> picking the side it favored before tip-off, the model is ${MODEL_REC.w}-${MODEL_REC.l} (${(100 * MODEL_REC.w / (MODEL_REC.w + MODEL_REC.l)).toFixed(1)}%) through ${MODEL_REC.through}.</li>
+    <ul><li><b>This season's games:</b> picking the side it favored before tip-off, the model is <span class="m-rec">counting…</span>. This is counted live from the scores each time the page loads.</li>
       <li><b>Playoff series:</b> it picks about 76% of the 450 series since 1997 correctly, and its probabilities are well calibrated (when it says 70%, those teams win about 70% of the time).</li>
       <li><b>Next season:</b> rating each roster with Chip Equity predicts teams' next-season results to within about 7 wins on average.</li>
       <li><b>What didn't make it:</b> a lot was tried and dropped because it didn't predict better: weighting by usage or shot volume, raw on/off numbers, play types, splitting lead credit proportionally, and style matchups (rebounding, turnovers, rim protection, pace, threes). A change was kept only when it held up.</li></ul></div>
