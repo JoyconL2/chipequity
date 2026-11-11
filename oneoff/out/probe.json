@@ -1,0 +1,325 @@
+{
+ "1996-97": {
+  "games": 1261,
+  "gid": "0029600298",
+  "cdn_pbp": null,
+  "stats_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "1997-98": {
+  "games": 1260,
+  "gid": "0029700298",
+  "cdn_pbp": null,
+  "stats_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "1998-99": {
+  "games": 791,
+  "gid": "0029800182",
+  "cdn_pbp": null,
+  "stats_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "1999-00": {
+  "games": 1264,
+  "gid": "0029900298",
+  "cdn_pbp": null,
+  "stats_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2000-01": {
+  "games": 1260,
+  "gid": "0020000298",
+  "cdn_pbp": null,
+  "stats_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2001-02": {
+  "games": 1260,
+  "gid": "0020100298",
+  "cdn_pbp": null,
+  "stats_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2002-03": {
+  "games": 1277,
+  "gid": "0020200298",
+  "cdn_pbp": null,
+  "stats_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2003-04": {
+  "games": 1271,
+  "gid": "0020300298",
+  "cdn_pbp": null,
+  "stats_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2004-05": {
+  "games": 1314,
+  "gid": "0020400308",
+  "cdn_pbp": null,
+  "stats_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2005-06": {
+  "games": 1319,
+  "gid": "0020500308",
+  "cdn_pbp": null,
+  "stats_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2006-07": {
+  "games": 1309,
+  "gid": "0020600308",
+  "cdn_pbp": null,
+  "stats_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2007-08": {
+  "games": 1316,
+  "gid": "0020700308",
+  "cdn_pbp": null,
+  "stats_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2008-09": {
+  "games": 1315,
+  "gid": "0020800308",
+  "cdn_pbp": null,
+  "stats_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2009-10": {
+  "games": 1312,
+  "gid": "0020900308",
+  "cdn_pbp": null,
+  "stats_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2010-11": {
+  "games": 1311,
+  "gid": "0021000308",
+  "cdn_pbp": null,
+  "stats_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2011-12": {
+  "games": 1074,
+  "gid": "0021100248",
+  "cdn_pbp": null,
+  "stats_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2012-13": {
+  "games": 1315,
+  "gid": "0021200308",
+  "cdn_pbp": null,
+  "stats_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2013-14": {
+  "games": 1319,
+  "gid": "0021300308",
+  "cdn_pbp": null,
+  "stats_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2014-15": {
+  "games": 1311,
+  "gid": "0021400308",
+  "cdn_pbp": null,
+  "stats_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2015-16": {
+  "games": 1316,
+  "gid": "0021500308",
+  "cdn_pbp": null,
+  "stats_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2016-17": {
+  "games": 1309,
+  "gid": "0021600308",
+  "cdn_pbp": null,
+  "stats_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2017-18": {
+  "games": 1312,
+  "gid": "0021700308",
+  "cdn_pbp": null,
+  "stats_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2018-19": {
+  "games": 1312,
+  "gid": "0021800308",
+  "cdn_pbp": null,
+  "stats_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2019-20": {
+  "games": 1142,
+  "gid": "0021900265",
+  "cdn_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2020-21": {
+  "games": 1165,
+  "gid": "0022000271",
+  "cdn_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2021-22": {
+  "games": 1317,
+  "gid": "0022100308",
+  "cdn_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2022-23": {
+  "games": 1314,
+  "gid": "0022200308",
+  "cdn_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2023-24": {
+  "games": 1312,
+  "gid": "0022300308",
+  "cdn_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2024-25": {
+  "games": 1314,
+  "gid": "0022400308",
+  "cdn_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ },
+ "2025-26": {
+  "games": 1315,
+  "gid": "0022500308",
+  "cdn_pbp": 200,
+  "video": [
+   false,
+   false,
+   false
+  ]
+ }
+}
