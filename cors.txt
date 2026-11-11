@@ -1,20 +1,15 @@
-== https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json
+== origin none
 HTTP/2 403 
-content-type: text/html
-x-content-type-options: nosniff
-== https://cdn.nba.com/static/json/liveData/playbyplay/playbyplay_0022600150.json
+== origin https://example.netlify.app
 HTTP/2 403 
-content-type: text/html
-x-content-type-options: nosniff
-== https://cdn.nba.com/static/json/liveData/playbyplay/playbyplay_0022100002.json
+== origin https://www.nba.com
 HTTP/2 403 
-content-type: text/html
-x-content-type-options: nosniff
-== https://cdn.nba.com/static/json/liveData/boxscore/boxscore_0022100002.json
+access-control-max-age: 86400
+access-control-allow-credentials: true
+access-control-allow-headers: *
+access-control-allow-methods: GET,POST
+access-control-allow-origin: https://www.nba.com
+== referer only netlify
 HTTP/2 403 
-content-type: text/html
-x-content-type-options: nosniff
-== https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json
+== origin only netlify
 HTTP/2 403 
-content-type: text/html
-x-content-type-options: nosniff
