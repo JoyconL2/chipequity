@@ -1,0 +1,16 @@
+name: cors-check
+on: { push: { branches: [cors-check] } }
+permissions: { contents: write }
+jobs:
+  c:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          H='-H "Origin: https://example.netlify.app" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130 Safari/537.36" -H "Referer: https://example.netlify.app/"'
+          for u in https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json https://cdn.nba.com/static/json/liveData/playbyplay/playbyplay_0022600150.json https://cdn.nba.com/static/json/liveData/playbyplay/playbyplay_0022100002.json https://cdn.nba.com/static/json/liveData/boxscore/boxscore_0022100002.json https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json; do
+            echo "== $u" >> cors.txt
+            eval curl -sS -o /dev/null -D - $H "$u" | grep -iE "^HTTP|access-control|content-type" >> cors.txt || echo fail >> cors.txt
+          done
+          git config user.name bot; git config user.email bot@users.noreply.github.com
+          git add cors.txt; git commit -m "cors result"; git push
