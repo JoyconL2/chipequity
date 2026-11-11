@@ -326,6 +326,7 @@ td.sub{color:var(--ink-3);font-size:12px}
       <button role="tab" data-tab="compare" id="tab-compare">Compare</button>
       <button role="tab" data-tab="matchup" id="tab-matchup">Playoff Matchup</button>
       <button role="tab" data-tab="leaders" id="tab-leaders">Leaders</button>
+      <button role="tab" data-tab="classic" id="tab-classic">1980-96</button>
       <button role="tab" data-tab="teams" id="tab-teams">Teams</button>
       <button role="tab" data-tab="wowy" id="tab-wowy">WOWY</button>
       <button role="tab" data-tab="league" id="tab-league">League</button>
@@ -387,6 +388,8 @@ td.sub{color:var(--ink-3);font-size:12px}
   </section>
 
   <section class="panel" id="p-method" hidden><div id="me-out"></div></section>
+
+  <section class="panel" id="p-classic" hidden><div id="cl-out"></div></section>
 
   <section class="panel" id="p-leaders" hidden>
     <div class="controls">
@@ -2954,18 +2957,70 @@ document.addEventListener("click", e => { const a = e.target.closest("[data-meth
 /* ---------------- tabs + season type ---------------- */
 const tabs = [...document.querySelectorAll("nav.tabs button")];
 const renderLiveFeed = () => { renderGames(); if (!gcGame) renderSeason(); };
-const renderers = {wowy:renderWowy, home:renderHome, players:renderPlayer, compare:renderCompare, matchup:renderMatchup, method:renderMethod, leaders:renderLeaders, teams:renderTeams, league:renderLeague, games:renderLiveFeed};
+const renderers = {classic:renderClassic, wowy:renderWowy, home:renderHome, players:renderPlayer, compare:renderCompare, matchup:renderMatchup, method:renderMethod, leaders:renderLeaders, teams:renderTeams, league:renderLeague, games:renderLiveFeed};
 let current = "players";
 const stSeg = document.getElementById("season-type");
 document.addEventListener("click", e => {          // any player link opens his profile
   const a = e.target.closest && e.target.closest("[data-player]"); if (!a || e.defaultPrevented) return;
   e.preventDefault(); openPlayer(+a.dataset.player, a.dataset.season != null ? +a.dataset.season : null);
 });
+/* ---------------- 1980-96 (Chip Equity v1, box-score estimate; pre97.json, loaded when the page opens) ---------------- */
+let CL = null, CL_P = null, CL_VIEW = "rs", CL_PL = "Michael Jordan";
+const clOut = document.getElementById("cl-out");
+function loadClassic(){ if (!CL_P) CL_P = fetch("pre97.json", {cache: "force-cache"}).then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+  .then(j => (CL = j)).catch(e => { CL_P = null; throw e; }); return CL_P; }
+async function renderClassic(){
+  if (!CL) { clOut.innerHTML = `<div class="msg">Loading 1980-96…</div>`;
+    try { await loadClassic(); } catch (e) { clOut.innerHTML = `<div class="msg">Couldn't load pre97.json (${esc(e.message)}). It must be deployed next to index.html.</div>`; return; }
+    if (current !== "classic") return; }
+  const sg = v => v == null ? "–" : (v >= 0 ? "+" : "") + v.toFixed(2), cls = v => v >= 0 ? "" : ' class="neg"';
+  const who = (n) => { const k = nameIdx.get(norm(n)); return k != null ? pLink(k, esc(n)) : esc(n); };
+  const chg = (a, b) => { const d = a - b; return Math.abs(d) < 0.005 ? `<span class="muted">–</span>` : `<span class="muted">${sg(b)}</span> <span style="color:${d > 0 ? "var(--good,#3ecf8e)" : "var(--bad,#e05d5d)"}">${d > 0 ? "▲" : "▼"}${Math.abs(d).toFixed(2)}</span>`; };
+  const RS = CL.rs, PO = CL.po;   // rs: pid name season team mpg poss off def total before; po: pid name season team gp poss off def total
+  const seasonTable = (rows, before) => `<div class="tscroll"><table><thead><tr><th>#</th><th class="l">Player</th><th class="l">Season</th><th class="l">Team</th><th>Total</th><th>Off</th><th>Def</th>${before ? `<th title="Before the light playoff weighting">Before</th>` : `<th>GP</th>`}</tr></thead><tbody>
+    ${rows.map((r, i) => `<tr><td>${i + 1}</td><td class="l">${who(r[1])}</td><td class="l">${r[2]}</td><td class="l">${esc(r[3])}</td><td${cls(r[8])}><b>${sg(r[8])}</b></td><td>${sg(r[6])}</td><td>${sg(r[7])}</td>${before ? `<td>${chg(r[8], r[9])}</td>` : `<td>${r[4]}</td>`}</tr>`).join("")}</tbody></table></div>`;
+  const stretch = (rows, need) => { const by = new Map(); for (const r of rows) { const y = +r[2].slice(0, 4), m = by.get(r[1]) || new Map(); m.set(y, Math.max(m.get(y) ?? -99, r[8])); by.set(r[1], m); }
+    const out = []; for (const [n, m] of by) { let best = null; for (const y0 of m.keys()) { const v = [...m].filter(([y]) => y >= y0 && y < y0 + 5);
+      if (v.length >= need) { const a = v.reduce((s, x) => s + x[1], 0) / v.length; if (!best || a > best[2]) best = [n, `${Math.min(...v.map(x => x[0]))}-${String(Math.max(...v.map(x => x[0])) + 1).slice(2)}`, a, v.length]; } }
+      if (best) out.push(best); }
+    return out.sort((a, b) => b[2] - a[2]).slice(0, 30); };
+  const stretchTable = rows => `<div class="tscroll"><table><thead><tr><th>#</th><th class="l">Player</th><th class="l">Years</th><th>Seasons</th><th>Average</th></tr></thead><tbody>${rows.map((r, i) => `<tr><td>${i + 1}</td><td class="l">${who(r[0])}</td><td class="l">${r[1]}</td><td>${r[3]}</td><td><b>${sg(r[2])}</b></td></tr>`).join("")}</tbody></table></div>`;
+  const seg = `<div class="seg" role="group" aria-label="View">${[["rs","Regular season"],["po","Playoffs"],["pl","By player"]].map(([k, l]) => `<button data-clv="${k}" aria-pressed="${CL_VIEW === k}">${l}</button>`).join("")}</div>`;
+  let body = "";
+  if (CL_VIEW === "rs") {
+    const peaks = []; const seen = new Set(); for (const r of RS) if (!seen.has(r[1])) { seen.add(r[1]); peaks.push(r); }
+    body = `<div class="box"><h2>Best player peaks <small>each player's best season · regular season with light playoff weighting · 1,500+ possessions</small></h2>${seasonTable(peaks.slice(0, 30), true)}</div>
+      <div class="box"><h2>Best single seasons <small>a player can appear more than once</small></h2>${seasonTable(RS.slice(0, 50), true)}</div>
+      <div class="box"><h2>Best 5-year stretches <small>average of the best 5-year window, 4+ qualifying seasons</small></h2>${stretchTable(stretch(RS, 4))}</div>`;
+  } else if (CL_VIEW === "po") {
+    const car = new Map(); for (const r of PO) { const c = car.get(r[1]) || [0, 0, -99]; c[0] += Math.max(0, r[8]); c[1]++; c[2] = Math.max(c[2], r[8]); car.set(r[1], c); }
+    const carRows = [...car].sort((a, b) => b[1][0] - a[1][0]).slice(0, 30);
+    body = `<div class="box"><h2>Best playoff runs <small>playoffs only · 300+ possessions · adjusted for opponents</small></h2>${seasonTable(PO.slice(0, 50), false)}</div>
+      <div class="box"><h2>Best 5-year playoff stretches <small>3+ qualifying runs in the window</small></h2>${stretchTable(stretch(PO, 3))}</div>
+      <div class="box"><h2>Playoff career value <small>sum of every positive playoff run, 1980-96</small></h2><div class="tscroll"><table><thead><tr><th>#</th><th class="l">Player</th><th>Total</th><th>Runs</th><th>Best</th></tr></thead><tbody>
+        ${carRows.map(([n, c], i) => `<tr><td>${i + 1}</td><td class="l">${who(n)}</td><td><b>${sg(c[0])}</b></td><td>${c[1]}</td><td>${sg(c[2])}</td></tr>`).join("")}</tbody></table></div></div>`;
+  } else {
+    const names = [...new Set(RS.map(r => r[1]).concat(PO.map(r => r[1])))].sort((a, b) => a.split(" ").slice(-1)[0].localeCompare(b.split(" ").slice(-1)[0]) || a.localeCompare(b));
+    if (!names.includes(CL_PL)) CL_PL = names[0];
+    const mine = RS.filter(r => r[1] === CL_PL).sort((a, b) => a[2] < b[2] ? -1 : 1), pom = new Map(PO.filter(r => r[1] === CL_PL).map(r => [r[2], r]));
+    const allS = [...new Set(mine.map(r => r[2]).concat([...pom.keys()]))].sort();
+    const k = nameIdx.get(norm(CL_PL));
+    body = `<div class="box"><div class="field" style="max-width:320px"><label for="cl-pl">Player</label><select id="cl-pl">${names.map(n => `<option ${n === CL_PL ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></div>
+      <h2 style="margin-top:12px">${esc(CL_PL)} <small>1980-96 · regular season with light playoff weighting${k != null ? ` · ${pLink(k, "1996-97 on: player page ›")}` : ""}</small></h2>
+      <div class="tscroll"><table><thead><tr><th class="l">Season</th><th class="l">Team</th><th>MPG</th><th>Off</th><th>Def</th><th>Total</th><th>Before</th><th>Playoffs</th></tr></thead><tbody>
+      ${allS.map(s => { const r = mine.find(x => x[2] === s), q = pom.get(s);
+        return `<tr><td class="l">${s}</td><td class="l">${esc((r || q)[3])}</td><td>${r ? r[4] : "–"}</td><td>${r ? sg(r[6]) : "–"}</td><td>${r ? sg(r[7]) : "–"}</td><td>${r ? `<b>${sg(r[8])}</b>` : `<span class="muted">under 1,500 poss.</span>`}</td><td>${r ? chg(r[8], r[9]) : ""}</td><td>${q ? sg(q[8]) : "–"}</td></tr>`; }).join("")}</tbody></table></div></div>`;
+  }
+  clOut.innerHTML = `<div class="box"><h2>1980-96 <small>Chip Equity v1 · estimated from the box score</small></h2>
+    <p class="note" style="margin:0 0 10px">Play-by-play only exists from 1996-97, so these seasons are <b>estimated</b>: a model trained on real Chip Equity (1996-97 on) predicts it from each player's box score and his team's results. Same scale as the rest of the site (points per 100 possessions). In the regular season, a playoff run better or worse than his season predicts moves the number by half the difference, scaled by the playoff sample. The estimate reads offense better than defense and squeezes the very top, so treat close calls as ties.</p>${seg}</div>${body}`;
+  clOut.querySelectorAll("[data-clv]").forEach(b => b.addEventListener("click", () => { CL_VIEW = b.dataset.clv; renderClassic(); }));
+  const sel = document.getElementById("cl-pl"); if (sel) sel.addEventListener("change", () => { CL_PL = sel.value; renderClassic(); });
+}
 function show(tab){
   current = tab;
   tabs.forEach(b=>b.setAttribute("aria-selected", b.dataset.tab===tab));
   document.querySelectorAll(".panel").forEach(p=>p.hidden = p.id!=="p-"+tab);
-  stSeg.style.visibility = (tab==="home" || tab==="matchup" || tab==="method" || tab==="league" || tab==="games" || tab==="wowy") ? "hidden" : "visible";
+  stSeg.style.visibility = (tab==="classic" || tab==="home" || tab==="matchup" || tab==="method" || tab==="league" || tab==="games" || tab==="wowy") ? "hidden" : "visible";
   stSeg.hidden = false; document.getElementById("st-both").hidden = true;   // leaders may swap these back
   if (tab!=="games") clearTimeout(gmTimer);
   renderers[tab]();
