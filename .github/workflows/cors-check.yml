@@ -6,18 +6,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
       - run: |
-          u=https://cdn.nba.com/static/json/liveData/playbyplay/playbyplay_0022100002.json
-          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130 Safari/537.36"
-          rm -f cors.txt
-          for o in none "https://example.netlify.app" "https://www.nba.com"; do
-            echo "== origin $o" >> cors.txt
-            if [ "$o" = none ]; then curl -sS -o /dev/null -D - -H "User-Agent: $UA" "$u" | grep -iE "^HTTP|access-control" >> cors.txt
-            else curl -sS -o /dev/null -D - -H "User-Agent: $UA" -H "Origin: $o" -H "Referer: $o/" "$u" | grep -iE "^HTTP|access-control" >> cors.txt; fi
-          done
-          echo "== referer only netlify" >> cors.txt
-          curl -sS -o /dev/null -D - -H "User-Agent: $UA" -H "Referer: https://example.netlify.app/" "$u" | grep -iE "^HTTP|access-control" >> cors.txt
-          echo "== origin only netlify" >> cors.txt
-          curl -sS -o /dev/null -D - -H "User-Agent: $UA" -H "Origin: https://example.netlify.app" "$u" | grep -iE "^HTTP|access-control" >> cors.txt
-          git config user.name bot; git config user.email bot@users.noreply.github.com
-          git add cors.txt; git commit -m "cors result"; git push
+          pip install -q requests
+          cd update && python - <<'PY'
+          import json, fetch_season as F
+          j = F.get("https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json")
+          out = [[g["gameId"], (g.get("gameDateEst") or "")[:10], g["homeTeam"]["teamTricode"], g["awayTeam"]["teamTricode"], g["homeTeam"].get("score"), g["awayTeam"].get("score"), g.get("gameStatus"), g.get("isNeutral")]
+                 for d in j["leagueSchedule"]["gameDates"] for g in d["games"]]
+          json.dump(out, open("../sched.json", "w"))
+          print(len(out))
+          PY
+          cd .. && git config user.name bot && git config user.email bot@users.noreply.github.com && git add sched.json && git commit -m "sched result" && git push
