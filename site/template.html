@@ -1909,9 +1909,10 @@ async function feedESPN(day){
   return (d.events||[]).map(e => { const c = e.competitions[0], st = e.status.type;
     const side = h => { const x = c.competitors.find(q=>q.homeAway===h), ab = ESPN_FIX[x.team.abbreviation] || x.team.abbreviation;
       return {ab, tid:x.team.id, name:x.team.shortDisplayName || x.team.displayName, score: st.state==="pre" ? null : +x.score, rec:(x.records&&x.records[0]&&x.records[0].summary)||"", logo:x.team.logo}; };
-    return {id:e.id, src:"espn", start:new Date(e.date), state:st.state, status:st.shortDetail, home:side("home"), away:side("away")}; });
+    return {id:e.id, src:"espn", stype: e.season && e.season.type, start:new Date(e.date), state:st.state, status:st.shortDetail, home:side("home"), away:side("away")}; });
 }
 // the model's record this season, counted in the browser from every finished game on ESPN's scoreboard:
+// (regular season and playoffs only; preseason games don't count)
 // a game counts as right when the side the site favors (the same pick shown on each game card) won
 let REC_P = null; const REC_DAYS = new Map();
 function modelRecord(){
@@ -1924,7 +1925,7 @@ function modelRecord(){
     const lists = await Promise.all(days.map(d => REC_DAYS.has(isoDay(d)) ? REC_DAYS.get(isoDay(d)) : feedESPN(d).then(L => { if (isoDay(d) !== isoDay(today)) REC_DAYS.set(isoDay(d), L); return L; }).catch(() => null)));
     let w = 0, l = 0, last = null, gaps = 0;
     lists.forEach((L, i) => { if (!L) { gaps++; return; }
-      for (const g of L) { if (g.state !== "post" || g.start < CUR.seasonStart || g.home.score == null) continue;
+      for (const g of L) { if (g.state !== "post" || g.start < CUR.seasonStart || g.home.score == null || g.stype === 1) continue;   // 1 = preseason
         const p = gamePred(g); if (!p) continue;
         ((p.pHome >= 0.5) === (g.home.score > g.away.score)) ? w++ : l++; last = days[i]; } });
     if (!w && !l) throw new Error("no finished games found");
