@@ -1897,6 +1897,9 @@ lgStat.addEventListener("change", renderLeague);
 
 /* ---------------- GAMES (live feed) ---------------- */
 const gmOut = document.getElementById("gm-out"), gmDate = document.getElementById("gm-date");
+// the model's record picking this season's games (winner = the side it favored before tip-off)
+const LATEST_NAME = () => DATA.seasons[DATA.seasons.length - 1];
+const MODEL_REC = {w: 116, l: 44, through: "Nov 10"};
 const ESPN_FIX = {GS:"GSW", NY:"NYK", SA:"SAS", NO:"NOP", UTAH:"UTA", WSH:"WAS", PHO:"PHX", BRK:"BKN", CHO:"CHA"};
 const ymd = d => `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`;
 const isoDay = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
@@ -1964,7 +1967,8 @@ async function renderGames(){
     else pred = `<div class="pred"><span class="muted">${live ? "Live" : done ? "Final" : "Upcoming"}</span><span>Play-by-play ›</span></div>`;
     return `<div class="game" tabindex="0" role="button" data-gid="${esc(g.id)}" aria-label="${esc(g.away.name)} at ${esc(g.home.name)}: open play-by-play"><div class="gh"><span class="${live?"live":""}">${live ? "LIVE · " + esc(g.status) : done ? esc(g.status) : esc(tip)}</span><span>${esc(g.away.ab)} @ ${esc(g.home.ab)}</span></div>${row(g.away,"away")}${row(g.home,"home")}${pred}</div>`;
   };
-  gmOut.innerHTML = `<div class="box"><h2>${esc(when)} <small>${games.length} game${games.length>1?"s":""} · live from ${gmSource}${games.some(g=>g.state==="in")?" · updates every 30 seconds":""}</small></h2>
+  const recBox = `<div class="box gm-rec"><b>Model record, ${esc(LATEST_NAME())}:</b> ${MODEL_REC.w}-${MODEL_REC.l} <span class="muted">(${(100 * MODEL_REC.w / (MODEL_REC.w + MODEL_REC.l)).toFixed(1)}% of games picked right, through ${esc(MODEL_REC.through)})</span></div>`;
+  gmOut.innerHTML = recBox + `<div class="box"><h2>${esc(when)} <small>${games.length} game${games.length>1?"s":""} · live from ${gmSource}${games.some(g=>g.state==="in")?" · updates every 30 seconds":""}</small></h2>
     <div class="games">${games.map(card).join("")}</div>
     <p class="note">Times are in your time zone.</p></div>`;
   gmOut.querySelectorAll("[data-mu]").forEach(a => a.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); const [aw, hm] = a.dataset.mu.split("|"); muHome = "A"; openMatchup(hm, LATEST, aw, LATEST); }));
@@ -2059,7 +2063,9 @@ const playVideo = (gid, ev, title) => { const yy = +String(gid).slice(3, 5), sea
   return `https://www.nba.com/stats/events/?GameEventID=${encodeURIComponent(ev)}&GameID=${encodeURIComponent(gid)}&Season=${season}&flag=1&sct=plot&title=${encodeURIComponent(title || "")}`; };
 // highlight searches on YouTube for a player (a season, its playoffs, or the career)
 const ytSearch = q => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+const CLIPS = false;   // video / highlight links, switched off for now
 function hlLinks(k, s = null, po = false){
+  if (!CLIPS) return "";
   const n = DATA.names[k], a = (q, l) => `<a href="${ytSearch(q)}" target="_blank" rel="noopener">${l}</a>`;
   return `<div class="hl-links"><span class="muted">▶ Highlights</span>${s == null ? a(`${n} career highlights`, "Career") + a(`${n} best plays`, "Best plays")
     : a(`${n} ${S[s]} highlights`, `${S[s]} season`) + (po ? a(`${n} ${S[s]} playoff highlights`, `${S[s]} playoffs`) : "")}<span class="muted sub">on YouTube</span></div>`; }
@@ -2102,7 +2108,7 @@ async function renderGameCenter(useCache){
   let d = useCache && gcData ? gcData : null, err = null;
   if (!d) { try {
     // games listed from ESPN: find the NBA.com game id too, so the play-by-play comes from NBA.com with a video link per play
-    if (g.src !== "nba" && g.nbaGid === undefined) g.nbaGid = await nbaGidFor(g).catch(() => null);
+    if (CLIPS && g.src !== "nba" && g.nbaGid === undefined) g.nbaGid = await nbaGidFor(g).catch(() => null);
     d = g.src === "nba" ? await detailNBA(g) : g.nbaGid ? await detailNBA({...g, id: g.nbaGid}).catch(() => detailESPN(g)) : await detailESPN(g);
   } catch (e) { err = e; } }
   if (gcGame !== g) return;           // user navigated away while loading
@@ -2121,7 +2127,7 @@ async function renderGameCenter(useCache){
       <div class="gc-team">${logoBig(g.away)}<div class="nm">${esc(g.away.name)}</div><div class="rec">${esc(g.away.rec || "")} · away</div></div>
       <div class="gc-score">${d.state === "pre" ? "vs" : `${as} – ${hs}`}<small class="${live ? "live" : ""}">${live ? "● Live · " : ""}${esc(d.status || "")}</small></div>
       <div class="gc-team">${logoBig(g.home)}<div class="nm">${esc(g.home.name)}</div><div class="rec">${esc(g.home.rec || "")} · home</div></div></div>
-    ${d.state === "post" ? `<div class="hl-links gc-hl"><span class="muted">▶ Game highlights</span><a href="${ytSearch(`${g.away.name} vs ${g.home.name} full game highlights ${g.start.toLocaleDateString("en-US", {month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York"})}`)}" target="_blank" rel="noopener">YouTube</a>${g.src === "nba" || g.nbaGid ? `<a href="https://www.nba.com/game/${g.src === "nba" ? g.id : g.nbaGid}" target="_blank" rel="noopener">NBA.com</a>` : ""}</div>` : ""}
+    ${CLIPS && d.state === "post" ? `<div class="hl-links gc-hl"><span class="muted">▶ Game highlights</span><a href="${ytSearch(`${g.away.name} vs ${g.home.name} full game highlights ${g.start.toLocaleDateString("en-US", {month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York"})}`)}" target="_blank" rel="noopener">YouTube</a>${g.src === "nba" || g.nbaGid ? `<a href="https://www.nba.com/game/${g.src === "nba" ? g.id : g.nbaGid}" target="_blank" rel="noopener">NBA.com</a>` : ""}</div>` : ""}
     <div class="gc-wp"><span>${esc(g.away.ab)} ${pctTxt(1-wpNow)}</span><div class="bar"><i style="width:${(1-wpNow)*100}%;background:var(--s2)"></i><i style="width:${wpNow*100}%;background:var(--s1)"></i></div><span>${esc(g.home.ab)} ${pctTxt(wpNow)}</span></div>
     ${live ? `<p class="note" style="margin-bottom:0">Updates every 15 seconds.</p>` : ""}</div>`;
 
@@ -2164,7 +2170,7 @@ async function renderGameCenter(useCache){
   const fresh = new Set(); if (gcSeen.size) for (const p of plays) if (!gcSeen.has(p.id)) fresh.add(p.id);
   plays.forEach(p => gcSeen.add(p.id));
   const rows = shown.map(p => { const sep = p.period !== lastPer ? `<div class="qsep">${perName(p.period)}</div>` : ""; lastPer = p.period;
-    return `${sep}<div class="pl ${p.scoring ? "score" : ""} ${fresh.has(p.id) ? "new" : ""}"><span class="t">${perName(p.period)} ${clockTxt(p.left)}</span><span class="tm">${esc(p.team || "")}</span><span class="pf">${p.who || p.img || p.nbaId ? liveFace(p.img, p.who, p.nbaId) : ""}</span><span class="tx">${esc(p.text)}${p.vid && (g.src === "nba" || g.nbaGid) ? ` <a class="vid" href="${playVideo(g.src === "nba" ? g.id : g.nbaGid, p.id, p.text)}" target="_blank" rel="noopener" title="Watch this play on NBA.com">▶ Watch</a>` : ""}</span><span class="sc">${p.away}–${p.home}</span></div>`; }).join("");
+    return `${sep}<div class="pl ${p.scoring ? "score" : ""} ${fresh.has(p.id) ? "new" : ""}"><span class="t">${perName(p.period)} ${clockTxt(p.left)}</span><span class="tm">${esc(p.team || "")}</span><span class="pf">${p.who || p.img || p.nbaId ? liveFace(p.img, p.who, p.nbaId) : ""}</span><span class="tx">${esc(p.text)}${CLIPS && p.vid && (g.src === "nba" || g.nbaGid) ? ` <a class="vid" href="${playVideo(g.src === "nba" ? g.id : g.nbaGid, p.id, p.text)}" target="_blank" rel="noopener" title="Watch this play on NBA.com">▶ Watch</a>` : ""}</span><span class="sc">${p.away}–${p.home}</span></div>`; }).join("");
   const opt = (v, l, cur) => `<option value="${v}" ${String(cur) === String(v) ? "selected" : ""}>${l}</option>`;
   const pbp = `<div class="box"><h2>Play-by-play <small>newest first · ${plays.length} plays · score shown ${esc(g.away.ab)}–${esc(g.home.ab)}</small></h2>
     <div class="pbp-filters">
@@ -2837,7 +2843,8 @@ function renderMethod(){
 
   <div class="box" id="m-read"><h2>5. How we know it works</h2>
     <p>Every version of the model was tested on seasons it never saw: it was fit on all the other seasons, then asked to predict the missing one.</p>
-    <ul><li><b>Playoff series:</b> it picks about 76% of the 450 series since 1997 correctly, and its probabilities are well calibrated (when it says 70%, those teams win about 70% of the time).</li>
+    <ul><li><b>This season's games:</b> picking the side it favored before tip-off, the model is ${MODEL_REC.w}-${MODEL_REC.l} (${(100 * MODEL_REC.w / (MODEL_REC.w + MODEL_REC.l)).toFixed(1)}%) through ${MODEL_REC.through}.</li>
+      <li><b>Playoff series:</b> it picks about 76% of the 450 series since 1997 correctly, and its probabilities are well calibrated (when it says 70%, those teams win about 70% of the time).</li>
       <li><b>Next season:</b> rating each roster with Chip Equity predicts teams' next-season results to within about 7 wins on average.</li>
       <li><b>What didn't make it:</b> a lot was tried and dropped because it didn't predict better: weighting by usage or shot volume, raw on/off numbers, play types, splitting lead credit proportionally, and style matchups (rebounding, turnovers, rim protection, pace, threes). A change was kept only when it held up.</li></ul></div>
 
