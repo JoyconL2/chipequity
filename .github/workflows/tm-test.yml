@@ -1,0 +1,32 @@
+name: teammate fix this season
+on:
+  push:
+    branches: [tm-test]
+permissions:
+  contents: write
+jobs:
+  t:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - run: python -m pip install --quiet numpy pandas scipy requests
+      - run: python update/setup_pbp.py
+      - uses: actions/cache/restore@v4
+        with:
+          path: live
+          key: live-none
+          restore-keys: live-
+      - run: mkdir -p update/tmp /tmp/cmp && python update/run.py --site-url x > /tmp/cmp/a.log 2>&1 && cp dist/index.html /tmp/cmp/a.html
+      - run: TMFIX=1 python update/run.py --site-url x > /tmp/cmp/b.log 2>&1 && cp dist/index.html /tmp/cmp/b.html
+      - run: npm install --no-save --no-package-lock playwright@1.48.2 && npx playwright install --with-deps chromium
+      - run: node oneoff/tm_compare.mjs /tmp/cmp
+      - run: |
+          git config user.name "oneoff[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add oneoff/out/tm.txt; git commit -q -m "one-off: teammate fix this season"; git push -q origin HEAD:tm-test
+      - if: failure()
+        run: tail -40 /tmp/cmp/*.log

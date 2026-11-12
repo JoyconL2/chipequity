@@ -25,11 +25,14 @@ BETA = 0.5
 _TM = pd.read_csv("tm_sums.csv"); _g = _TM.assign(wo=_TM.tmo * _TM.n, wd=_TM.tmd * _TM.n).groupby(["stype", "season"])
 _co = (_g.wo.sum() / _g.n.sum()).to_dict(); _cd = (_g.wd.sum() / _g.n.sum()).to_dict()
 TMA = {(int(p), s_, t): (o - _co[(t, s_)], d - _cd[(t, s_)]) for p, s_, t, o, d in zip(_TM.p, _TM.season, _TM.stype, _TM.tmo, _TM.tmd)}
+import os
+FIX = os.environ.get("TMFIX") == "1"        # test: weak side x2.0, strong side x0.5
+bet = lambda a: (2.0 if a < 0 else 0.5) if FIX else BETA
 for k_, (n_, v_, o_, d_) in list(LEAD.items()):
-    ao, ad = TMA.get((k_[0], k_[1], "rs"), (0.0, 0.0)); LEAD[k_] = (n_, v_ - BETA * (ao + ad), o_ - BETA * ao, d_ - BETA * ad)
+    ao, ad = TMA.get((k_[0], k_[1], "rs"), (0.0, 0.0)); bo, bd = bet(ao), bet(ad); LEAD[k_] = (n_, v_ - bo * ao - bd * ad, o_ - bo * ao, d_ - bd * ad)
 for k_, q in POL.items():
     if q["n"] > 0:
-        ao, ad = TMA.get((k_[0], k_[1], "po"), (0.0, 0.0)); q["lead_t"] -= BETA * (ao + ad); q["off_t"] -= BETA * ao; q["de_t"] -= BETA * ad
+        ao, ad = TMA.get((k_[0], k_[1], "po"), (0.0, 0.0)); bo, bd = bet(ao), bet(ad); q["lead_t"] -= bo * ao + bd * ad; q["off_t"] -= bo * ao; q["de_t"] -= bd * ad
 C = pd.read_csv("comp_share.csv"); COMP = {(int(p), s): (a, b) for p, s, a, b in zip(C.p, C.season, C.comp, C.t_comp)}
 def comps(p, seas, K, po_seas=None):
     n = net = off = de = ca = cb = 0.0
