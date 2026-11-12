@@ -1,0 +1,17 @@
+name: picks test
+on:
+  push:
+    branches: [picks-test]
+jobs:
+  t:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          for u in "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=20261112" \
+                   "https://site.web.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=20261112" \
+                   "https://cdn.espn.com/core/nba/scoreboard?xhr=1&dates=20261112" \
+                   "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/1/roster" \
+                   "https://sports.core.api.espn.com/v2/sports/basketball/leagues/nba/teams/1/injuries" \
+                   "https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json"; do
+            for ua in "curl/8" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"; do
+              echo "$(curl -s -o /tmp/o -w '%{http_code}' -A "$ua" -H 'Origin: https://www.espn.com' "$u") $(wc -c </tmp/o) [$ua] $u"; done; done
