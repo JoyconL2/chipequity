@@ -13,6 +13,6 @@ git("commit", "-q", "-m", f"Daily update: {u['season']} through {u['through']} -
 import time
 for i in range(5):                       # the model-picks job may have pushed dist/picks.json meanwhile
     if git("push").returncode == 0: break
-    time.sleep(15); git("pull", "-q", "--rebase", "origin", "main", check=True)
+    time.sleep(15); git("pull", "-q", "--rebase", "--autostash", "origin", "main", check=True)
 else: sys.exit("push failed")
 print("pushed:", u["season"], "through", u["through"])
