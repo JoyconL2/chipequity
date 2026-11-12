@@ -1914,25 +1914,32 @@ async function feedESPN(day){
       return {ab, tid:x.team.id, name:x.team.shortDisplayName || x.team.displayName, score: st.state==="pre" ? null : +x.score, rec:(x.records&&x.records[0]&&x.records[0].summary)||"", logo:x.team.logo}; };
     return {id:e.id, src:"espn", stype: e.season && e.season.type, start:new Date(e.date), state:st.state, status:st.shortDetail, home:side("home"), away:side("away")}; });
 }
-// the model's record this season, counted in the browser from every finished game on ESPN's scoreboard:
-// (regular season and playoffs only; preseason games don't count)
-// a game counts as right when the side the site favors (the same pick shown on each game card) won
+// the model's record this season. Each game counts the pick the site showed before tip-off: the pick is saved by the
+// "model picks" job (update/snap_picks.mjs, every hour on game days) into picks.json, and once a game starts its pick is
+// never changed. Recounting old games with today's ratings and today's injury list would keep changing the record.
+// picks.json also holds the record carried over from before the saved picks began ("base", through that date).
+// A finished game with no saved pick (the job didn't run in time) falls back to today's model.
 let REC_P = null; const REC_DAYS = new Map();
 function modelRecord(){
   if (REC_P) return REC_P;
   REC_P = (async () => {
     if (typeof CUR === "undefined" || !CUR) throw new Error("no season model");
     if (!CUR.ready()) await CUR.ensure();
+    let PK = null; try { PK = await getJSON("picks.json"); } catch (e) { PK = null; }
+    const season = DATA.seasons[DATA.seasons.length - 1];
+    if (PK && PK.season !== season) PK = null;
+    const base = PK && PK.base ? PK.base : null, saved = (PK && PK.games) || {};
     const today = new Date(); today.setHours(12, 0, 0, 0); const days = [];
-    for (let d = new Date(CUR.seasonStart); d <= today; d.setDate(d.getDate() + 1)) { const x = new Date(d); x.setHours(12, 0, 0, 0); days.push(x); }
+    for (let d = new Date(CUR.seasonStart); d <= today; d.setDate(d.getDate() + 1)) { const x = new Date(d); x.setHours(12, 0, 0, 0); if (!base || isoDay(x) > base.through) days.push(x); }
     const lists = await Promise.all(days.map(d => REC_DAYS.has(isoDay(d)) ? REC_DAYS.get(isoDay(d)) : feedESPN(d).then(L => { if (isoDay(d) !== isoDay(today)) REC_DAYS.set(isoDay(d), L); return L; }).catch(() => null)));
-    let w = 0, l = 0, last = null, gaps = 0;
+    let w = base ? base.w : 0, l = base ? base.l : 0, last = base ? new Date(base.through + "T12:00:00") : null, gaps = 0, unsaved = 0;
     lists.forEach((L, i) => { if (!L) { gaps++; return; }
       for (const g of L) { if (g.state !== "post" || g.start < CUR.seasonStart || g.home.score == null || g.stype === 1) continue;   // 1 = preseason
-        const p = gamePred(g); if (!p) continue;
-        ((p.pHome >= 0.5) === (g.home.score > g.away.score)) ? w++ : l++; last = days[i]; } });
+        let pH = saved[g.id] ? saved[g.id][3] : null;
+        if (pH == null) { const p = gamePred(g); if (!p) continue; pH = p.pHome; if (PK) unsaved++; }
+        ((pH >= 0.5) === (g.home.score > g.away.score)) ? w++ : l++; last = days[i]; } });
     if (!w && !l) throw new Error("no finished games found");
-    return {w, l, last, gaps};
+    return {w, l, last, gaps, unsaved};
   })();
   REC_P.catch(() => { REC_P = null; });
   return REC_P;
@@ -2872,7 +2879,7 @@ function renderMethod(){
 
   <div class="box" id="m-read"><h2>5. How we know it works</h2>
     <p>Every version of the model was tested on seasons it never saw: it was fit on all the other seasons, then asked to predict the missing one.</p>
-    <ul><li><b>This season's games:</b> picking the side it favored before tip-off, the model is <span class="m-rec">counting…</span>. This is counted live from the scores each time the page loads.</li>
+    <ul><li><b>This season's games:</b> picking the side it favored before tip-off, the model is <span class="m-rec">counting…</span>. Each game counts the pick shown here before tip-off, saved when the game starts, so later rating changes and injury news never change it.</li>
       <li><b>Playoff series:</b> it picks about 76% of the 450 series since 1997 correctly, and its probabilities are well calibrated (when it says 70%, those teams win about 70% of the time).</li>
       <li><b>Next season:</b> rating each roster with Chip Equity predicts teams' next-season results to within about 7 wins on average.</li>
       <li><b>What didn't make it:</b> a lot was tried and dropped because it didn't predict better: weighting by usage or shot volume, raw on/off numbers, play types, splitting lead credit proportionally, and style matchups (rebounding, turnovers, rim protection, pace, threes). A change was kept only when it held up.</li></ul></div>
