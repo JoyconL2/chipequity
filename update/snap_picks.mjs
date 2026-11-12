@@ -30,7 +30,7 @@ if (process.env.ESPN_MOCK) await page.route(/site\.api\.espn\.com\/.*\/scoreboar
 // are handed to the page as if ESPN had answered it directly.
 if (!process.env.ESPN_MOCK) await page.route(/^https:\/\/[a-z.]*espn\.com\//, async r => {
   try {
-    const res = await r.fetch({ headers: { ...r.request().headers(), "user-agent": UA } });
+    const res = await r.fetch({ headers: { "user-agent": UA, accept: "application/json" } });     // no Origin: ESPN refuses a localhost one
     if (res.status() !== 200) console.log("ESPN", res.status(), r.request().url().slice(0, 120));
     await r.fulfill({ response: res, headers: { ...res.headers(), "access-control-allow-origin": "*" } });
   } catch (e) { console.log("ESPN request failed:", e.message, r.request().url().slice(0, 120)); await r.abort(); }
