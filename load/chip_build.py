@@ -6,7 +6,8 @@
   CompShare  = his share of his team's non-garbage minutes, in games he played
 LeadMargin also counts his playoff lead stints, each playoff possession worth 2 regular-season ones, with the margin
 adjusted for the opponent: + the opponent team's regular-season offense/defense vs league (load/po_lead.py).
-Lead margin is also adjusted for teammates: - 0.5 x the four teammates' 3-year o and d (centred by season).
+Lead margin is also adjusted for teammates, offense and defense separately: the four teammates' 3-year o (or d), centred
+by season, x 0.5 when they are above average and x 2.0 when below.
 Playoff-only Chip Equity (pcepm) = (0.65 x playoff-only regression + 0.35 x opponent-adjusted playoff lead margin
 x n/(n+1000)) x playoff competitive share.
 Single seasons are steadied 40% toward the 3-season window (first full window 1996-99 for the first two seasons).
@@ -25,11 +26,15 @@ BETA = 0.5
 _TM = pd.read_csv("tm_sums.csv"); _g = _TM.assign(wo=_TM.tmo * _TM.n, wd=_TM.tmd * _TM.n).groupby(["stype", "season"])
 _co = (_g.wo.sum() / _g.n.sum()).to_dict(); _cd = (_g.wd.sum() / _g.n.sum()).to_dict()
 TMA = {(int(p), s_, t): (o - _co[(t, s_)], d - _cd[(t, s_)]) for p, s_, t, o, d in zip(_TM.p, _TM.season, _TM.stype, _TM.tmo, _TM.tmd)}
+# per side: where his teammates were below average (offense or defense), give back twice their shortfall (x2.0);
+# where they were above average, take off half (x0.5). Tested 1997-2026: better next-season player and team prediction.
+BETA_WEAK = 2.0
+bet = lambda a: BETA_WEAK if a < 0 else BETA
 for k_, (n_, v_, o_, d_) in list(LEAD.items()):
-    ao, ad = TMA.get((k_[0], k_[1], "rs"), (0.0, 0.0)); LEAD[k_] = (n_, v_ - BETA * (ao + ad), o_ - BETA * ao, d_ - BETA * ad)
+    ao, ad = TMA.get((k_[0], k_[1], "rs"), (0.0, 0.0)); bo, bd = bet(ao), bet(ad); LEAD[k_] = (n_, v_ - bo * ao - bd * ad, o_ - bo * ao, d_ - bd * ad)
 for k_, q in POL.items():
     if q["n"] > 0:
-        ao, ad = TMA.get((k_[0], k_[1], "po"), (0.0, 0.0)); q["lead_t"] -= BETA * (ao + ad); q["off_t"] -= BETA * ao; q["de_t"] -= BETA * ad
+        ao, ad = TMA.get((k_[0], k_[1], "po"), (0.0, 0.0)); bo, bd = bet(ao), bet(ad); q["lead_t"] -= bo * ao + bd * ad; q["off_t"] -= bo * ao; q["de_t"] -= bd * ad
 C = pd.read_csv("comp_share.csv"); COMP = {(int(p), s): (a, b) for p, s, a, b in zip(C.p, C.season, C.comp, C.t_comp)}
 def comps(p, seas, K, po_seas=None):
     n = net = off = de = ca = cb = 0.0
