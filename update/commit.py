@@ -10,5 +10,9 @@ if git("diff", "--cached", "--quiet").returncode == 0:
     print("no changes"); sys.exit(0)
 u = json.load(open(os.path.join(ROOT, "dist", "update.json")))
 git("commit", "-q", "-m", f"Daily update: {u['season']} through {u['through']} - {u['games']} games", check=True)
-git("push", check=True)
+import time
+for i in range(5):                       # the model-picks job may have pushed dist/picks.json meanwhile
+    if git("push").returncode == 0: break
+    time.sleep(15); git("pull", "-q", "--rebase", "origin", "main", check=True)
+else: sys.exit("push failed")
 print("pushed:", u["season"], "through", u["through"])
