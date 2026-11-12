@@ -22,9 +22,19 @@ await new Promise(r => srv.listen(0, "127.0.0.1", r));
 const port = srv.address().port;
 
 const browser = await chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {});
-const ctx = await browser.newContext({ timezoneId: "America/New_York" });     // game days are Eastern, like ESPN's
+const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
+const ctx = await browser.newContext({ timezoneId: "America/New_York", userAgent: UA });     // game days are Eastern, like ESPN's
 const page = await ctx.newPage();
 if (process.env.ESPN_MOCK) await page.route(/site\.api\.espn\.com\/.*\/scoreboard/, r => r.fulfill({ contentType: "application/json", body: fs.readFileSync(process.env.ESPN_MOCK, "utf8") }));   // local testing only
+// ESPN requests go out from here instead of from the page (no browser cross-site rules on a headless server), then
+// are handed to the page as if ESPN had answered it directly.
+if (!process.env.ESPN_MOCK) await page.route(/^https:\/\/[a-z.]*espn\.com\//, async r => {
+  try {
+    const res = await r.fetch({ headers: { ...r.request().headers(), "user-agent": UA } });
+    if (res.status() !== 200) console.log("ESPN", res.status(), r.request().url().slice(0, 120));
+    await r.fulfill({ response: res, headers: { ...res.headers(), "access-control-allow-origin": "*" } });
+  } catch (e) { console.log("ESPN request failed:", e.message, r.request().url().slice(0, 120)); await r.abort(); }
+});
 page.on("pageerror", e => console.log("page error:", e.message));
 await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "load" });
 const got = await page.evaluate(async () => {
