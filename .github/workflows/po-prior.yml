@@ -1,0 +1,24 @@
+name: oneoff find data
+# One-off: NBA.com's stats site refuses GitHub's servers, so this runs on the self-hosted runner (your computer).
+on:
+  push:
+    branches: [po-prior]
+    paths: [".github/workflows/po-prior.yml", "oneoff/find_data.py"]
+permissions:
+  contents: write
+jobs:
+  get:
+    runs-on: self-hosted
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: find Python
+        shell: powershell
+        run: |
+          $c = @(); $g = Get-Command python -ErrorAction SilentlyContinue
+          if ($g -and $g.Source -notlike "*WindowsApps*") { $c += $g.Source }
+          $c += Get-ChildItem "C:\Program Files\Python3*\python.exe", "C:\Python3*\python.exe", "C:\Users\*\AppData\Local\Programs\Python\Python3*\python.exe" -ErrorAction SilentlyContinue | Sort-Object FullName | ForEach-Object FullName
+          foreach ($p in $c) { $v = & $p -c "import sys; print(sys.version_info[1])" 2>$null; if ($LASTEXITCODE -eq 0 -and [int]$v -ge 10 -and [int]$v -le 13) { Split-Path $p | Out-File -Append -Encoding utf8 $env:GITHUB_PATH; (Join-Path (Split-Path $p) "Scripts") | Out-File -Append -Encoding utf8 $env:GITHUB_PATH; Write-Output "using $p"; exit 0 } }
+          Write-Output "::error::Python 3.10-3.13 not found"; exit 1
+      - run: python oneoff/find_data.py
+      - run: python oneoff/commit.py
