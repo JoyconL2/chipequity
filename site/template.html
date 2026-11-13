@@ -2953,9 +2953,7 @@ function renderMethod(){
     <p>Every version of the model was tested on seasons it never saw: it was fit on all the other seasons, then asked to predict the missing one.</p>
     <ul><li><b>This season's games:</b> picking the side it favored before tip-off, the model is <span class="m-rec">counting…</span>. Each game counts the pick shown here before tip-off, saved when the game starts, so later rating changes and injury news never change it.</li>
       <li><b>Playoff series:</b> it picks about 76% of the 450 series since 1997 correctly, and its probabilities are well calibrated (when it says 70%, those teams win about 70% of the time).</li>
-      <li><b>Next season, players:</b> a player's Chip Equity this season lines up with how he rates the next season at r = 0.68 (about 46% of the year-to-year differences; injuries, aging and role changes are most of the rest).</li>
-      <li><b>Next season, teams:</b> rating each roster with Chip Equity predicts teams' next-season point margin at r = 0.75 and their records to within about 6.6 wins on average (1997–2026).</li>
-      <li><b>Playoffs, player by player:</b> regular-season Chip Equity lines up with that spring's playoff Chip Equity at r ≈ 0.70 and the next spring's at r ≈ 0.58. Playoff Chip Equity itself predicts the next postseason at r ≈ 0.49: playoff samples are short, so they're noisier, which is why playoff runs only nudge the regular-season number.</li>
+      <li><b>Next season:</b> rating each roster with Chip Equity predicts teams' next-season results to within about 7 wins on average.</li>
       <li><b>What didn't make it:</b> a lot was tried and dropped because it didn't predict better: weighting by usage or shot volume, raw on/off numbers, play types, splitting lead credit proportionally, and style matchups (rebounding, turnovers, rim protection, pace, threes). A change was kept only when it held up.</li></ul></div>
 
   <div class="box" id="m-model"><h2>6. Playoff odds</h2>
