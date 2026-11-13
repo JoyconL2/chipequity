@@ -1067,10 +1067,14 @@ function poTable(k){
     <p class="mlink"><a href="#" data-method="po">How it's calculated ›</a></p>`;
 }
 /* ---- play types (play-by-play + shot charts; playtypes/build_playtypes.py) ---- */
-const PT = DATA.pt || {cols:[], rows:[], lg:{}};
-const PTC = Object.fromEntries(PT.cols.map((c,i)=>[c,i]));
-const PTMAP = new Map(); const PTSEASON = new Map();
-for (const r of PT.rows){ PTMAP.set(r[0]*64 + r[1], r); (PTSEASON.get(r[1]) || PTSEASON.set(r[1], []).get(r[1])).push(r); }
+// two sets: regular season (DATA.pt) and playoffs (DATA.ptpo, playtypes/build_playtypes_po.py); ptUse(t) points the
+// helpers below at one of them (rendering is synchronous, so ptBox switches and switches back)
+const PTSETS = [DATA.pt, DATA.ptpo].map(src => { src = src || {cols:[], rows:[], lg:{}};
+  const map = new Map(), seas = new Map(); for (const r of src.rows){ map.set(r[0]*64 + r[1], r); (seas.get(r[1]) || seas.set(r[1], []).get(r[1])).push(r); }
+  return {PT: src, PTC: Object.fromEntries(src.cols.map((c,i)=>[c,i])), MAP: map, SEASON: seas}; });
+let PT_T = 0, PT = PTSETS[0].PT, PTC = PTSETS[0].PTC, PTMAP = PTSETS[0].MAP, PTSEASON = PTSETS[0].SEASON;
+function ptUse(t){ PT_T = t; ({PT, PTC, MAP: PTMAP, SEASON: PTSEASON} = PTSETS[t]); }
+const ptHas = (k, s, t = 0) => PTSETS[t].MAP.has(k*64 + s);
 const ptRate = (r, x) => 75 * x / r[PTC.pos];
 function ptParts(r){        // per-75 volume and points per shot for each play type
   const g = c => r[PTC[c]], s75 = c => r[PTC[c+"_self75"]], v = c => ptRate(r, g(c+"_fga"));
@@ -1088,12 +1092,13 @@ function ptParts(r){        // per-75 volume and points per shot for each play t
 }
 const PT_AST = [["ast_rim","Rim shots"],["ast_three","Threes"],["ast_mid","Mid-range"],["ast_transition","Transition"]];
 // percentile pools: 1,000+ possessions; the season being played uses its early-season minimum (ipFloor)
-const poolMin = si => si === LATEST && INPROG ? ipFloor() : 1000;
-const poolTxt = si => `among players with ${poolMin(si).toLocaleString()}+ possessions that season`;
+const poolMin = si => PT_T ? 200 : si === LATEST && INPROG ? ipFloor() : 1000;
+const poolTxt = si => `among players with ${poolMin(si).toLocaleString()}+ ${PT_T ? "playoff " : ""}possessions that ${PT_T ? "postseason" : "season"}`;
 function ptPct(si, f, val){ const pool = (PTSEASON.get(si) || []).filter(r => r[PTC.pos] >= poolMin(si)).map(f).filter(Number.isFinite).sort((a,b)=>a-b);
   if (!pool.length || !Number.isFinite(val)) return null; let n = 0; for (const x of pool) if (x <= val) n++; return Math.round(100 * n / pool.length); }
-function ptBox(k, si){
-  const r = PTMAP.get(k*64 + si); if (!r) return `<p class="muted">No play-by-play play types for ${S[si]}.</p>`;
+function ptBox(k, si, t = 0){ ptUse(t); try { return ptBox_(k, si); } finally { ptUse(0); } }
+function ptBox_(k, si){
+  const r = PTMAP.get(k*64 + si); if (!r) return `<p class="muted">No play-by-play play types for ${S[si]}${PT_T ? " playoffs" : ""}.</p>`;
   const lg = PT.lg[String(si)] || [], cats = ["transition","putback","rim","mid","three"], lgpps = c => { const i = cats.indexOf(c); return lg[i] ? lg[5+i] / lg[i] : NaN; };
   const parts = ptParts(r), mx = Math.max(4, ...parts.map(p=>p.v));
   const zoneShots = c => r[PTC[c+"_fga"]], ppsCell = (p, span) => { const n = zoneShots(p.cat), d = p.pps - lgpps(p.cat);
@@ -1208,6 +1213,50 @@ async function playerLive(k){
       <p class="note">Box-score stats are live from ESPN after every game. Chip Equity so far comes from NBA.com play-by-play and updates every morning; early in the season it moves a lot (it\'s pulled 40% toward his 3-year number to steady it).</p></div>`;
   } catch(err){ if (!gone()) slot.remove(); }
 }
+/* ---- similar players: closest regular seasons by style (box score per 75, shot diet, usage) and Chip Equity ---- */
+// every season is measured against that season's league (z-scores), so eras compare fairly
+let SIM = null;
+const SIM_F = [["CE off", 1.1], ["CE def", 1.1], ["PTS", 1.1], ["AST", 1.2], ["OREB", 0.9], ["DREB", 1.0], ["STL", 0.7], ["BLK", 0.9], ["TOV", 0.6], ["3PA rate", 1.2], ["FT rate", 0.7], ["TS", 0.9], ["USG", 1.1]];
+function simBuild(){
+  if (SIM) return SIM;
+  const RW1 = new Map(); for (const v of (DATA.rw || {rows: []}).rows) if (v[2] === 1) RW1.set(v[0]*64 + v[1], v);
+  const acc = new Map();
+  for (let i = 0; i < P.p.length; i++){ if (P.t[i] !== 0) continue; const key = P.p[i]*64 + P.s[i];
+    let a = acc.get(key); if (!a){ a = {k: P.p[i], s: P.s[i], pos: 0, pts: 0, oreb: 0, dreb: 0, ast: 0, stl: 0, blk: 0, tov: 0, fga: 0, fg3a: 0, fta: 0, uw: 0, tm: P.tm[i], gp: 0}; acc.set(key, a); }
+    const ps = P.pos[i] || 0; a.pos += ps; a.pts += P.pts[i]; a.oreb += P.oreb[i]; a.dreb += P.dreb[i]; a.ast += P.ast[i]; a.stl += P.stl[i]; a.blk += P.blk[i]; a.tov += P.tov[i];
+    a.fga += P.fg2a[i] + P.fg3a[i]; a.fg3a += P.fg3a[i]; a.fta += P.fta[i]; a.uw += (P.usg[i] || 0) * ps; if (P.gp[i] > a.gp){ a.gp = P.gp[i]; a.tm = P.tm[i]; } }
+  const rows = [];
+  for (const a of acc.values()){ const rw = RW1.get(a.k*64 + a.s); if (a.pos < 1000 || !rw) continue; const r75 = x => 75 * x / a.pos;
+    rows.push({k: a.k, s: a.s, tm: a.tm, ce: rw[5], raw: [rw[3], rw[4], r75(a.pts), r75(a.ast), r75(a.oreb), r75(a.dreb), r75(a.stl), r75(a.blk), r75(a.tov),
+      a.fga ? a.fg3a / a.fga : 0, a.fga ? a.fta / a.fga : 0, a.fga + 0.44*a.fta ? a.pts / (2*(a.fga + 0.44*a.fta)) : 0, a.uw / a.pos]}); }
+  const bySeason = new Map(); rows.forEach(r => (bySeason.get(r.s) || bySeason.set(r.s, []).get(r.s)).push(r));
+  for (const list of bySeason.values()) SIM_F.forEach((f, j) => { const xs = list.map(r => r.raw[j]), m = xs.reduce((a, b) => a + b, 0) / xs.length;
+    const sd = Math.sqrt(xs.reduce((a, b) => a + (b - m) ** 2, 0) / xs.length) || 1; list.forEach(r => (r.z = r.z || [])[j] = (r.raw[j] - m) / sd * f[1]); });
+  const careers = new Map(); rows.forEach(r => { const c = careers.get(r.k) || careers.set(r.k, {k: r.k, n: 0, w: 0, z: SIM_F.map(() => 0), s0: r.s, s1: r.s}).get(r.k);
+    const w = 1; c.n++; c.w += w; c.z = c.z.map((v, j) => v + r.z[j] * w); c.s0 = Math.min(c.s0, r.s); c.s1 = Math.max(c.s1, r.s); });
+  for (const c of careers.values()) c.z = c.z.map(v => v / c.w);
+  SIM = {rows, byKey: new Map(rows.map(r => [r.k*64 + r.s, r])), careers};
+  return SIM;
+}
+const simDist = (a, b) => Math.sqrt(a.reduce((t, v, j) => t + (v - b[j]) ** 2, 0));
+// match: 100% = identical, 0% = as far as his typical (median) distance to everyone else
+const simPct = (d, med) => Math.max(0, Math.round(100 * (1 - d / med)));
+const median = xs => { const a = xs.slice().sort((x, y) => x - y); return a[Math.floor(a.length / 2)] || 1; };
+function simSeasonBox(k, s){
+  const X = simBuild(), me = X.byKey.get(k*64 + s); if (!me) return "";
+  const best = new Map();
+  for (const r of X.rows){ if (r.k === k) continue; const d = simDist(me.z, r.z), b = best.get(r.k); if (!b || d < b.d) best.set(r.k, {r, d}); }
+  const all = [...best.values()].sort((a, b) => a.d - b.d), med = median(all.map(x => x.d)), top = all.slice(0, 8);
+  return `<div class="box"><h2>Similar seasons <small>closest regular seasons since 1996-97 by Chip Equity offense and defense, box score per 75 possessions, shot diet and usage, each against its own season's league · one season per player</small></h2><div class="tscroll"><table>
+    <thead><tr><th class="l">Player</th><th>Season</th><th class="l">Team</th><th>Chip Equity</th><th>Match</th></tr></thead><tbody>${top.map(({r, d}) => `<tr><td class="l"><div class="who">${faceImg(r.k, "sm")}<span class="n">${pLink(r.k, esc(DATA.names[r.k]), r.s)}</span>${trophyIf(r.k, r.s)}</div></td><td>${S[r.s]}</td>
+    <td class="l"><div class="who">${tLink(AB(r.tm), r.s, `${logoImg(AB(r.tm), r.s)}${AB(r.tm)}`)}</div></td><td>${pm(r.ce)}</td><td><strong>${simPct(d, med)}%</strong></td></tr>`).join("")}</tbody></table></div></div>`;
+}
+function simCareerBox(k){
+  const X = simBuild(), me = X.careers.get(k); if (!me || me.n < 2) return "";
+  const all = [...X.careers.values()].filter(c => c.k !== k && c.n >= 3).map(c => ({c, d: simDist(me.z, c.z)})).sort((a, b) => a.d - b.d), med = median(all.map(x => x.d)), top = all.slice(0, 8);
+  return `<div class="box"><h2>Similar players <small>closest careers since 1996-97: the average of each player's regular seasons with 1,000+ possessions (Chip Equity offense and defense, box score per 75, shot diet, usage), each season against its own league</small></h2><div class="tscroll"><table>
+    <thead><tr><th class="l">Player</th><th>Seasons</th><th>Match</th></tr></thead><tbody>${top.map(({c, d}) => `<tr><td class="l"><div class="who">${faceImg(c.k, "sm")}<span class="n">${pLink(c.k, esc(DATA.names[c.k]))}</span></div></td><td>${S[c.s0].slice(0, 4)}–${S[c.s1].slice(5)}</td><td><strong>${simPct(d, med)}%</strong></td></tr>`).join("")}</tbody></table></div></div>`;
+}
 function renderPlayer(){
   syncPlStat(); syncCurTeams();
   const k = findPlayer(plQ.value);
@@ -1251,10 +1300,11 @@ function renderPlayer(){
     <div class="box"><h2>Season by season <small>click a season for its own page · ${typeName().toLowerCase()} · ${plMode==="p75"?"per 75 possessions":"per game"} · shooting splits are made / attempted · rTS = true shooting minus that season's league average</small></h2><div class="tscroll"><table class="box-t">
       <thead><tr><th>Season</th><th class="l">Team</th><th>Team W-L</th><th class="l">Playoffs</th><th>GP</th><th>MPG</th>${BOX_HEAD}<th>USG</th>${TYPE === 1 ? `<th title="Chip Equity on that postseason's playoff possessions only">Playoff Chip Equity</th><th>Off</th><th>Def</th>` : `<th title="Chip Equity fit on that season alone">1-yr Chip Equity</th><th>2-yr Chip Equity</th><th>3-yr Chip Equity</th><th title="3-year offensive Chip Equity">3-yr offensive Chip Equity</th><th title="3-year defensive Chip Equity">3-yr defensive Chip Equity</th>`}</tr></thead>
       <tbody>${body}</tbody></table></div></div>
-    ${TYPE === 0 ? (() => { const ss = rows.map(i=>P.s[i]).filter((s, j, a) => a.indexOf(s) === j && PTMAP.has(k*64+s)); if (!ss.length) return "";
-      const def = ss[ss.length-1]; return `<div class="box"><h2>Play types <small>from play-by-play and shot charts · regular season</small></h2>
+    ${simCareerBox(k)}
+    ${(() => { const ss = rows.map(i=>P.s[i]).filter((s, j, a) => a.indexOf(s) === j && ptHas(k, s, TYPE)); if (!ss.length) return "";
+      const def = ss[ss.length-1]; return `<div class="box"><h2>Play types <small>from play-by-play and shot charts · ${TYPE ? "playoffs" : "regular season"}</small></h2>
         <label class="sub">Season <select id="pt-season">${ss.slice().reverse().map(s=>`<option value="${s}" ${s===def?"selected":""}>${S[s]}</option>`).join("")}</select></label>
-        <div id="pt-out" style="margin-top:10px">${ptBox(k, def)}</div><p class="mlink"><a href="#" data-method="pt">How play types are measured ›</a></p></div>`; })() : ""}
+        <div id="pt-out" style="margin-top:10px">${ptBox(k, def, TYPE)}</div><p class="mlink"><a href="#" data-method="pt">How play types are measured ›</a></p></div>`; })()}
     ${(() => { const ss = rows.map(i=>P.s[i]).filter((s, j, a) => a.indexOf(s) === j && DPTMAP.has((k*64+s)*2 + TYPE)); if (!ss.length) return "";
       const def = ss[ss.length-1]; return `<div class="box"><h2>Defensive play types <small>${typeName().toLowerCase()} · play-by-play since 1996-97, matchup tracking since 2017-18</small></h2>
         <label class="sub">Season <select id="dpt-season">${ss.slice().reverse().map(s=>`<option value="${s}" ${s===def?"selected":""}>${S[s]}</option>`).join("")}</select></label>
@@ -1267,7 +1317,7 @@ function renderPlayer(){
     const setCe = (q, w) => { const key = ceKey(q, w); if (![...plStat.options].some(o => o.value === key)) plStat.insertAdjacentHTML("beforeend", `<option value="${key}">${STATS[key].label}</option>`); plStat.value = key; const y = window.scrollY; renderPlayer(); window.scrollTo({top: y}); };
     plOut.querySelectorAll("[data-ceside]").forEach(b => b.onclick = () => setCe(b.dataset.ceside, st0.rw));
     plOut.querySelectorAll("[data-cew]").forEach(b => b.onclick = () => setCe(st0.part || "r", +b.dataset.cew)); }
-  const ptSel = document.getElementById("pt-season"); if (ptSel) ptSel.onchange = () => { document.getElementById("pt-out").innerHTML = ptBox(k, +ptSel.value); };
+  const ptSel = document.getElementById("pt-season"); if (ptSel) ptSel.onchange = () => { document.getElementById("pt-out").innerHTML = ptBox(k, +ptSel.value, TYPE); };
   const dSel = document.getElementById("dpt-season"); if (dSel) dSel.onchange = () => { document.getElementById("dpt-out").innerHTML = defBox(k, +dSel.value); };
   lineChart(document.getElementById("pl-chart"), [{name:DATA.names[k], pts: rows.map(i=>({x:P.s[i], y:rowVal(i,plStat.value), sub:playerTeams(k, P.s[i], AB(P.tm[i])).map(t=>t[0]).join("/")}))}], STATS[plStat.value], {bands});
   if (TYPE === 0 && typeof CUR !== "undefined" && CUR && Date.now() >= +CUR.seasonStart){
@@ -1308,7 +1358,7 @@ function renderPlayerSeason(k, s){
   const boxRow = (lab, rows) => { if (!rows.length) return ""; const r = agg(rows); return `<tr><td class="l">${lab}</td><td>${r.gp}</td><td>${fmt(val(r,"MPG"),1)}</td>${boxCells(boxSum(rows), r)}<td>${fmt(val(r,"USG"),1)}</td></tr>`; };
   const boxBox = `<div class="box"><h2>Stats <small>${S[s]} · ${plMode === "p75" ? "per 75 possessions" : "per game"} · rTS = true shooting minus the league average</small></h2><div class="tscroll"><table class="box-t">
     <thead><tr><th class="l"></th><th>GP</th><th>MPG</th>${BOX_HEAD}<th>USG</th></tr></thead><tbody>${boxRow("Regular season", rsR)}${boxRow("Playoffs", poR)}</tbody></table></div></div>`;
-  const ptB = PTMAP.has(k*64 + s) ? `<div class="box"><h2>Play types <small>${S[s]} regular season · from play-by-play and shot charts</small></h2>${ptBox(k, s)}<p class="mlink"><a href="#" data-method="pt">How play types are measured ›</a></p></div>` : "";
+  const ptB = [0, 1].filter(t => ptHas(k, s, t)).map(t => `<div class="box"><h2>${t ? "Playoff play types" : "Play types"} <small>${S[s]} ${t ? "playoffs" : "regular season"} · from play-by-play and shot charts</small></h2>${ptBox(k, s, t)}<p class="mlink"><a href="#" data-method="pt">How play types are measured ›</a></p></div>`).join("");
   const dptB = DPTMAP.has((k*64 + s)*2 + TYPE) ? `<div class="box"><h2>Defensive play types <small>${S[s]} ${typeName().toLowerCase()}</small></h2>${defBox(k, s)}<p class="mlink"><a href="#" data-method="dpt">How defensive play types are measured ›</a></p></div>` : "";
   const live = s === LATEST && TYPE === 0 && typeof CUR !== "undefined" && CUR && Date.now() >= +CUR.seasonStart;
   plOut.innerHTML = nav + `<div class="box"><div class="profile">${faceImg(k)}<div style="min-width:0">
@@ -1317,7 +1367,7 @@ function renderPlayerSeason(k, s){
       <div class="tiles">${tiles}</div></div></div>${ctx ? `<p class="note">${ctx}</p>` : ""}</div>${live ? `<div id="pl-live"></div>` : ""}
     ${ceBox}${boxBox}
     <div class="box"><h2>On / off <small>${S[s]} · team net rating per 100 possessions with him on vs. off the floor · garbage time out</small></h2><div id="ps-onoff"><div class="msg">Loading on/off…</div></div></div>
-    ${ptB}${dptB}${playoffSeriesBox(k, s)}`;
+    ${ptB}${dptB}${simSeasonBox(k, s)}${playoffSeriesBox(k, s)}`;
   const sel = document.getElementById("ps-season"); sel.onchange = () => openPlayer(k, +sel.value);
   const fillOnOff = () => {
     const el = document.getElementById("ps-onoff"); if (!el || PL_SEASON !== s) return;
