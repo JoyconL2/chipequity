@@ -12,6 +12,7 @@ by season, x 0.5 when they are above average and x 2.0 when below.
 Playoff-only Chip Equity (pcepm) = (0.65 x playoff-only regression + 0.35 x opponent-adjusted playoff lead margin
 x n/(n+1000)) x (0.5 + 0.5 x playoff competitive share).
 Single seasons are steadied 40% toward the 3-season window (first full window 1996-99 for the first two seasons).
+2-5 year windows are the possession-weighted average of the steadied single seasons in them.
 Writes data.json rw (1-5 year rows), peak (best 2-5 year windows + decades), cerm (playoff model, regular season only)
 and empties the old Chip Equity layer (ce, cepeak)."""
 import json, numpy as np, pandas as pd
@@ -71,12 +72,27 @@ def split(r, o, d):
     return O1, round(R1 - O1, 1)
 MINP = {2: 3000, 3: 4500, 4: 6000, 5: 7500}
 rw_rows, rw_n, best, bestx = [], {}, {}, {}   # bestx: (k, w, kind) -> best window by total (0) / offense (1) / defense (2)
-for w, d in disp.items():
+# Multi-year windows = the possession-weighted average of his steadied single seasons in the window, so a window
+# can never rate higher than his best season in it (a pooled fit, unsteadied, could).
+SV = {}
+d1_ = disp[1]
+for p, r, o, dd, we, poss in zip(d1_.player, d1_.rapm, d1_.o_rapm, d1_.d_rapm, d1_.window_end, d1_.poss):
+    si = SI.get(we)
+    if si is None or kOf.get(int(p)) is None: continue
+    v = value(int(p), si, 1, r, o, dd)
+    if v is not None: SV[(int(p), si)] = (*v, float(poss))
+def window_value(p, si, w):
+    xs = [SV[(p, t)] for t in range(max(0, si - w + 1), si + 1) if (p, t) in SV]
+    tot = sum(x[3] for x in xs)
+    if not xs or tot <= 0: return None
+    return tuple(sum(x[j] * x[3] for x in xs) / tot for j in range(3))
+for w in sorted(disp):
+    d = disp[w]
     out = []
     for p, r, o, dd, we, poss in zip(d.player, d.rapm, d.o_rapm, d.d_rapm, d.window_end, d.poss):
         p = int(p); k = kOf.get(p); si = SI.get(we)
         if k is None or si is None: continue
-        v = value(p, si, w, r, o, dd)
+        v = SV[(p, si)][:3] if w == 1 and (p, si) in SV else window_value(p, si, w) if w > 1 else None
         if v is None: continue
         out.append((k, si, w, v[1], v[2], v[0], poss))
         if w >= 2 and poss >= MINP[w]:
@@ -100,7 +116,7 @@ for j, name in enumerate(DS):
         dd_ = pd.read_csv(f"../cepm/{f[0]}"); dd_ = dd_[dd_.poss >= 3000]; seas = [S[x] for x in range(SI[f[1]], SI[f[2]] + 1)]; items = []
         for p, r, o, de in zip(dd_.player, dd_.rapm, dd_.o_rapm, dd_.d_rapm):
             k = kOf.get(int(p)); c = comps(int(p), seas, K1) if k is not None else None
-            if c: items.append((((1 - WL) * r + WL * c[0]) * c[3], k, (((1 - WL) * r + WL * c[0]) * c[3], ((1 - WL) * o + WL * c[1]) * c[3], ((1 - WL) * de + WL * c[2]) * c[3])))
+            if c: sh_ = SOFT(c[3]); items.append((((1 - WL) * r + WL * c[0]) * sh_, k, (((1 - WL) * r + WL * c[0]) * sh_, ((1 - WL) * o + WL * c[1]) * sh_, ((1 - WL) * de + WL * c[2]) * sh_)))
         items.sort(reverse=True)
     pn.append(len(items))
     for rk, (v, k, x) in enumerate(items, 1): prow.append([k, j, *split(x[0], x[1], x[2]), round(x[0], 2), rk])
