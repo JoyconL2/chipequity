@@ -1905,7 +1905,7 @@ function wonTitle(k, s){
   for (const i of rowsByPlayer[k] || []) if (P.t[i] === 1 && P.s[i] === s && M.teamPath(s, P.tm[i]).some(x => x.round === 4 && x.w === P.tm[i])){ won = true; break; }
   TITLE_CACHE.set(key, won); return won;
 }
-const TROPHY = `<span class="trophy" title="Won the title that season" aria-label="Won the title"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 1.5h8v3.2a4 4 0 0 1-8 0z" fill="#e3b341"/><path d="M4 2.5H1.8a2.2 2.2 0 0 0 2.4 3M12 2.5h2.2a2.2 2.2 0 0 1-2.4 3" fill="none" stroke="#e3b341" stroke-width="1.2"/><rect x="7" y="8.4" width="2" height="3.2" fill="#e3b341"/><rect x="4.5" y="11.6" width="7" height="2.6" rx=".6" fill="#e3b341"/></svg></span>`;
+const TROPHY = `<span class="trophy" title="Won the title that season" aria-label="Won the title"><img src="trophy.png" width="14" height="22" alt=""></span>`;
 const trophyIf = (k, s) => s != null && s >= 0 && wonTitle(k, s) ? TROPHY : "";
 // titles inside a stretch of w seasons ending at s: one trophy, with a count when there's more than one
 const trophiesIn = (k, s, w) => { if (s == null) return ""; let n = 0; for (let x = s - (w || 1) + 1; x <= s; x++) if (x >= 0 && wonTitle(k, x)) n++;
