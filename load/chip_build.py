@@ -12,7 +12,7 @@ by season, x 0.5 when they are above average and x 2.0 when below.
 Playoff-only Chip Equity (pcepm) = (0.65 x playoff-only regression + 0.35 x opponent-adjusted playoff lead margin
 x n/(n+1000)) x (0.5 + 0.5 x playoff competitive share).
 Single seasons are steadied 40% toward the 3-season window (first full window 1996-99 for the first two seasons).
-2-5 year windows are the possession-weighted average of the single seasons in them, each steadied 20% (2-year
+2-5 year windows (only for players with a rated season in every year of the window) are the possession-weighted average of the single seasons in them, each steadied 20% (2-year
 windows) or not at all (3-5 years).
 Writes data.json rw (1-5 year rows), peak (best 2-5 year windows + decades), cerm (playoff model, regular season only)
 and empties the old Chip Equity layer (ce, cepeak)."""
@@ -90,7 +90,9 @@ for p, r, o, dd, we, poss in zip(d1_.player, d1_.rapm, d1_.o_rapm, d1_.d_rapm, d
 SV = SVB[B]
 def window_value(p, si, w):
     sv = SVB[WIN_B[w]]
-    xs = [sv[(p, t)] for t in range(max(0, si - w + 1), si + 1) if (p, t) in sv]
+    if si - w + 1 < 0: return None
+    xs = [sv[(p, t)] for t in range(si - w + 1, si + 1) if (p, t) in sv]
+    if len(xs) < w: return None          # a w-year window needs a rated season in every one of its w years
     tot = sum(x[3] for x in xs)
     if not xs or tot <= 0: return None
     return tuple(sum(x[j] * x[3] for x in xs) / tot for j in range(3))
