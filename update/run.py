@@ -126,6 +126,15 @@ def main():
         run([PY, "pt_features.py"], cwd="playtypes", env={"PT_CUR": f"{CUR}:{ptmin}"}, out=os.path.join(tmp, "pt_features.log"))
         run([PY, "pt_to_data.py"], cwd="playtypes", out=os.path.join(tmp, "pt_to_data.log"))
         log(f"play types: {CUR} added (players with {ptmin}+ possessions)")
+    # 3c playoff play types: history in playtypes/playtypes_po.csv (build_playtypes_po.py), plus this postseason once it starts
+    if os.path.exists(os.path.join(ROOT, "playtypes/playtypes_po.csv")):
+        if glob.glob(os.path.join(wd, "pbp_po", "*.json")):
+            run([PY, "build_playtypes.py", "--live", os.path.join(wd, "pbp_po"), CUR, os.path.join(tmp, "ptpo_cur.csv")], cwd="playtypes", out=os.path.join(tmp, "playtypes_po.log"))
+            hist = pd.read_csv(os.path.join(ROOT, "playtypes/playtypes_po.csv")); hist = hist[hist.season != CUR]
+            pd.concat([hist, pd.read_csv(os.path.join(tmp, "ptpo_cur.csv"))], ignore_index=True).fillna(0).to_csv(os.path.join(ROOT, "playtypes/playtypes_po.csv"), index=False)
+        run([PY, "pt_features.py"], cwd="playtypes", env={"PT_TYPE": "po"}, out=os.path.join(tmp, "pt_features_po.log"))
+        run([PY, "pt_to_data.py"], cwd="playtypes", env={"PT_TYPE": "po"}, out=os.path.join(tmp, "pt_to_data_po.log"))
+        log("playoff play types added")
 
     # 4  features + priors for windows ending this season
     run([PY, "update/features_season.py", os.path.join(wd, f"box_{CUR}_rs.csv"), CUR, "mymodel/features_rs.csv"])
