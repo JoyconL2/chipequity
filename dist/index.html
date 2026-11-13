@@ -1123,8 +1123,8 @@ table.cmp.solo td.lbl{text-align:left;padding-right:28px}
   </section>
 
   <section class="panel" id="p-teams" hidden>
+    <div class="controls" id="tm-top"><div class="field"><label for="tm-season">Season</label><select id="tm-season"></select></div></div>
     <div class="controls">
-      <div class="field"><label for="tm-season">Season</label><select id="tm-season"></select></div>
       <div class="field"><label for="tm-1">Team 1</label><select id="tm-1"></select></div>
       <div class="field"><label for="tm-2">Team 2</label><select id="tm-2"></select></div>
       <div class="field"><label for="tm-3">Team 3</label><select id="tm-3"></select></div>
@@ -1730,6 +1730,8 @@ const stintYrs = st => { if (!st.now) return yrSpan(st.s0, st.s1); if (st.s0 > L
 const playingNow = k => !!(curTeamOf(k) && CUR_SEASON && S[LATEST] !== CUR_SEASON);
 const curTeamName = ab => { try { const t = CUR && CUR.ready() && CUR.state().teams[ab]; if (t && t.name) return t.name; } catch(e){} return teamName(ab, LATEST); };
 // any player name can open his profile
+// a team in a given season: opens that team's page (roster, on/off, WOWY)
+const tLink = (ab, s, html) => !ab || s == null || s < 0 ? html : `<a href="#" class="plink" data-tteam="${ab}" data-tseason="${s}">${html}</a>`;
 const pLink = (k, html, s) => k == null || k < 0 ? html : `<a href="#" class="plink" data-player="${k}"${s != null && s >= 0 ? ` data-season="${s}"` : ""}>${html}</a>`;
 
 /* ---------------- players index + search ---------------- */
@@ -2375,8 +2377,8 @@ function renderPlayer(){
   plOut.innerHTML = `
     <div class="box"><div class="profile">${faceImg(k)}<div style="min-width:0">
       <h2 class="pname">${esc(DATA.names[k])}</h2>
-      <div class="teamline">${(h => h ? (h.now ? `${logoImg(h.ab, LATEST)}${esc(curTeamName(h.ab))}` : `${logoImg(h.ab, h.s)}${esc(teamName(h.ab, h.s))}`) : `${logoImg(ab, P.s[last])}${esc(teamName(ab,P.s[last]))}`)(homeTeamOf(k))} <span class="muted">· ${S[P.s[rows[0]]]} to ${playingNow(k) && TYPE === 0 ? CUR_SEASON : S[P.s[last]]} · ${typeName()}${plMode==="p75"?" · per 75 possessions":""}</span></div>
-      <div class="stints"><span class="muted" style="margin-right:2px">Teams</span>${stintsNow(k).map(st => `<span class="stint${st.now ? " now" : ""}">${logoImg(st.ab, Math.min(st.s1, LATEST))}${esc(st.ab)} <span class="muted">${stintYrs(st)}</span></span>`).join("")}</div>${hlLinks(k)}
+      <div class="teamline">${(h => h ? (h.now ? tLink(h.ab, LATEST, `${logoImg(h.ab, LATEST)}${esc(curTeamName(h.ab))}`) : tLink(h.ab, h.s, `${logoImg(h.ab, h.s)}${esc(teamName(h.ab, h.s))}`)) : tLink(ab, P.s[last], `${logoImg(ab, P.s[last])}${esc(teamName(ab,P.s[last]))}`))(homeTeamOf(k))} <span class="muted">· ${S[P.s[rows[0]]]} to ${playingNow(k) && TYPE === 0 ? CUR_SEASON : S[P.s[last]]} · ${typeName()}${plMode==="p75"?" · per 75 possessions":""}</span></div>
+      <div class="stints"><span class="muted" style="margin-right:2px">Teams</span>${stintsNow(k).map(st => `<span class="stint${st.now ? " now" : ""}">${tLink(st.ab, Math.min(st.s1, LATEST), `${logoImg(st.ab, Math.min(st.s1, LATEST))}${esc(st.ab)}`)} <span class="muted">${stintYrs(st)}</span></span>`).join("")}</div>${hlLinks(k)}
       <div class="tiles">${tiles}</div></div></div>
       <p class="note">${stars}${po}</p></div>
     <div class="box"><h2>Peak &amp; decade impact <small>career-level · all-time ranks</small></h2>${peakTable(k)}
@@ -2413,7 +2415,7 @@ function renderPlayer(){
 /* ---------------- ONE PLAYER, ONE SEASON ---------------- */
 // any player link that carries a season (a season list, a roster, a box score) opens this page instead of the career
 let PL_SEASON = null;
-function openPlayer(k, s = null){ plQ.value = optLabel(k); PL_SEASON = s; if (current !== "players") show("players"); else renderPlayer(); window.scrollTo({top: 0}); }
+function openPlayer(k, s = null){ plQ.value = optLabel(k); PL_SEASON = s; if (current !== "players") show("players"); else { renderPlayer(); pushNav(); } window.scrollTo({top: 0}); }
 const seasonLink = (k, s, html) => `<a href="#" class="plink" data-player="${k}" data-season="${s}" title="${esc(DATA.names[k])}, ${S[s]} season">${html}</a>`;
 function renderPlayerSeason(k, s){
   plStat.closest(".field").hidden = true;
@@ -2429,7 +2431,7 @@ function renderPlayerSeason(k, s){
     + (a ? tile(`${fmt(val(a,"PPG"),1)} / ${fmt(val(a,"RPG"),1)} / ${fmt(val(a,"APG"),1)}`, "Points / rebounds / assists") + tile(fmt(val(a,"TS"),"pct"), `True shooting · ${fmt(val(a,"RTS"),"rel")} vs. league`)
       + tile(`${a.gp} · ${fmt(val(a,"MPG"),1)}`, "Games · minutes per game") : "");
   const teamLine = tl.map(([t, n]) => { const ai = DATA.abbrs.indexOf(t), sr = ai >= 0 ? seasonResult(ai, s) : {txt: "", cls: ""};
-    return `<span class="stint">${logoImg(t, s)}${esc(teamName(t, s))} <span class="muted">${recTxt(t, s)}${tl.length > 1 && n ? ` · ${n} games` : ""}</span>${sr.txt ? ` <span class="res ${sr.cls}">${sr.txt}</span>` : ""}</span>`; }).join("");
+    return `<span class="stint">${tLink(t, s, `${logoImg(t, s)}${esc(teamName(t, s))}`)} <span class="muted">${recTxt(t, s)}${tl.length > 1 && n ? ` · ${n} games` : ""}</span>${sr.txt ? ` <span class="res ${sr.cls}">${sr.txt}</span>` : ""}</span>`; }).join("");
   // where it sits in his career
   const mine = M.rwSeries(k, 1).filter(v => v.s !== LATEST || !INPROG).sort((x, y) => y.r - x.r), myRank = c1 ? mine.findIndex(v => v.s === s) + 1 : 0;
   const ctx = c1 && mine.length > 1 && myRank > 0 ? `${myRank === 1 ? "His best season" : `His ${ord(myRank)}-best season`} by single-season Chip Equity, of ${mine.length}${mine.length && myRank !== 1 ? ` (best: ${seasonLink(k, mine[0].s, S[mine[0].s])}, ${pm(mine[0].r)})` : ""}.` : "";
@@ -2469,8 +2471,8 @@ function renderPlayerSeason(k, s){
   fillOnOff();
   if (live) playerLive(k);
 }
-plQ.addEventListener("change", () => { PL_SEASON = null; renderPlayer(); });
-plQ.addEventListener("keydown", e=>{ if(e.key==="Enter"){ PL_SEASON = null; renderPlayer(); } });
+plQ.addEventListener("change", () => { PL_SEASON = null; renderPlayer(); pushNav(); });
+plQ.addEventListener("keydown", e=>{ if(e.key==="Enter"){ PL_SEASON = null; renderPlayer(); pushNav(); } });
 plStat.addEventListener("change", renderPlayer);
 
 /* ---------------- COMPARE ---------------- */
@@ -2748,7 +2750,7 @@ function renderLeaders(){
     ldOut.innerHTML = `<div class="box"><h2>${esc(PEAK_LABEL[stat])}${LD_SORT!=="r"?` · ranked by ${SORT_NAME[LD_SORT]}`:""} <small>all-time · regular season + playoffs</small></h2><div class="tscroll"><table>
       <thead><tr><th>#</th><th class="l">Player</th><th class="l" title="${CUR_SEASON ? CUR_SEASON + " team for players on a current roster, otherwise the team he played the most games for" : "Team he played the most games for"}">Team</th><th>GP since 1996-97</th><th class="l" title="${PK === "r" ? "The season or stretch of his peak" : `The season or stretch of his best ${PK === "o" ? "offense" : "defense"}`}">${stat === "Peak 1Y CEPM" ? "Season" : /^Peak/.test(stat) ? "Stretch" : "Decade"}</th>${sth("r","Total")}${sth("o","Off")}${sth("d","Def")}<th>All-time rank${LD_SORT!=="r"?(LD_SORT==="o"?" (off)":" (def)"):""}</th></tr></thead>
       <tbody>${list.map((r,i)=>`<tr><td>${r.pos}</td><td class="l"><div class="who">${faceImg(r.k,"sm")}<span class="n">${pLink(r.k, esc(DATA.names[r.k]))}</span></div></td>
-        <td class="l"><div class="who">${logoImg(r.tm, r.s)}${r.tm||""}</div></td><td>${r.gp.toLocaleString()}</td><td class="l nw">${esc(r.v.when || "–")}</td><td class="nw">${sb("r",pm(r.v.r))}${bp("r", r)}</td><td class="nw">${sb("o",pm(r.v.o))}${bp("o", r)}</td><td class="nw">${sb("d",pm(r.v.d))}${bp("d", r)}</td><td class="sub">${ord(rankOf.get(r.v))} of ${allV.length.toLocaleString()}</td></tr>`).join("")}</tbody>
+        <td class="l"><div class="who">${tLink(r.tm, r.s, `${logoImg(r.tm, r.s)}${r.tm||""}`)}</div></td><td>${r.gp.toLocaleString()}</td><td class="l nw">${esc(r.v.when || "–")}</td><td class="nw">${sb("r",pm(r.v.r))}${bp("r", r)}</td><td class="nw">${sb("o",pm(r.v.o))}${bp("o", r)}</td><td class="nw">${sb("d",pm(r.v.d))}${bp("d", r)}</td><td class="sub">${ord(rankOf.get(r.v))} of ${allV.length.toLocaleString()}</td></tr>`).join("")}</tbody>
       </table></div><p class="note">Click Total, Off or Def to rank by that number. Ranked by Off or Def, each player's best offensive or defensive ${stat === "Peak 1Y CEPM" ? "season" : "stretch"} is used, and the ${stat === "Peak 1Y CEPM" ? "Season" : "Stretch"} column shows it.</p><p class="mlink"><a href="#" data-method="windows">How it's calculated ›</a></p></div>`;
     return;
   }
@@ -2791,7 +2793,7 @@ function renderLeaders(){
   ldOut.innerHTML = `<div class="box"><h2>${esc(title)}${rwW && LD_SORT!=="r"?` · ranked by ${SORT_NAME[LD_SORT]}`:""} <small>${isC ? "regular season + playoffs" : typeName()}</small></h2><div class="tscroll"><table>
     <thead><tr><th>#</th><th class="l">Player</th><th class="l">Team</th><th class="l">${m==="season"||m==="best"?(rwW?"Window":"Season"):"Years"}</th><th>GP</th>${rwW ? sth("r",esc(head))+sth("o","Off")+sth("d","Def") : `<th>${esc(head)}</th>`}</tr></thead>
     <tbody>${list.map((r,i)=>`<tr><td>${r.pos}</td><td class="l"><div class="who">${faceImg(r.k,"sm")}<span class="n">${pLink(r.k, esc(DATA.names[r.k]), m==="season" || m==="best" ? r.s : null)}</span></div></td>
-      <td class="l"><div class="who">${logoImg(r.tm, r.s)}${r.tm||""}</div></td><td class="l">${m==="season"||m==="best"?(rwW?rwSpan(r.s,rwW):S[r.s]):r.span}</td><td>${r.gp.toLocaleString()}</td>${valCells(r)}</tr>`).join("")}</tbody>
+      <td class="l"><div class="who">${tLink(r.tm, r.s, `${logoImg(r.tm, r.s)}${r.tm||""}`)}</div></td><td class="l">${m==="season"||m==="best"?(rwW?rwSpan(r.s,rwW):S[r.s]):r.span}</td><td>${r.gp.toLocaleString()}</td>${valCells(r)}</tr>`).join("")}</tbody>
     </table></div><p class="note">${rwW ? "Click a column to rank by it." : "Click a column to sort."}</p>${rwW ? `<p class="mlink"><a href="#" data-method="windows">How it's calculated ›</a></p>` : ""}</div>`;
 }
 ldMode.addEventListener("change", ()=>{ ldStatOptions(); renderLeaders(); });
@@ -2967,11 +2969,17 @@ function renderWowy(){
   const mo = document.getElementById("wv-more"); if (mo) mo.onclick = () => { WV.more++; renderWowy(); };
   const mn = document.getElementById("wv-min"); if (mn) mn.onchange = ev => { WV.min = Math.max(0, +ev.target.value || 0); WV.more = 0; renderWowy(); };
 }
-function bindRosterBack(s){ const bk = document.getElementById("tm-back"); if (bk) bk.onclick = ev => { ev.preventDefault(); tmRoster = null; renderTeams(); window.scrollTo({top: 0}); }; }
-const TM_PANEL = document.getElementById("p-teams"), TM_CTL = TM_PANEL.querySelector(".controls");
+function bindRosterBack(s){ const bk = document.getElementById("tm-back"); if (bk) bk.onclick = ev => { ev.preventDefault(); tmRoster = null; renderTeams(); pushNav(); window.scrollTo({top: 0}); }; }
+function openTeam(ab, s){
+  if (s != null && +tmSeason.value !== s){ tmSeason.value = String(s); fillTeamSelects(); }
+  tmRoster = ab; WY = {on: null, off: [], size: 3, sort: "p", min: null};
+  if (current !== "teams") show("teams"); else { renderTeams(); pushNav(); }
+  window.scrollTo({top: 0}); loadWowy();
+}
+const TM_PANEL = document.getElementById("p-teams"), TM_CTL = TM_PANEL.querySelector(".controls:not(#tm-top)");
 function renderTeams(){
   const s = +tmSeason.value, all = teamsIn(s);
-  tmSel.forEach(x => { const f = x.closest(".field"); if (f) f.hidden = !!tmRoster; });     // team pickers hide on a team's own page
+  TM_CTL.hidden = !!tmRoster;     // team pickers hide on a team's own page (the season stays on top)
   if (tmRoster){ if (TM_CTL.parentNode !== TM_PANEL) TM_PANEL.insertBefore(TM_CTL, tmOut); renderRoster(tmRoster, s); return; }
   if (!all.length){ tmOut.innerHTML = `<div class="msg">No ${typeName().toLowerCase()} team data for ${S[s]}.</div>`; return; }
   const picks = [...new Set(tmSel.map(x=>x.value).filter(Boolean))].map(ab=>all.find(t=>AB(t.a)===ab)).filter(Boolean);
@@ -3016,11 +3024,11 @@ function renderTeams(){
   if (TM_CTL.parentNode !== TM_PANEL) TM_PANEL.insertBefore(TM_CTL, tmOut);      // keep the controls safe while the output is rebuilt
   tmOut.innerHTML = html;
   const slot = document.getElementById("tm-cfg-slot"); if (slot) slot.appendChild(TM_CTL);
-  tmOut.querySelectorAll("[data-roster]").forEach(a => a.addEventListener("click", ev => { ev.preventDefault(); tmRoster = a.dataset.roster; WY = {on: null, off: [], size: 3, sort: "p", min: null}; renderTeams(); window.scrollTo({top: 0}); loadWowy(); }));
+  tmOut.querySelectorAll("[data-roster]").forEach(a => a.addEventListener("click", ev => { ev.preventDefault(); tmRoster = a.dataset.roster; WY = {on: null, off: [], size: 3, sort: "p", min: null}; renderTeams(); pushNav(); window.scrollTo({top: 0}); loadWowy(); }));
   const sim = document.getElementById("tm-sim");
   if (sim) sim.addEventListener("click", ()=> openMatchup(AB(picks[0].a), s, AB(picks[1].a), s));
 }
-tmSeason.addEventListener("change", ()=>{ fillTeamSelects(); WY = {on: null, off: [], size: 3, sort: "p", min: null}; renderTeams(); });
+tmSeason.addEventListener("change", ()=>{ fillTeamSelects(); WY = {on: null, off: [], size: 3, sort: "p", min: null}; renderTeams(); pushNav(); });
 tmSel.forEach(x=>x.addEventListener("change", renderTeams));
 
 /* ---------------- LEAGUE ---------------- */
@@ -4119,6 +4127,10 @@ const renderLiveFeed = () => { renderGames(); if (!gcGame) renderSeason(); };
 const renderers = {classic:renderClassic, wowy:renderWowy, home:renderHome, players:renderPlayer, compare:renderCompare, matchup:renderMatchup, method:renderMethod, leaders:renderLeaders, teams:renderTeams, league:renderLeague, games:renderLiveFeed};
 let current = "players";
 const stSeg = document.getElementById("season-type");
+document.addEventListener("click", e => {          // any team link opens that team's page for that season
+  const a = e.target.closest && e.target.closest("[data-tteam]"); if (!a || e.defaultPrevented) return;
+  e.preventDefault(); openTeam(a.dataset.tteam, +a.dataset.tseason);
+});
 document.addEventListener("click", e => {          // any player link opens his profile
   const a = e.target.closest && e.target.closest("[data-player]"); if (!a || e.defaultPrevented) return;
   e.preventDefault(); openPlayer(+a.dataset.player, a.dataset.season != null ? +a.dataset.season : null);
@@ -4184,7 +4196,30 @@ function show(tab){
   if (tab!=="games") clearTimeout(gmTimer);
   renderers[tab]();
   try{ localStorage.setItem("courtside-tab", tab); }catch(e){}
+  pushNav();
 }
+// Back / forward: every page change (tab, player, team page, team season) is a browser history entry, so the
+// browser's back button returns to the page before (e.g. Leaders -> a team -> back to Leaders), at the same scroll spot.
+let NAV_ON = false, NAV_Y = 0;     // NAV_Y: scroll position before the page changed (scroll events arrive after a re-render)
+window.addEventListener("scroll", () => { NAV_Y = window.scrollY; }, {passive: true});
+const navSnap = () => ({tab: current, pl: plQ.value, ps: PL_SEASON, ts: tmSeason.value, tr: tmRoster});
+function pushNav(){
+  if (!NAV_ON) return;
+  const st = navSnap(), cur = history.state;
+  if (cur){ const {y, ...c} = cur; if (JSON.stringify(c) === JSON.stringify(st)) return; }
+  try { if (cur) history.replaceState({...cur, y: NAV_Y}, "", location.hash); history.pushState(st, "", "#" + st.tab); } catch(e){}
+}
+window.addEventListener("popstate", e => {
+  const st = e.state; if (!st || !st.tab) return;
+  NAV_ON = false;
+  try {
+    plQ.value = st.pl; PL_SEASON = st.ps;
+    if (tmSeason.value !== st.ts){ tmSeason.value = st.ts; fillTeamSelects(); }
+    tmRoster = st.tr; if (tmRoster) loadWowy();
+    show(st.tab);
+  } finally { NAV_ON = true; }
+  setTimeout(() => window.scrollTo({top: st.y || 0}), 0);
+});
 tabs.forEach(b=>b.addEventListener("click", ()=>show(b.dataset.tab)));
 { const br = document.querySelector(".brand"); br.style.cursor = "pointer"; br.setAttribute("role","link"); br.setAttribute("tabindex","0"); br.title = "Home";
   br.addEventListener("click", ()=>{ show("home"); window.scrollTo({top:0}); }); br.addEventListener("keydown", e=>{ if (e.key==="Enter") show("home"); }); }
@@ -4207,6 +4242,8 @@ tmSeason.value = String(HEAD); fillTeamSelects();
 let startTab = "home";   // the site always opens on the front page (a #players style link still works)
 if (/^#(home|players|compare|matchup|season|method|leaders|teams|wowy|league|games)$/.test(location.hash)) startTab = location.hash.slice(1) === "season" ? "games" : location.hash.slice(1);
 show(startTab);
+try { history.replaceState(navSnap(), "", location.hash || location.pathname); } catch(e){}
+NAV_ON = true;
 document.documentElement.classList.add("ready");      // hides the loading screen
 </script>
 <script>
