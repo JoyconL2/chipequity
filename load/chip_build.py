@@ -12,7 +12,8 @@ by season, x 0.5 when they are above average and x 2.0 when below.
 Playoff-only Chip Equity (pcepm) = (0.65 x playoff-only regression + 0.35 x opponent-adjusted playoff lead margin
 x n/(n+1000)) x (0.5 + 0.5 x playoff competitive share).
 Single seasons are steadied 40% toward the 3-season window (first full window 1996-99 for the first two seasons).
-2-5 year windows are the possession-weighted average of the steadied single seasons in them.
+2-5 year windows are the possession-weighted average of the single seasons in them, each steadied 20% (2-year
+windows) or not at all (3-5 years).
 Writes data.json rw (1-5 year rows), peak (best 2-5 year windows + decades), cerm (playoff model, regular season only)
 and empties the old Chip Equity layer (ce, cepeak)."""
 import json, numpy as np, pandas as pd
@@ -53,14 +54,15 @@ def comps(p, seas, K, po_seas=None):
 disp = {w: pd.read_csv(f"../cepm/disp{w}.csv") for w in (1, 2, 3, 4, 5)}
 c3 = disp[3]; C3 = {(int(p), s): (r, o, d) for p, s, r, o, d in zip(c3.player, c3.window_end, c3.rapm, c3.o_rapm, c3.d_rapm)}
 SOFT = lambda sh: 0.5 + 0.5 * sh          # half the minutes-share penalty
-def value(p, si, w, r, o, d):
+def value(p, si, w, r, o, d, b=None):
     seas = [S[x] for x in range(max(0, si - w + 1), si + 1)]; c = comps(p, seas, K1)
     if c is None: return None
     ln, lo, ld, sh = c
     if w == 1:
         j = max(si, 2); rr = C3.get((p, S[j]), (r, o, d)); x = comps(p, [S[t] for t in range(j - 2, j + 1)], KS)
-        r, o, d = [(1 - B) * a + B * b for a, b in zip((r, o, d), rr)]
-        if x: ln, lo, ld = [(1 - B) * a + B * b for a, b in zip((ln, lo, ld), x[:3])]
+        Bw = B if b is None else b
+        r, o, d = [(1 - Bw) * a + Bw * c_ for a, c_ in zip((r, o, d), rr)]
+        if x: ln, lo, ld = [(1 - Bw) * a + Bw * c_ for a, c_ in zip((ln, lo, ld), x[:3])]
     f = lambda cep, lead: ((1 - WL) * cep + WL * lead) * SOFT(sh)
     return f(r, ln), f(o, lo), f(d, ld)
 def split(r, o, d):
@@ -74,15 +76,21 @@ MINP = {2: 3000, 3: 4500, 4: 6000, 5: 7500}
 rw_rows, rw_n, best, bestx = [], {}, {}, {}   # bestx: (k, w, kind) -> best window by total (0) / offense (1) / defense (2)
 # Multi-year windows = the possession-weighted average of his steadied single seasons in the window, so a window
 # can never rate higher than his best season in it (a pooled fit, unsteadied, could).
-SV = {}
+# Each season in a window is steadied less than a lone season (40%), since the window average already smooths it:
+# 20% inside a 2-year window, none inside 3-5 year windows (tested 1997-2026 on next-season prediction).
+WIN_B = {1: B, 2: 0.2, 3: 0.0, 4: 0.0, 5: 0.0}
+SVB = {b_: {} for b_ in set(WIN_B.values())}
 d1_ = disp[1]
 for p, r, o, dd, we, poss in zip(d1_.player, d1_.rapm, d1_.o_rapm, d1_.d_rapm, d1_.window_end, d1_.poss):
     si = SI.get(we)
     if si is None or kOf.get(int(p)) is None: continue
-    v = value(int(p), si, 1, r, o, dd)
-    if v is not None: SV[(int(p), si)] = (*v, float(poss))
+    for b_ in SVB:
+        v = value(int(p), si, 1, r, o, dd, b_)
+        if v is not None: SVB[b_][(int(p), si)] = (*v, float(poss))
+SV = SVB[B]
 def window_value(p, si, w):
-    xs = [SV[(p, t)] for t in range(max(0, si - w + 1), si + 1) if (p, t) in SV]
+    sv = SVB[WIN_B[w]]
+    xs = [sv[(p, t)] for t in range(max(0, si - w + 1), si + 1) if (p, t) in sv]
     tot = sum(x[3] for x in xs)
     if not xs or tot <= 0: return None
     return tuple(sum(x[j] * x[3] for x in xs) / tot for j in range(3))
