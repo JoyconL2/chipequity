@@ -1,15 +1,16 @@
 """Chip Equity (v3, version A): the site's one impact stat (replaces CEPM in every display).
-  Chip Equity = (0.65 x CEPM + 0.35 x LeadMargin) x CompShare        (offense and defense the same way)
+  Chip Equity = (0.65 x CEPM + 0.35 x LeadMargin) x (0.5 + 0.5 x CompShare)        (offense and defense the same way)
   CEPM       = the ridge regression (cepm/disp{w}.csv), points per 100 possessions on the floor
   LeadMargin = his team's margin per 100 in the stints where he is the best player on the floor, split into offense
                (points scored vs league) and defense (points allowed vs league), garbage time out, x n/(n+3000)
-  CompShare  = his share of his team's non-garbage minutes, in games he played
+  CompShare  = his share of his team's non-garbage minutes, in games he played. Only half of its gap from 1 counts
+               (tested 1997-2026: better next-season player and team prediction than the full share)
 LeadMargin also counts his playoff lead stints, each playoff possession worth 2 regular-season ones, with the margin
 adjusted for the opponent: + the opponent team's regular-season offense/defense vs league (load/po_lead.py).
 Lead margin is also adjusted for teammates, offense and defense separately: the four teammates' 3-year o (or d), centred
 by season, x 0.5 when they are above average and x 2.0 when below.
 Playoff-only Chip Equity (pcepm) = (0.65 x playoff-only regression + 0.35 x opponent-adjusted playoff lead margin
-x n/(n+1000)) x playoff competitive share.
+x n/(n+1000)) x (0.5 + 0.5 x playoff competitive share).
 Single seasons are steadied 40% toward the 3-season window (first full window 1996-99 for the first two seasons).
 Writes data.json rw (1-5 year rows), peak (best 2-5 year windows + decades), cerm (playoff model, regular season only)
 and empties the old Chip Equity layer (ce, cepeak)."""
@@ -50,6 +51,7 @@ def comps(p, seas, K, po_seas=None):
     return net * f, off * f, de * f, ca / cb
 disp = {w: pd.read_csv(f"../cepm/disp{w}.csv") for w in (1, 2, 3, 4, 5)}
 c3 = disp[3]; C3 = {(int(p), s): (r, o, d) for p, s, r, o, d in zip(c3.player, c3.window_end, c3.rapm, c3.o_rapm, c3.d_rapm)}
+SOFT = lambda sh: 0.5 + 0.5 * sh          # half the minutes-share penalty
 def value(p, si, w, r, o, d):
     seas = [S[x] for x in range(max(0, si - w + 1), si + 1)]; c = comps(p, seas, K1)
     if c is None: return None
@@ -58,7 +60,7 @@ def value(p, si, w, r, o, d):
         j = max(si, 2); rr = C3.get((p, S[j]), (r, o, d)); x = comps(p, [S[t] for t in range(j - 2, j + 1)], KS)
         r, o, d = [(1 - B) * a + B * b for a, b in zip((r, o, d), rr)]
         if x: ln, lo, ld = [(1 - B) * a + B * b for a, b in zip((ln, lo, ld), x[:3])]
-    f = lambda cep, lead: ((1 - WL) * cep + WL * lead) * sh
+    f = lambda cep, lead: ((1 - WL) * cep + WL * lead) * SOFT(sh)
     return f(r, ln), f(o, lo), f(d, ld)
 def split(r, o, d):
     """Offense/defense scaled to add up to the total: the gap between the total fit and the split fit is shared in
@@ -114,10 +116,10 @@ pc = []
 for k, si, v, o, d, poss, rank, n in json.load(open("pcepm_raw.json")):   # playoff-only regression rows, as fit
     q = POL.get((ids[k], S[si])); sh = q["po_share"] if q and np.isfinite(q["po_share"]) else 0.6
     f = q["n"] / (q["n"] + KPO) if q else 0.0; L = (lambda x: q[x] * f) if q else (lambda x: 0.0)
-    pc.append([k, si, ((1 - WL) * v + WL * L("lead_t")) * sh, ((1 - WL) * o + WL * L("off_t")) * sh, ((1 - WL) * d + WL * L("de_t")) * sh, poss, n])
+    sh = SOFT(sh); pc.append([k, si, ((1 - WL) * v + WL * L("lead_t")) * sh, ((1 - WL) * o + WL * L("off_t")) * sh, ((1 - WL) * d + WL * L("de_t")) * sh, poss, n])
 PC = pd.DataFrame(pc, columns=["k", "si", "v", "o", "d", "poss", "n"]); PC["rank"] = PC.groupby("si").v.rank(ascending=False, method="min").astype(int)
 D["pcepm"] = [[int(a), int(b), round(c, 2), *split(c, e, f_), int(g_), int(h), int(i)] for a, b, c, e, f_, g_, h, i in zip(PC.k, PC.si, PC.v, PC.o, PC.d, PC.poss, PC["rank"], PC.n)]
-D["rw"] = {"rows": rw_rows, "n": rw_n, "src": "Chip Equity: 65% CEPM ridge regression + 35% lead margin, times share of competitive minutes"}
+D["rw"] = {"rows": rw_rows, "n": rw_n, "src": "Chip Equity: 65% CEPM ridge regression + 35% lead margin, times (0.5 + 0.5 x share of competitive minutes)"}
 D["peak"] = {"ds": DS, "n": pn, "rows": prow}
 # each player's best 2- to 5-year stretch by total, by offense and by defense, with the window's last season
 D["peakx"] = {"cols": ["k", "w", "kind", "r", "o", "d", "end"], "rows": [[int(k), int(w), kind, round(r, 2), o, d, int(si)] for (k, w, kind), (_, r, o, d, si) in bestx.items()]}; D["cerm"] = cerm; D["ce"] = {"rows": [], "n": {}}; D["cepeak"] = {"ds": [], "n": [], "rows": []}
