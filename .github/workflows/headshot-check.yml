@@ -8,9 +8,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
-          echo "bogus id:"; curl -s -o /tmp/b -w '%{http_code} ' -A "Mozilla/5.0" https://cdn.nba.com/headshots/nba/latest/1040x760/99999999.png; md5sum </tmp/b | cut -c1-8
-          curl -sIL -A "Mozilla/5.0" https://stats.nba.com/media/players/230x185/977.png | grep -iE "^(HTTP|location)"
-          : > sums.txt
-          while read p; do curl -s -o /tmp/o -A "Mozilla/5.0" "https://cdn.nba.com/headshots/nba/latest/260x190/$p.png"; echo "$(md5sum </tmp/o | cut -c1-8) $(wc -c </tmp/o) $p" >> sums.txt; done < ids.txt
-          echo "most common images (a placeholder shows up many times):"; cut -d' ' -f1,2 sums.txt | sort | uniq -c | sort -rn | head -5
-          top=$(cut -d' ' -f1 sums.txt | sort | uniq -c | sort -rn | head -1 | awk '{print $2}'); echo "players on the top image:"; grep "^$top" sums.txt | cut -d' ' -f3 | tr '\n' ' ' | head -c 3000
+          for q in "Grant%20Long" "Michael%20Jordan" "Tim%20Duncan" "Antoine%20Walker"; do
+            echo "== $q"; curl -s -A "Mozilla/5.0" "https://site.web.api.espn.com/apis/common/v3/search?query=$q&limit=3&type=player&sport=basketball&league=nba" | head -c 1500; echo
+          done
+          echo "== headshot Jordan 1035"; curl -s -o /tmp/o -w '%{http_code} ' -A "Mozilla/5.0" https://a.espncdn.com/i/headshots/nba/players/full/1035.png; wc -c </tmp/o
+          echo "== headshot bogus"; curl -s -o /tmp/o -w '%{http_code} ' -A "Mozilla/5.0" https://a.espncdn.com/i/headshots/nba/players/full/99999999.png; wc -c </tmp/o
