@@ -34,11 +34,11 @@ jobs:
           for p, f in W:
               d = info.get(f) or info.get(f.replace("_", " "))
               if not d or not d["u"]: miss += 1; print("no info", p, f); continue
-              out[p] = [d["u"].replace("https://upload.wikimedia.org/wikipedia/commons/thumb/", ""), d["a"], d["l"], f]
+              out[p] = [d["u"].split("?")[0], d["a"], d["l"], f]
           print("resolved", len(out), "missing", miss)
           json.dump(out, open("wiki_resolved.json", "w"), ensure_ascii=False, separators=(",", ":"))
           for j, (p, v) in enumerate(out.items()):
-              u = "https://upload.wikimedia.org/wikipedia/commons/thumb/" + v[0]
+              u = v[0]
               r = subprocess.run(["curl", "-sL", "-o", f"th/{j:03d}_{p}.img", "-w", "%{http_code}", "-A", UA, u], capture_output=True, text=True).stdout
               if r != "200": print("thumb fail", r, p, u)
               time.sleep(0.5)
