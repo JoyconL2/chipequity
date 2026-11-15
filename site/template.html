@@ -1352,14 +1352,15 @@ function scLine(rows){
   const a = {gp:0, sec:0, pts:0, reb:0, ast:0, stl:0, blk:0, tov:0, fg2m:0, fg2a:0, fg3m:0, fg3a:0, ftm:0, fta:0, pos:0, uw:0};
   for (const i of rows){ for (const c of ["gp","sec","pts","reb","ast","stl","blk","tov","fg2m","fg2a","fg3m","fg3a","ftm","fta","pos"]) a[c] += P[c][i] || 0; a.uw += (P.usg[i] || 0) * P.sec[i]; }
   if (!a.gp) return null; const g = a.gp, fga = a.fg2a + a.fg3a, ta = fga + 0.44 * a.fta;
-  return {gp: g, min: a.sec / 60 / g, pts: a.pts / g, reb: a.reb / g, ast: a.ast / g, stl: a.stl / g, blk: a.blk / g, tov: a.tov / g,
-    fgp: fga >= 5 * g ? 100 * (a.fg2m + a.fg3m) / fga : null, tpp: a.fg3a >= 2 * g ? 100 * a.fg3m / a.fg3a : null, tpa: a.fg3a / g,
-    ftp: a.fta >= 1.5 * g ? 100 * a.ftm / a.fta : null, fta: a.fta / g, ts: ta ? 100 * a.pts / (2 * ta) : null, usg: a.sec ? a.uw / a.sec : null, pos: a.pos,
+  const dv = plMode === "p75" ? (a.pos ? a.pos / 75 : NaN) : g;          // counting stats per game, or per 75 possessions when that's switched on
+  return {gp: g, min: a.sec / 60 / g, pts: a.pts / dv, reb: a.reb / dv, ast: a.ast / dv, stl: a.stl / dv, blk: a.blk / dv, tov: a.tov / dv,
+    fgp: fga >= 5 * g ? 100 * (a.fg2m + a.fg3m) / fga : null, tpp: a.fg3a >= 2 * g ? 100 * a.fg3m / a.fg3a : null, tpa: a.fg3a / dv,
+    ftp: a.fta >= 1.5 * g ? 100 * a.ftm / a.fta : null, fta: a.fta / dv, ts: ta ? 100 * a.pts / (2 * ta) : null, usg: a.sec ? a.uw / a.sec : null, pos: a.pos,
     fgpRaw: fga ? 100 * (a.fg2m + a.fg3m) / fga : null, tppRaw: a.fg3a ? 100 * a.fg3m / a.fg3a : null, ftpRaw: a.fta ? 100 * a.ftm / a.fta : null};
 }
 const SC_POOL = new Map();
 function scPool(s, t){                                  // that season's qualified players: per-stat values, best first
-  const key = s * 2 + t; if (SC_POOL.has(key)) return SC_POOL.get(key);
+  const key = (s * 2 + t) * 2 + (plMode === "p75" ? 1 : 0); if (SC_POOL.has(key)) return SC_POOL.get(key);
   const minPos = t ? 150 : (s === LATEST && INPROG ? ipFloor() : 1000), by = new Map();
   for (let i = 0; i < P.p.length; i++) if (P.s[i] === s && P.t[i] === t) (by.get(P.p[i]) || by.set(P.p[i], []).get(P.p[i])).push(i);
   const lines = [...by.values()].map(scLine).filter(x => x && x.pos >= minPos), out = {n: lines.length};
@@ -1399,9 +1400,9 @@ function seasonCard(k, s, tl, rsR, poR, myRank){
       <div class="seg sm" role="group" aria-label="Season type" style="margin-top:10px"><button data-sct="0" aria-pressed="${!t}">Regular season</button><button data-sct="1" aria-pressed="${!!t}" ${poR.length ? "" : "disabled"}>Playoffs</button></div>
       <div class="tiles">${tiles}</div></div></div>
     ${[[SC_STATS, "sc-wide"], [SC_STATS.slice(0, 5), "sc-narrow"], [SC_STATS.slice(5, 10), "sc-narrow"], [SC_STATS.slice(10), "sc-narrow"]].map(([cols, cls]) => `<table class="box-t sc-t ${cls}"><thead><tr><th></th>${cols.map(([lab]) => `<th>${lab}</th>`).join("")}</tr></thead>
-      <tbody><tr><td class="l">${t ? "Playoffs" : "Per game"}</td>${cols.map(([, c]) => `<td>${fmtS(c)}</td>`).join("")}</tr>
+      <tbody><tr><td class="l">${plMode === "p75" ? "Per 75" : "Per game"}</td>${cols.map(([, c]) => `<td>${fmtS(c)}</td>`).join("")}</tr>
       <tr class="sc-rkrow"><td class="l">Rank</td>${cols.map(([, c]) => `<td>${rkS(c)}</td>`).join("")}</tr></tbody></table>`).join("")}
-    <p class="note" style="margin-bottom:0">${t ? "Playoffs" : "Regular season"} · ranks among ${pool.n} players with ${(t ? 150 : s === LATEST && INPROG ? ipFloor() : 1000).toLocaleString()}+ possessions · Chip Equity in points per 100 possessions</p>
+    <p class="note" style="margin-bottom:0">${t ? "Playoffs" : "Regular season"} · ${plMode === "p75" ? "per 75 possessions (games, minutes and percentages as usual)" : "per game"} · ranks among ${pool.n} players with ${(t ? 150 : s === LATEST && INPROG ? ipFloor() : 1000).toLocaleString()}+ possessions · Chip Equity in points per 100 possessions</p>
   </div>`;
 }
 function renderPlayerSeason(k, s){
