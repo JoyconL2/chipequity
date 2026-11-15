@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
-          sudo apt-get -qq install -y imagemagick >/dev/null; pip -q install opencv-python-headless
+          sudo apt-get -qq install -y imagemagick >/dev/null; pip -q install opencv-python-headless==4.10.0.84 "numpy<2.3"
           python3 tools/facecrop.py
           names() { python3 -c "import sys; d=dict(l.split('\t') for l in open('players.tsv').read().splitlines()); print(d.get(sys.argv[1],''))" $1; }
           rm -rf sheets; mkdir -p sheets; ls crop | sort | split -l 48 - grp_
