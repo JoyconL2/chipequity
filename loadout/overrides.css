@@ -232,3 +232,38 @@ table.cmp.solo td.lbl{text-align:left;padding-right:28px}
 .hl-links .sub{font-size:12px}
 .pl .tx a.vid{font-size:12px;font-weight:600;white-space:nowrap;margin-left:4px}
 .gm-rec{padding:10px 14px;font-size:14px}
+
+/* season card (screenshot-ready summary) */
+.scard{position:relative;background:linear-gradient(160deg,var(--panel-3),var(--panel) 55%);border:1px solid var(--line-2);border-radius:16px;padding:18px 18px 12px;margin:0 0 14px;max-width:720px;overflow:hidden}
+.scard::after{content:"";position:absolute;right:-60px;top:-60px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(76,201,240,.16),transparent 70%);pointer-events:none}
+.sc-head{display:flex;gap:16px;align-items:center}
+.sc-head .face.sc-face{width:96px;height:96px;border-radius:50%;object-fit:cover;object-position:top;background:var(--panel-2);border:2px solid var(--line-2);flex:none}
+.sc-id{min-width:0}
+.sc-yr{display:inline-block;font:700 13px var(--display);letter-spacing:.08em;background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:2px 10px}
+.sc-id h2{font:800 34px/1.05 var(--display);margin:6px 0 4px;letter-spacing:.01em}
+.sc-team{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;font-size:14px}
+.sc-team .logo{width:22px;height:22px}
+.sc-chips{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:0;margin-top:14px;border:1px solid var(--line-2);border-radius:12px;overflow:hidden}
+.sc-chip{text-align:center;padding:8px 6px}.sc-chip+.sc-chip{border-left:1px solid var(--line-2)}
+.sc-chip b{display:block;font:800 30px/1 var(--display)}.sc-chip b sup{font-size:.5em;margin-left:1px}
+.sc-chip span{font:700 11px var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.sc-badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.sc-badge{display:inline-flex;align-items:center;gap:5px;font:600 12.5px var(--body);background:var(--panel-2);border:1px solid var(--line-2);border-radius:999px;padding:3px 10px}
+.sc-badge.gold{border-color:rgba(227,179,65,.5);color:#f1d27a}.sc-badge.acc{border-color:var(--accent);color:var(--accent)}
+.sc-tr{display:inline-block;height:15px;width:auto;vertical-align:-3px;margin-right:1px}
+.sc-tog{display:inline-flex;margin-top:12px;border:1px solid var(--line-2);border-radius:999px;overflow:hidden}
+.sc-tog button{background:none;border:0;color:var(--ink-2);font:600 13px var(--body);padding:6px 14px;cursor:pointer}
+.sc-tog button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}.sc-tog button:disabled{opacity:.4;cursor:default}
+.sc-ce{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.sc-ce.one{grid-template-columns:1fr}
+.sc-ce-c{background:rgba(76,201,240,.07);border:1px solid rgba(76,201,240,.25);border-radius:12px;padding:8px 10px;display:grid;gap:1px}
+.sc-ce-l{font:700 10.5px var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.sc-ce-c b{font:800 28px/1.05 var(--display);color:var(--accent)}
+.sc-od{font-size:12px;color:var(--ink-2)}.sc-rk{font-size:11.5px;color:var(--ink-3)}
+.sc-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:10px 4px;margin-top:14px;text-align:center}
+.sc-s{display:grid;gap:1px;min-width:0}
+.sc-sl{font:600 11px var(--body);letter-spacing:.06em;color:var(--ink-3)}
+.sc-s b{font:800 22px/1.1 var(--display);font-variant-numeric:tabular-nums}
+.sc-sr{font:600 12px var(--body);color:var(--accent)}.sc-sr.gold{color:#f1d27a}.sc-sr.muted{color:var(--ink-3)}
+.sc-foot{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:12px;padding-top:8px;border-top:1px solid var(--line);font-size:11px;color:var(--ink-3)}
+.sc-brand{font:800 13px var(--display);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}.sc-brand b{color:var(--accent)}
+@media (max-width:640px){.sc-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.sc-ce{grid-template-columns:1fr 1fr 1fr;gap:6px}.sc-ce-c b{font-size:22px}.sc-id h2{font-size:28px}.sc-head .face.sc-face{width:76px;height:76px}}
