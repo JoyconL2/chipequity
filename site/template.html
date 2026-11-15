@@ -1388,10 +1388,10 @@ function seasonCard(k, s, tl, rsR, poR, myRank){
   if (!t && myRank === 1) facts.push("career best");
   const led = L ? SC_STATS.filter(([lab, c]) => !["gp","min","tov","tpa","fta","usg","rts"].includes(c) && scRank(L[c], pool[c]) === 1).map(([lab]) => lab) : [];
   if (led.length) facts.push(`led NBA in ${led.join(", ")}`);
-  const ceT = (lab, v, sub, hero) => v ? tile(pm(v.r), `${lab}${v.rank ? " · " + ord(v.rank) + (sub || "") : ""}<br>O ${pm(v.o)} · D ${pm(v.d)}`, hero ? "hero" : "")
+  const ceT = (lab, v, sub, hero) => v ? tile(pm(v.r), `${lab}<br>${v.rank ? ord(v.rank) + (sub || "") : "&nbsp;"}<br>O ${pm(v.o)} · D ${pm(v.d)}`, hero ? "hero" : "")
     : tile("–", `${lab}<br>too few possessions`, hero ? "hero" : "");
-  const tiles = t ? ceT("Playoff CE", pc, pc ? `/${pc.n}` : "", 1)
-    : [1, 2, 3].map(w => ceT(`${w}-yr CE`, M.rwOf(k, s, w), "", w === 1)).join("");
+  const tiles = t ? ceT("Playoff Chip Equity", pc, pc ? `/${pc.n}` : "", 1)
+    : [1, 2, 3].map(w => ceT(`${w}-yr Chip Equity`, M.rwOf(k, s, w), "", w === 1)).join("");
   const fmtS = c => { const v = L ? (c === "fgp" ? L.fgpRaw : c === "tpp" ? L.tppRaw : c === "ftp" ? L.ftpRaw : L[c]) : null; return v == null ? "–" : c === "gp" ? Math.round(v) : c === "rts" ? (v >= 0 ? "+" : "") + v.toFixed(1) : c === "ato" ? v.toFixed(2) : v.toFixed(1); };
   const rkS = c => { const rk = L ? scRank(L[c], pool[c]) : 0; return rk ? (rk === 1 && c !== "tov" ? TROPHY_SM : "") + ord(rk) : ""; };
   return `<div class="box scard" id="scard"><div class="sc-top">${faceImgSeason(k, s, team)}<div style="min-width:0">
@@ -1403,7 +1403,7 @@ function seasonCard(k, s, tl, rsR, poR, myRank){
     ${[[SC_STATS, "sc-wide"], [SC_STATS.slice(0, 6), "sc-narrow"], [SC_STATS.slice(6, 12), "sc-narrow"], [SC_STATS.slice(12), "sc-narrow"]].map(([cols, cls]) => `<table class="box-t sc-t ${cls}"><thead><tr><th></th>${cols.map(([lab]) => `<th>${lab}</th>`).join("")}</tr></thead>
       <tbody><tr><td class="l">${plMode === "p75" ? "/75" : "Avg"}</td>${cols.map(([, c]) => `<td>${fmtS(c)}</td>`).join("")}</tr>
       <tr class="sc-rkrow"><td class="l">Rank</td>${cols.map(([, c]) => `<td>${rkS(c)}</td>`).join("")}</tr></tbody></table>`).join("")}
-    <p class="sc-note">${t ? "Playoffs" : "Regular season"} · ${plMode === "p75" ? "per 75 poss." : "per game"} · ranks of ${pool.n} players with ${(t ? 150 : s === LATEST && INPROG ? ipFloor() : 1000).toLocaleString()}+ poss. · CE = Chip Equity, pts per 100</p>
+    <p class="sc-note">${t ? "Playoffs" : "Regular season"} · ${plMode === "p75" ? "per 75 poss." : "per game"} · ranks of ${pool.n} players with ${(t ? 150 : s === LATEST && INPROG ? ipFloor() : 1000).toLocaleString()}+ poss. · Chip Equity in pts per 100</p>
   </div>`;
 }
 function renderPlayerSeason(k, s){
