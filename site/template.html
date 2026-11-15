@@ -519,6 +519,13 @@ function faceImg(k, cls=""){
   const id = DATA.ids[k], n = DATA.names[k];
   return `<img class="face ${cls}" src="https://cdn.nba.com/headshots/nba/latest/1040x760/${id}.png" data-alt="https://cdn.nba.com/headshots/nba/latest/260x190/${id}.png" data-fb="${esc(initialsOf(n))}" alt="${esc(n)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="__imgFail(this)">`;
 }
+// the headshot from that season (NBA.com keeps them by team and season from 2015-16 on); falls back to his current one
+function faceImgSeason(k, s, ab, cls=""){
+  const ai = ab ? DATA.abbrs.indexOf(ab) : -1, y = +String(S[s] || "").slice(0, 4);
+  if (ai < 0 || !(y >= 2015) || !DATA.teamIds || !DATA.teamIds[ai]) return faceImg(k, cls);
+  const id = DATA.ids[k], n = DATA.names[k];
+  return `<img class="face ${cls}" src="https://cdn.nba.com/headshots/nba/${DATA.teamIds[ai]}/${y}/1040x760/${id}.png" data-alt="https://cdn.nba.com/headshots/nba/latest/1040x760/${id}.png|https://cdn.nba.com/headshots/nba/latest/260x190/${id}.png" data-fb="${esc(initialsOf(n))}" alt="${esc(n)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="__imgFail(this)">`;
+}
 function logoImg(ab, s, cls=""){
   if (!ab) return `<span class="logo ${cls}"></span>`;
   if (isDefunct(ab,s)) return `<span class="logo badge ${cls}" title="${esc(teamName(ab,s))}">${esc(ab)}</span>`;
@@ -1256,7 +1263,7 @@ function simSeasonBox(k, s){
   for (const r of X.rows){ if (r.k === k) continue; const d = simDist(me.z, r.z), b = best.get(r.k); if (!b || d < b.d) best.set(r.k, {r, d}); }
   const all = [...best.values()].sort((a, b) => a.d - b.d), med = median(all.map(x => x.d)), top = all.slice(0, 8);
   return `<div class="box"><h2>Similar seasons <small>closest regular seasons since 1996-97 by Chip Equity offense and defense, box score per 75 possessions, shot diet and usage, each against its own season's league · one season per player</small></h2><div class="tscroll"><table>
-    <thead><tr><th class="l">Player</th><th>Season</th><th class="l">Team</th><th>Chip Equity</th><th>Match</th></tr></thead><tbody>${top.map(({r, d}) => `<tr><td class="l"><div class="who">${faceImg(r.k, "sm")}<span class="n">${pLink(r.k, esc(DATA.names[r.k]), r.s)}</span>${trophyIf(r.k, r.s)}</div></td><td>${S[r.s]}</td>
+    <thead><tr><th class="l">Player</th><th>Season</th><th class="l">Team</th><th>Chip Equity</th><th>Match</th></tr></thead><tbody>${top.map(({r, d}) => `<tr><td class="l"><div class="who">${faceImgSeason(r.k, r.s, AB(r.tm), "sm")}<span class="n">${pLink(r.k, esc(DATA.names[r.k]), r.s)}</span>${trophyIf(r.k, r.s)}</div></td><td>${S[r.s]}</td>
     <td class="l"><div class="who">${tLink(AB(r.tm), r.s, `${logoImg(AB(r.tm), r.s)}${AB(r.tm)}`)}</div></td><td>${pm(r.ce)}</td><td><strong>${simPct(d, med)}%</strong></td></tr>`).join("")}</tbody></table></div></div>`;
 }
 function simCareerBox(k){
@@ -1387,7 +1394,7 @@ function seasonCard(k, s, tl, rsR, poR, myRank){
     const rk = c === "gp" || c === "min" ? scRank(v, pool[c]) : scRank(v, pool[c]), d = c === "gp" ? 0 : 1;
     return `<div class="sc-s"><span class="sc-sl">${lab}</span><b>${raw == null ? "–" : (c === "gp" ? Math.round(raw) : raw.toFixed(d))}</b><span class="sc-sr${rk === 1 && c !== "tov" ? " gold" : c === "tov" ? " muted" : ""}">${rk ? (rk === 1 && c !== "tov" ? TROPHY_SM : "") + ord(rk) : "&nbsp;"}</span></div>`; };
   return `<div class="scard" id="scard">
-    <div class="sc-head">${faceImg(k, "sc-face")}<div class="sc-id"><div class="sc-yr">${S[s]}${ipTag(s)}</div><h2>${esc(name)}</h2>
+    <div class="sc-head">${faceImgSeason(k, s, team, "sc-face")}<div class="sc-id"><div class="sc-yr">${S[s]}${ipTag(s)}</div><h2>${esc(name)}</h2>
       <div class="sc-team">${tl.map(([tm]) => tLink(tm, s, `${logoImg(tm, s)}${esc(teamName(tm, s))}`)).join(" · ")} <span class="muted">· ${recTxt(team, s)}</span></div></div></div>
     ${chips ? `<div class="sc-chips">${chips}</div>` : ""}${badges ? `<div class="sc-badges">${badges}</div>` : ""}
     <div class="sc-tog" role="group" aria-label="Season type"><button data-sct="0" aria-pressed="${!t}">Regular season</button><button data-sct="1" aria-pressed="${!!t}" ${poR.length ? "" : "disabled"}>Playoffs</button></div>
@@ -1726,7 +1733,7 @@ function renderLeaders(){
     if (!list.length){ ldOut.innerHTML = `<div class="msg">Nobody qualifies. Try a lower minimum number of games.</div>`; return; }
     ldOut.innerHTML = `<div class="box"><h2>${esc(PEAK_LABEL[stat])}${LD_SORT!=="r"?` · ranked by ${SORT_NAME[LD_SORT]}`:""} <small>all-time · regular season + playoffs</small></h2><div class="tscroll"><table>
       <thead><tr><th>#</th><th class="l">Player</th><th class="l" title="The team(s) he played for during this peak (most games each season)">Peak team</th><th>GP since 1996-97</th><th class="l" title="${PK === "r" ? "The season or stretch of his peak" : `The season or stretch of his best ${PK === "o" ? "offense" : "defense"}`}">${stat === "Peak 1Y CEPM" ? "Season" : /^Peak/.test(stat) ? "Stretch" : "Decade"}</th>${sth("r","Total")}${sth("o","Off")}${sth("d","Def")}<th>All-time rank${LD_SORT!=="r"?(LD_SORT==="o"?" (off)":" (def)"):""}</th></tr></thead>
-      <tbody>${list.map((r,i)=>`<tr><td>${r.pos}</td><td class="l"><div class="who">${faceImg(r.k,"sm")}<span class="n">${pLink(r.k, esc(DATA.names[r.k]))}</span>${trophiesIn(r.k, r.v.s, r.v.w)}</div></td>
+      <tbody>${list.map((r,i)=>`<tr><td>${r.pos}</td><td class="l"><div class="who">${(pt => pt.length ? faceImgSeason(r.k, r.v.s, pt[pt.length - 1][0], "sm") : faceImg(r.k, "sm"))(peakTeams(r.k, r.v.s, 1))}<span class="n">${pLink(r.k, esc(DATA.names[r.k]))}</span>${trophiesIn(r.k, r.v.s, r.v.w)}</div></td>
         <td class="l"><div class="who">${(pt => pt.length ? pt.map(([t, ts]) => tLink(t, ts, `${logoImg(t, ts)}${t}`)).join(" ") : tLink(r.tm, r.s, `${logoImg(r.tm, r.s)}${r.tm||""}`))(peakTeams(r.k, r.v.s, r.v.w || 1))}</div></td><td>${r.gp.toLocaleString()}</td><td class="l nw"><strong>${esc(r.v.when || "–")}</strong></td><td class="nw">${sb("r",pm(r.v.r))}${bp("r", r)}</td><td class="nw">${sb("o",pm(r.v.o))}${bp("o", r)}</td><td class="nw">${sb("d",pm(r.v.d))}${bp("d", r)}</td><td class="sub">${ord(rankOf.get(r.v))} of ${allV.length.toLocaleString()}</td></tr>`).join("")}</tbody>
       </table></div><p class="note">Click Total, Off or Def to rank by that number. Ranked by Off or Def, each player's best offensive or defensive ${stat === "Peak 1Y CEPM" ? "season" : "stretch"} is used, and the ${stat === "Peak 1Y CEPM" ? "Season" : "Stretch"} column shows it.</p><p class="mlink"><a href="#" data-method="windows">How it's calculated ›</a></p></div>`;
     return;
