@@ -13,20 +13,40 @@ jobs:
           sudo apt-get -qq install -y imagemagick >/dev/null
           mkdir -p th sheets
           python3 - <<'PY'
-          import json, subprocess, urllib.parse, time
+          import json, subprocess, urllib.parse, time, re, html
+          UA = "chipequity-check/1.0 (github.com/JoyconL2/chipequity)"
           M = json.load(open("alt_headshots.json")); names = dict(l.split("\t") for l in open("players.tsv").read().splitlines())
           W = [(p, v[1:]) for p, v in M.items() if v[0] == "w"]
-          for j, (p, f) in enumerate(W):
-              u = "https://commons.wikimedia.org/wiki/Special:FilePath/" + urllib.parse.quote(f) + "?width=160"
-              r = subprocess.run(["curl", "-sL", "-o", f"th/{j:03d}_{p}.img", "-w", "%{http_code}", "-A", "chipequity-check/1.0 (github.com/JoyconL2/chipequity)", u], capture_output=True, text=True).stdout
-              if r != "200": print("fail", r, p, f)
-              time.sleep(0.15)
-          open("labels.txt", "w").write("\n".join(f"{j:03d}_{p} {names.get(p,'')}" for j, (p, f) in enumerate(W)))
+          info = {}
+          for i in range(0, len(W), 40):
+              titles = "|".join("File:" + f for p, f in W[i:i+40])
+              q = urllib.parse.urlencode({"action": "query", "format": "json", "prop": "imageinfo", "iiprop": "url|extmetadata", "iiurlwidth": 420, "titles": titles, "redirects": 1})
+              J = json.loads(subprocess.run(["curl", "-s", "-A", UA, "https://commons.wikimedia.org/w/api.php?" + q], capture_output=True, text=True).stdout)
+              norm = {n["to"]: n["from"] for n in J["query"].get("normalized", [])}
+              red = {n["to"]: n["from"] for n in J["query"].get("redirects", [])}
+              for pg in J["query"]["pages"].values():
+                  t = pg["title"]; t0 = norm.get(red.get(t, t), red.get(t, t))
+                  ii = (pg.get("imageinfo") or [{}])[0]; md = ii.get("extmetadata", {})
+                  strip = lambda s: html.unescape(re.sub("<[^>]+>", "", s or "")).strip()
+                  info[t0[5:]] = {"u": ii.get("thumburl", ""), "a": strip(md.get("Artist", {}).get("value"))[:80], "l": strip(md.get("LicenseShortName", {}).get("value")), "w": ii.get("thumbwidth"), "h": ii.get("thumbheight")}
+              time.sleep(1)
+          out, miss = {}, 0
+          for p, f in W:
+              d = info.get(f) or info.get(f.replace("_", " "))
+              if not d or not d["u"]: miss += 1; print("no info", p, f); continue
+              out[p] = [d["u"].replace("https://upload.wikimedia.org/wikipedia/commons/thumb/", ""), d["a"], d["l"], f]
+          print("resolved", len(out), "missing", miss)
+          json.dump(out, open("wiki_resolved.json", "w"), ensure_ascii=False, separators=(",", ":"))
+          for j, (p, v) in enumerate(out.items()):
+              u = "https://upload.wikimedia.org/wikipedia/commons/thumb/" + v[0]
+              r = subprocess.run(["curl", "-sL", "-o", f"th/{j:03d}_{p}.img", "-w", "%{http_code}", "-A", UA, u], capture_output=True, text=True).stdout
+              if r != "200": print("thumb fail", r, p)
+              time.sleep(0.5)
+          open("labels.txt", "w").write("\n".join(f"{j:03d}_{p} {names.get(p,'')}" for j, p in enumerate(out)))
           PY
-          ls th | wc -l
-          cd th && i=0; ls | sort | split -l 48 - ../grp_ ; cd ..
+          ls th | sort | split -l 48 - grp_
           for g in grp_*; do args=(); while read f; do id=${f%.img}; args+=( -label "$(grep "^$id " labels.txt | cut -d' ' -f2-)" "th/$f[0]" ); done < $g
-            montage "${args[@]}" -geometry 110x110+3+3 -tile 8x -pointsize 10 -background '#222' -fill white sheets/$g.jpg 2>/dev/null; done
-          ls -la sheets
+            montage "${args[@]}" -geometry 110x110+3+3 -tile 8x -pointsize 10 -background '#222' -fill white sheets/$g.jpg || echo "montage failed $g"; done
+          ls sheets
           git config user.name "headshot-check"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add sheets && git commit -qm "contact sheets" && git push -q
+          git add sheets wiki_resolved.json && git commit -qm "contact sheets" && git push -q
