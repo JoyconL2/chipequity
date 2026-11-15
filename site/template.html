@@ -746,6 +746,14 @@ function seasonResult(abIdx, s){
   if (last.round===4 && last.w===abIdx) return {txt:"Won title", cls:"title"};
   return {txt: last.round===4 ? "Lost Finals" : `Lost ${ROUND[last.round].toLowerCase()}`, cls:""};
 }
+// the team(s) he played for during a peak ending in season s and w seasons long: the team with the most games each season
+function peakTeams(k, s, w){
+  if (s == null) return []; const out = [];
+  for (let x = s - (w || 1) + 1; x <= s; x++){ let best = -1, gp = -1;
+    for (const i of rowsByPlayer[k] || []) if (P.s[i] === x && P.t[i] === 0 && P.gp[i] > gp){ gp = P.gp[i]; best = i; }
+    if (best >= 0){ const t = AB(P.tm[best]); if (!out.length || out[out.length - 1][0] !== t) out.push([t, x]); } }
+  return out.slice(-3);
+}
 // did he win the title that season (with any team he played for in those playoffs)?
 const TITLE_CACHE = new Map();
 function wonTitle(k, s){
@@ -1329,6 +1337,65 @@ function renderPlayer(){
 let PL_SEASON = null;
 function openPlayer(k, s = null){ plQ.value = optLabel(k); PL_SEASON = s; if (current !== "players") show("players"); else { renderPlayer(); pushNav(); } window.scrollTo({top: 0}); }
 const seasonLink = (k, s, html) => `<a href="#" class="plink" data-player="${k}" data-season="${s}" title="${esc(DATA.names[k])}, ${S[s]} season">${html}</a>`;
+/* ---- season card: a compact, screenshot-ready summary at the top of a season page ---- */
+let SC_T = 0;                                          // card view: 0 regular season, 1 playoffs
+const SC_STATS = [["G","gp"],["PTS","pts"],["REB","reb"],["AST","ast"],["STL","stl"],["BLK","blk"],["TOV","tov"],["MIN","min"],
+  ["FG%","fgp"],["3P%","tpp"],["3PA","tpa"],["FT%","ftp"],["FTA","fta"],["TS%","ts"],["USG%","usg"]];
+function scLine(rows){
+  const a = {gp:0, sec:0, pts:0, reb:0, ast:0, stl:0, blk:0, tov:0, fg2m:0, fg2a:0, fg3m:0, fg3a:0, ftm:0, fta:0, pos:0, uw:0};
+  for (const i of rows){ for (const c of ["gp","sec","pts","reb","ast","stl","blk","tov","fg2m","fg2a","fg3m","fg3a","ftm","fta","pos"]) a[c] += P[c][i] || 0; a.uw += (P.usg[i] || 0) * P.sec[i]; }
+  if (!a.gp) return null; const g = a.gp, fga = a.fg2a + a.fg3a, ta = fga + 0.44 * a.fta;
+  return {gp: g, min: a.sec / 60 / g, pts: a.pts / g, reb: a.reb / g, ast: a.ast / g, stl: a.stl / g, blk: a.blk / g, tov: a.tov / g,
+    fgp: fga >= 5 * g ? 100 * (a.fg2m + a.fg3m) / fga : null, tpp: a.fg3a >= 2 * g ? 100 * a.fg3m / a.fg3a : null, tpa: a.fg3a / g,
+    ftp: a.fta >= 1.5 * g ? 100 * a.ftm / a.fta : null, fta: a.fta / g, ts: ta ? 100 * a.pts / (2 * ta) : null, usg: a.sec ? a.uw / a.sec : null, pos: a.pos,
+    fgpRaw: fga ? 100 * (a.fg2m + a.fg3m) / fga : null, tppRaw: a.fg3a ? 100 * a.fg3m / a.fg3a : null, ftpRaw: a.fta ? 100 * a.ftm / a.fta : null};
+}
+const SC_POOL = new Map();
+function scPool(s, t){                                  // that season's qualified players: per-stat values, best first
+  const key = s * 2 + t; if (SC_POOL.has(key)) return SC_POOL.get(key);
+  const minPos = t ? 150 : (s === LATEST && INPROG ? ipFloor() : 1000), by = new Map();
+  for (let i = 0; i < P.p.length; i++) if (P.s[i] === s && P.t[i] === t) (by.get(P.p[i]) || by.set(P.p[i], []).get(P.p[i])).push(i);
+  const lines = [...by.values()].map(scLine).filter(x => x && x.pos >= minPos), out = {n: lines.length};
+  for (const [, c] of SC_STATS) out[c] = lines.map(x => x[c]).filter(v => v != null).sort((a, b) => b - a);
+  SC_POOL.set(key, out); return out;
+}
+const scRank = (v, arr) => { if (v == null || !arr || !arr.length) return null; let n = 0; for (const x of arr) if (x > v + 1e-9) n++; else break; return n + 1; };
+let SC_ALL = null;                                     // all-time single seasons (1,500+ possessions) and playoff runs (300+), best first
+function scAllTime(){
+  if (SC_ALL) return SC_ALL;
+  const rs = DATA.rw.rows.filter(r => r[2] === 1 && r[7] >= 1500 && !(r[1] === LATEST && INPROG)).map(r => r[5]).sort((a, b) => b - a);
+  const po = [...POC.values()].filter(v => v.p >= 300).map(v => v.r).sort((a, b) => b - a);
+  return SC_ALL = {rs, po};
+}
+const TROPHY_SM = `<img class="sc-tr" src="trophy.png" alt="">`;
+function seasonCard(k, s, tl, rsR, poR, myRank){
+  const t = SC_T && poR.length ? 1 : 0, rows = t ? poR : rsR, L = rows.length ? scLine(rows) : null, pool = scPool(s, t), AT = scAllTime();
+  const c1 = M.rwOf(k, s, 1), pc = POC.get(k*64 + s), won = wonTitle(k, s), name = DATA.names[k];
+  const team = tl[tl.length - 1][0], ai = DATA.abbrs.indexOf(team), sr = ai >= 0 ? seasonResult(ai, s) : {txt: ""};
+  const chip = (big, lab) => `<div class="sc-chip"><b>${big}</b><span>${lab}</span></div>`;
+  const ordS = n => `${n}<sup>${ord(n).replace(/^\d+/, "")}</sup>`;
+  let chips = "";
+  if (!t && c1){ chips += chip(ordS(c1.rank), `in ${S[s]}`); const at = scRank(c1.r, AT.rs); if (at) chips += chip(ordS(at), s === LATEST && INPROG ? "all-time pace" : "all-time season"); }
+  if (t && pc){ chips += chip(ordS(pc.rank), `${S[s]} playoffs`); const at = scRank(pc.r, AT.po); if (at && pc.p >= 300) chips += chip(ordS(at), "all-time run"); }
+  const badges = [won ? `<span class="sc-badge gold">${TROPHY_SM} Champion</span>` : "", !won && sr.txt && sr.txt !== "Missed playoffs" ? `<span class="sc-badge">${esc(sr.txt)}</span>` : "",
+    !t && c1 && c1.rank === 1 ? `<span class="sc-badge acc">#1 in Chip Equity</span>` : "", !t && myRank === 1 ? `<span class="sc-badge">Career-best season</span>` : "",
+    ...(L ? SC_STATS.filter(([lab, c]) => !["gp","min","tov","tpa","fta","usg"].includes(c) && scRank(L[c], pool[c]) === 1).map(([lab]) => `<span class="sc-badge gold">${TROPHY_SM} Led in ${lab}</span>`) : [])].filter(Boolean).join("");
+  // Chip Equity: 1 / 2 / 3-year windows (regular season) or the playoff run
+  const ceCell = (lab, v, sub) => `<div class="sc-ce-c"><span class="sc-ce-l">${lab}</span>${v ? `<b>${pm(v.r)}</b><span class="sc-od">O ${pm(v.o)} · D ${pm(v.d)}</span><span class="sc-rk">${v.rank ? ord(v.rank) + (sub || "") : ""}</span>` : `<b class="muted">–</b><span class="sc-od">not enough possessions</span>`}</div>`;
+  const ce = t ? ceCell("Playoff Chip Equity", pc, pc ? ` of ${pc.n}` : "") : [1, 2, 3].map(w => ceCell(w === 1 ? "1-year Chip Equity" : `${w}-year`, M.rwOf(k, s, w), w === 1 ? " this season" : " · " + rwSpan(s, w))).join("");
+  const cell = ([lab, c]) => { const v = L ? L[c] : null, raw = L ? (c === "fgp" ? L.fgpRaw : c === "tpp" ? L.tppRaw : c === "ftp" ? L.ftpRaw : v) : null;
+    const rk = c === "gp" || c === "min" ? scRank(v, pool[c]) : scRank(v, pool[c]), d = c === "gp" ? 0 : 1;
+    return `<div class="sc-s"><span class="sc-sl">${lab}</span><b>${raw == null ? "–" : (c === "gp" ? Math.round(raw) : raw.toFixed(d))}</b><span class="sc-sr${rk === 1 && c !== "tov" ? " gold" : c === "tov" ? " muted" : ""}">${rk ? (rk === 1 && c !== "tov" ? TROPHY_SM : "") + ord(rk) : "&nbsp;"}</span></div>`; };
+  return `<div class="scard" id="scard">
+    <div class="sc-head">${faceImg(k, "sc-face")}<div class="sc-id"><div class="sc-yr">${S[s]}${ipTag(s)}</div><h2>${esc(name)}</h2>
+      <div class="sc-team">${tl.map(([tm]) => tLink(tm, s, `${logoImg(tm, s)}${esc(teamName(tm, s))}`)).join(" · ")} <span class="muted">· ${recTxt(team, s)}</span></div></div></div>
+    ${chips ? `<div class="sc-chips">${chips}</div>` : ""}${badges ? `<div class="sc-badges">${badges}</div>` : ""}
+    <div class="sc-tog" role="group" aria-label="Season type"><button data-sct="0" aria-pressed="${!t}">Regular season</button><button data-sct="1" aria-pressed="${!!t}" ${poR.length ? "" : "disabled"}>Playoffs</button></div>
+    <div class="sc-ce${t ? " one" : ""}">${ce}</div>
+    <div class="sc-grid">${SC_STATS.map(cell).join("")}</div>
+    <div class="sc-foot"><span>${t ? "Playoffs" : "Regular season"} · per game · ranks among ${pool.n} players with ${(t ? 150 : s === LATEST && INPROG ? ipFloor() : 1000).toLocaleString()}+ possessions</span><span class="sc-brand">Courtside <b>Stats</b></span></div>
+  </div>`;
+}
 function renderPlayerSeason(k, s){
   plStat.closest(".field").hidden = true;
   const all = rowsByPlayer[k] || [], rsR = all.filter(i => P.s[i] === s && P.t[i] === 0), poR = all.filter(i => P.s[i] === s && P.t[i] === 1);
@@ -1361,14 +1428,12 @@ function renderPlayerSeason(k, s){
   const ptB = [0, 1].filter(t => ptHas(k, s, t)).map(t => `<div class="box"><h2>${t ? "Playoff play types" : "Play types"} <small>${S[s]} ${t ? "playoffs" : "regular season"} · from play-by-play and shot charts</small></h2>${ptBox(k, s, t)}<p class="mlink"><a href="#" data-method="pt">How play types are measured ›</a></p></div>`).join("");
   const dptB = DPTMAP.has((k*64 + s)*2 + TYPE) ? `<div class="box"><h2>Defensive play types <small>${S[s]} ${typeName().toLowerCase()}</small></h2>${defBox(k, s)}<p class="mlink"><a href="#" data-method="dpt">How defensive play types are measured ›</a></p></div>` : "";
   const live = s === LATEST && TYPE === 0 && typeof CUR !== "undefined" && CUR && Date.now() >= +CUR.seasonStart;
-  plOut.innerHTML = nav + `<div class="box"><div class="profile">${faceImg(k)}<div style="min-width:0">
-      <h2 class="pname">${esc(DATA.names[k])} <span class="ps-yr">${S[s]}</span>${ipTag(s)}</h2>
-      <div class="stints">${teamLine}</div>${hlLinks(k, s, poR.length > 0)}
-      <div class="tiles">${tiles}</div></div></div>${ctx ? `<p class="note">${ctx}</p>` : ""}</div>${live ? `<div id="pl-live"></div>` : ""}
+  plOut.innerHTML = nav + seasonCard(k, s, tl, rsR, poR, myRank) + `<div class="box"><div class="stints">${teamLine}</div>${hlLinks(k, s, poR.length > 0)}${ctx ? `<p class="note" style="margin-bottom:0">${ctx}</p>` : ""}</div>${live ? `<div id="pl-live"></div>` : ""}
     ${ceBox}${boxBox}
     <div class="box"><h2>On / off <small>${S[s]} · team net rating per 100 possessions with him on vs. off the floor · garbage time out</small></h2><div id="ps-onoff"><div class="msg">Loading on/off…</div></div></div>
     ${ptB}${dptB}${simSeasonBox(k, s)}${playoffSeriesBox(k, s)}`;
   const sel = document.getElementById("ps-season"); sel.onchange = () => openPlayer(k, +sel.value);
+  plOut.querySelectorAll("[data-sct]").forEach(b => b.onclick = () => { SC_T = +b.dataset.sct; renderPlayerSeason(k, s); });
   const fillOnOff = () => {
     const el = document.getElementById("ps-onoff"); if (!el || PL_SEASON !== s) return;
     if (!WOWY){ if (WOWY_ERR) el.innerHTML = `<div class="msg">Couldn't load the on/off data (${esc(WOWY_ERR)}).</div>`; else loadWowy().then(fillOnOff); return; }
@@ -1660,9 +1725,9 @@ function renderLeaders(){
     const bp = (key, r) => key === PK ? pctl({rank: rankOf.get(r.v), n: allV.length}, "on this all-time list") : "";
     if (!list.length){ ldOut.innerHTML = `<div class="msg">Nobody qualifies. Try a lower minimum number of games.</div>`; return; }
     ldOut.innerHTML = `<div class="box"><h2>${esc(PEAK_LABEL[stat])}${LD_SORT!=="r"?` · ranked by ${SORT_NAME[LD_SORT]}`:""} <small>all-time · regular season + playoffs</small></h2><div class="tscroll"><table>
-      <thead><tr><th>#</th><th class="l">Player</th><th class="l" title="${CUR_SEASON ? CUR_SEASON + " team for players on a current roster, otherwise the team he played the most games for" : "Team he played the most games for"}">Team</th><th>GP since 1996-97</th><th class="l" title="${PK === "r" ? "The season or stretch of his peak" : `The season or stretch of his best ${PK === "o" ? "offense" : "defense"}`}">${stat === "Peak 1Y CEPM" ? "Season" : /^Peak/.test(stat) ? "Stretch" : "Decade"}</th>${sth("r","Total")}${sth("o","Off")}${sth("d","Def")}<th>All-time rank${LD_SORT!=="r"?(LD_SORT==="o"?" (off)":" (def)"):""}</th></tr></thead>
+      <thead><tr><th>#</th><th class="l">Player</th><th class="l" title="The team(s) he played for during this peak (most games each season)">Peak team</th><th>GP since 1996-97</th><th class="l" title="${PK === "r" ? "The season or stretch of his peak" : `The season or stretch of his best ${PK === "o" ? "offense" : "defense"}`}">${stat === "Peak 1Y CEPM" ? "Season" : /^Peak/.test(stat) ? "Stretch" : "Decade"}</th>${sth("r","Total")}${sth("o","Off")}${sth("d","Def")}<th>All-time rank${LD_SORT!=="r"?(LD_SORT==="o"?" (off)":" (def)"):""}</th></tr></thead>
       <tbody>${list.map((r,i)=>`<tr><td>${r.pos}</td><td class="l"><div class="who">${faceImg(r.k,"sm")}<span class="n">${pLink(r.k, esc(DATA.names[r.k]))}</span>${trophiesIn(r.k, r.v.s, r.v.w)}</div></td>
-        <td class="l"><div class="who">${tLink(r.tm, r.s, `${logoImg(r.tm, r.s)}${r.tm||""}`)}</div></td><td>${r.gp.toLocaleString()}</td><td class="l nw">${esc(r.v.when || "–")}</td><td class="nw">${sb("r",pm(r.v.r))}${bp("r", r)}</td><td class="nw">${sb("o",pm(r.v.o))}${bp("o", r)}</td><td class="nw">${sb("d",pm(r.v.d))}${bp("d", r)}</td><td class="sub">${ord(rankOf.get(r.v))} of ${allV.length.toLocaleString()}</td></tr>`).join("")}</tbody>
+        <td class="l"><div class="who">${(pt => pt.length ? pt.map(([t, ts]) => tLink(t, ts, `${logoImg(t, ts)}${t}`)).join(" ") : tLink(r.tm, r.s, `${logoImg(r.tm, r.s)}${r.tm||""}`))(peakTeams(r.k, r.v.s, r.v.w || 1))}</div></td><td>${r.gp.toLocaleString()}</td><td class="l nw"><strong>${esc(r.v.when || "–")}</strong></td><td class="nw">${sb("r",pm(r.v.r))}${bp("r", r)}</td><td class="nw">${sb("o",pm(r.v.o))}${bp("o", r)}</td><td class="nw">${sb("d",pm(r.v.d))}${bp("d", r)}</td><td class="sub">${ord(rankOf.get(r.v))} of ${allV.length.toLocaleString()}</td></tr>`).join("")}</tbody>
       </table></div><p class="note">Click Total, Off or Def to rank by that number. Ranked by Off or Def, each player's best offensive or defensive ${stat === "Peak 1Y CEPM" ? "season" : "stretch"} is used, and the ${stat === "Peak 1Y CEPM" ? "Season" : "Stretch"} column shows it.</p><p class="mlink"><a href="#" data-method="windows">How it's calculated ›</a></p></div>`;
     return;
   }
