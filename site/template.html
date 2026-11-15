@@ -1346,8 +1346,8 @@ function openPlayer(k, s = null){ plQ.value = optLabel(k); PL_SEASON = s; if (cu
 const seasonLink = (k, s, html) => `<a href="#" class="plink" data-player="${k}" data-season="${s}" title="${esc(DATA.names[k])}, ${S[s]} season">${html}</a>`;
 /* ---- season card: a compact, screenshot-ready summary at the top of a season page ---- */
 let SC_T = 0;                                          // card view: 0 regular season, 1 playoffs
-const SC_STATS = [["G","gp"],["PTS","pts"],["REB","reb"],["AST","ast"],["STL","stl"],["BLK","blk"],["TOV","tov"],["MIN","min"],
-  ["FG%","fgp"],["3P%","tpp"],["3PA","tpa"],["FT%","ftp"],["FTA","fta"],["TS%","ts"],["USG%","usg"]];
+const SC_STATS = [["G","gp"],["PTS","pts"],["REB","reb"],["AST","ast"],["STL","stl"],["BLK","blk"],["TOV","tov"],["AST/TO","ato"],["MIN","min"],
+  ["FG%","fgp"],["3P%","tpp"],["3PA","tpa"],["FT%","ftp"],["FTA","fta"],["TS%","ts"],["rTS","rts"],["USG%","usg"]];
 function scLine(rows){
   const a = {gp:0, sec:0, pts:0, reb:0, ast:0, stl:0, blk:0, tov:0, fg2m:0, fg2a:0, fg3m:0, fg3a:0, ftm:0, fta:0, pos:0, uw:0};
   for (const i of rows){ for (const c of ["gp","sec","pts","reb","ast","stl","blk","tov","fg2m","fg2a","fg3m","fg3a","ftm","fta","pos"]) a[c] += P[c][i] || 0; a.uw += (P.usg[i] || 0) * P.sec[i]; }
@@ -1355,7 +1355,7 @@ function scLine(rows){
   const dv = plMode === "p75" ? (a.pos ? a.pos / 75 : NaN) : g;          // counting stats per game, or per 75 possessions when that's switched on
   return {gp: g, min: a.sec / 60 / g, pts: a.pts / dv, reb: a.reb / dv, ast: a.ast / dv, stl: a.stl / dv, blk: a.blk / dv, tov: a.tov / dv,
     fgp: fga >= 5 * g ? 100 * (a.fg2m + a.fg3m) / fga : null, tpp: a.fg3a >= 2 * g ? 100 * a.fg3m / a.fg3a : null, tpa: a.fg3a / dv,
-    ftp: a.fta >= 1.5 * g ? 100 * a.ftm / a.fta : null, fta: a.fta / dv, ts: ta ? 100 * a.pts / (2 * ta) : null, usg: a.sec ? a.uw / a.sec : null, pos: a.pos,
+    ftp: a.fta >= 1.5 * g ? 100 * a.ftm / a.fta : null, fta: a.fta / dv, ts: ta ? 100 * a.pts / (2 * ta) : null, rts: ta ? 100 * (a.pts / (2 * ta) - M.lgTS(P.s[rows[0]])) : null, ato: a.tov ? a.ast / a.tov : null, usg: a.sec ? a.uw / a.sec : null, pos: a.pos,
     fgpRaw: fga ? 100 * (a.fg2m + a.fg3m) / fga : null, tppRaw: a.fg3a ? 100 * a.fg3m / a.fg3a : null, ftpRaw: a.fta ? 100 * a.ftm / a.fta : null};
 }
 const SC_POOL = new Map();
@@ -1386,12 +1386,12 @@ function seasonCard(k, s, tl, rsR, poR, myRank){
   if (!t && c1){ facts.push(`${ord(c1.rank)} of ${c1.n || "–"} in Chip Equity`); const at = scRank(c1.r, AT.rs); if (at) facts.push(`${ord(at)} ${s === LATEST && INPROG ? "all-time pace" : "best season all-time"}`); }
   if (t && pc){ const at = scRank(pc.r, AT.po); if (at && pc.p >= 300) facts.push(`${ord(at)} best playoff run all-time`); }
   if (!t && myRank === 1) facts.push("career-best season");
-  if (L) SC_STATS.filter(([lab, c]) => !["gp","min","tov","tpa","fta","usg"].includes(c) && scRank(L[c], pool[c]) === 1).forEach(([lab]) => facts.push(`led the league in ${lab}`));
+  if (L) SC_STATS.filter(([lab, c]) => !["gp","min","tov","tpa","fta","usg","rts"].includes(c) && scRank(L[c], pool[c]) === 1).forEach(([lab]) => facts.push(`led the league in ${lab}`));
   const ceT = (lab, v, sub, hero) => v ? tile(pm(v.r), `${lab}<br>${v.rank ? ord(v.rank) + (sub || "") : "&nbsp;"}<br>O ${pm(v.o)} / D ${pm(v.d)}`, hero ? "hero" : "")
     : tile("–", `${lab}<br>not enough possessions`, hero ? "hero" : "");
   const tiles = t ? ceT("Playoff Chip Equity", pc, pc ? ` of ${pc.n}` : "", 1)
     : [1, 2, 3].map(w => ceT(`${w}-yr Chip Equity`, M.rwOf(k, s, w), w === 1 ? ` of ${(c1 && c1.n) || "–"}` : "", w === 1)).join("");
-  const fmtS = c => { const v = L ? (c === "fgp" ? L.fgpRaw : c === "tpp" ? L.tppRaw : c === "ftp" ? L.ftpRaw : L[c]) : null; return v == null ? "–" : c === "gp" ? Math.round(v) : v.toFixed(1); };
+  const fmtS = c => { const v = L ? (c === "fgp" ? L.fgpRaw : c === "tpp" ? L.tppRaw : c === "ftp" ? L.ftpRaw : L[c]) : null; return v == null ? "–" : c === "gp" ? Math.round(v) : c === "rts" ? (v >= 0 ? "+" : "") + v.toFixed(1) : c === "ato" ? v.toFixed(2) : v.toFixed(1); };
   const rkS = c => { const rk = L ? scRank(L[c], pool[c]) : 0; return rk ? (rk === 1 && c !== "tov" ? TROPHY_SM : "") + ord(rk) : ""; };
   return `<div class="box scard" id="scard"><div class="profile">${faceImgSeason(k, s, team)}<div style="min-width:0">
       <h2 class="pname">${esc(name)} <span class="ps-yr">${S[s]}${ipTag(s)}</span></h2>
@@ -1399,7 +1399,7 @@ function seasonCard(k, s, tl, rsR, poR, myRank){
       ${facts.length ? `<p class="sc-facts">${facts.join(" · ")}</p>` : ""}
       <div class="seg sm" role="group" aria-label="Season type" style="margin-top:10px"><button data-sct="0" aria-pressed="${!t}">Regular season</button><button data-sct="1" aria-pressed="${!!t}" ${poR.length ? "" : "disabled"}>Playoffs</button></div>
       <div class="tiles">${tiles}</div></div></div>
-    ${[[SC_STATS, "sc-wide"], [SC_STATS.slice(0, 5), "sc-narrow"], [SC_STATS.slice(5, 10), "sc-narrow"], [SC_STATS.slice(10), "sc-narrow"]].map(([cols, cls]) => `<table class="box-t sc-t ${cls}"><thead><tr><th></th>${cols.map(([lab]) => `<th>${lab}</th>`).join("")}</tr></thead>
+    ${[[SC_STATS, "sc-wide"], [SC_STATS.slice(0, 6), "sc-narrow"], [SC_STATS.slice(6, 12), "sc-narrow"], [SC_STATS.slice(12), "sc-narrow"]].map(([cols, cls]) => `<table class="box-t sc-t ${cls}"><thead><tr><th></th>${cols.map(([lab]) => `<th>${lab}</th>`).join("")}</tr></thead>
       <tbody><tr><td class="l">${plMode === "p75" ? "Per 75" : "Per game"}</td>${cols.map(([, c]) => `<td>${fmtS(c)}</td>`).join("")}</tr>
       <tr class="sc-rkrow"><td class="l">Rank</td>${cols.map(([, c]) => `<td>${rkS(c)}</td>`).join("")}</tr></tbody></table>`).join("")}
     <p class="note" style="margin-bottom:0">${t ? "Playoffs" : "Regular season"} · ${plMode === "p75" ? "per 75 possessions (games, minutes and percentages as usual)" : "per game"} · ranks among ${pool.n} players with ${(t ? 150 : s === LATEST && INPROG ? ipFloor() : 1000).toLocaleString()}+ possessions · Chip Equity in points per 100 possessions</p>
