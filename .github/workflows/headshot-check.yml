@@ -10,44 +10,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
-          while read p; do [ "$(curl -s -A "Mozilla/5.0" "https://cdn.nba.com/headshots/nba/latest/260x190/$p.png" | md5sum | cut -c1-8)" = 7475ba96 ] && echo $p; done < ids.txt > sil.txt
-          curl -s -G -H "Accept: text/csv" -A "chipequity-check/1.0 (github.com/JoyconL2/chipequity)" https://query.wikidata.org/sparql \
-            --data-urlencode 'query=SELECT ?nba ?espn ?img WHERE { ?p wdt:P3647 ?nba . OPTIONAL { ?p wdt:P3685 ?espn } OPTIONAL { ?p wdt:P18 ?img } }' > wd.csv
+          sudo apt-get -qq install -y imagemagick >/dev/null
+          mkdir -p th sheets
           python3 - <<'PY'
-          import csv, json, subprocess, urllib.parse
-          wd = {}
-          for r in csv.DictReader(open("wd.csv")):
-              d = wd.setdefault(r["nba"].strip(), {"espn": "", "img": ""})
-              d["espn"] = d["espn"] or r["espn"].strip(); d["img"] = d["img"] or r["img"].strip()
-          names = dict(l.split("\t") for l in open("players.tsv").read().splitlines())
-          sil = open("sil.txt").read().split()
-          def code(u):
-              return subprocess.run(["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "-A", "Mozilla/5.0", u], capture_output=True, text=True).stdout
-          def espn_search(n):
-              out = subprocess.run(["curl", "-s", "-A", "Mozilla/5.0", "https://site.web.api.espn.com/apis/search/v2?limit=5&query=" + urllib.parse.quote(n)], capture_output=True, text=True).stdout
-              try: J = json.loads(out)
-              except Exception: return []
-              hits = []
-              for g in J.get("results", []):
-                  for c in g.get("contents", []):
-                      if c.get("type") == "player" and c.get("uid", "").startswith("s:40~l:46~a:") and c.get("displayName", "").lower() == n.lower():
-                          hits.append(c["uid"].split("a:")[1])
-              return hits
-          M, src = {}, {"espn-wikidata": 0, "espn-search": 0, "wiki": 0, "none": 0}
-          for p in sil:
-              e = wd.get(p, {}).get("espn")
-              if e and code(f"https://a.espncdn.com/i/headshots/nba/players/full/{e}.png") == "200":
-                  M[p] = "e" + e; src["espn-wikidata"] += 1; continue
-              if not e:
-                  h = espn_search(names.get(p, ""))
-                  if len(h) == 1 and code(f"https://a.espncdn.com/i/headshots/nba/players/full/{h[0]}.png") == "200":
-                      M[p] = "e" + h[0]; src["espn-search"] += 1; continue
-              img = wd.get(p, {}).get("img")
-              if img:
-                  M[p] = "w" + urllib.parse.unquote(img.rsplit("/", 1)[1]); src["wiki"] += 1; continue
-              src["none"] += 1
-          print("silhouettes:", len(sil), src)
-          json.dump(M, open("alt_headshots.json", "w"), separators=(",", ":"), ensure_ascii=False)
+          import json, subprocess, urllib.parse, time
+          M = json.load(open("alt_headshots.json")); names = dict(l.split("\t") for l in open("players.tsv").read().splitlines())
+          W = [(p, v[1:]) for p, v in M.items() if v[0] == "w"]
+          for j, (p, f) in enumerate(W):
+              u = "https://commons.wikimedia.org/wiki/Special:FilePath/" + urllib.parse.quote(f) + "?width=160"
+              r = subprocess.run(["curl", "-sL", "-o", f"th/{j:03d}_{p}.img", "-w", "%{http_code}", "-A", "chipequity-check/1.0 (github.com/JoyconL2/chipequity)", u], capture_output=True, text=True).stdout
+              if r != "200": print("fail", r, p, f)
+              time.sleep(0.15)
+          open("labels.txt", "w").write("\n".join(f"{j:03d}_{p} {names.get(p,'')}" for j, (p, f) in enumerate(W)))
           PY
+          ls th | wc -l
+          cd th && i=0; ls | sort | split -l 48 - ../grp_ ; cd ..
+          for g in grp_*; do args=(); while read f; do id=${f%.img}; args+=( -label "$(grep "^$id " labels.txt | cut -d' ' -f2-)" "th/$f[0]" ); done < $g
+            montage "${args[@]}" -geometry 110x110+3+3 -tile 8x -pointsize 10 -background '#222' -fill white sheets/$g.jpg 2>/dev/null; done
+          ls -la sheets
           git config user.name "headshot-check"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add alt_headshots.json sil.txt && git commit -qm "alt headshots result" && git push -q
+          git add sheets && git commit -qm "contact sheets" && git push -q
