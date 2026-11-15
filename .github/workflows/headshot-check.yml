@@ -8,8 +8,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
-          for q in "Grant%20Long" "Michael%20Jordan" "Tim%20Duncan" "Antoine%20Walker"; do
-            echo "== $q"; curl -s -A "Mozilla/5.0" "https://site.web.api.espn.com/apis/common/v3/search?query=$q&limit=3&type=player&sport=basketball&league=nba" | head -c 1500; echo
-          done
-          echo "== headshot Jordan 1035"; curl -s -o /tmp/o -w '%{http_code} ' -A "Mozilla/5.0" https://a.espncdn.com/i/headshots/nba/players/full/1035.png; wc -c </tmp/o
-          echo "== headshot bogus"; curl -s -o /tmp/o -w '%{http_code} ' -A "Mozilla/5.0" https://a.espncdn.com/i/headshots/nba/players/full/99999999.png; wc -c </tmp/o
+          for e in 215 110 614 1966 1035 31; do curl -s -o /tmp/o -w "espn $e %{http_code} " -A "Mozilla/5.0" https://a.espncdn.com/i/headshots/nba/players/full/$e.png; wc -c </tmp/o; done
+          echo "== espn search v2"; curl -s -A "Mozilla/5.0" "https://site.web.api.espn.com/apis/search/v2?query=tim%20duncan&limit=3" | head -c 1200; echo
+          while read p; do [ "$(curl -s -A "Mozilla/5.0" "https://cdn.nba.com/headshots/nba/latest/260x190/$p.png" | md5sum | cut -c1-8)" = 7475ba96 ] && echo $p; done < ids.txt > sil.txt
+          echo "== wikidata"
+          curl -s -G -H "Accept: text/csv" -A "chipequity-check/1.0 (github.com/JoyconL2/chipequity)" https://query.wikidata.org/sparql \
+            --data-urlencode 'query=SELECT ?nba ?img WHERE { ?p wdt:P3647 ?nba . OPTIONAL { ?p wdt:P18 ?img } }' > wd.csv
+          wc -l wd.csv; head -3 wd.csv
+          python3 - <<'PY'
+          import csv
+          wd = {}
+          for r in csv.DictReader(open("wd.csv")):
+              wd.setdefault(r["nba"].strip(), r["img"])
+          ids = [l.split("\t") for l in open("players.tsv").read().splitlines()]
+          sil = set(open("sil.txt").read().split())
+          have = [p for p, n in ids if wd.get(p)]
+          print("players in our data:", len(ids), "with a Wikidata entry:", sum(p in wd for p, n in ids), "with a photo:", len(have))
+          print("silhouette players:", len(sil), "with a Wikidata photo:", sum(1 for p in sil if wd.get(p)))
+          for p, n in ids[:0]: pass
+          for p in list(sil)[:8]: print(p, dict(ids).get(p), wd.get(p, "-"))
+          PY
