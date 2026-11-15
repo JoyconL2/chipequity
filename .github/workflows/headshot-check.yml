@@ -7,22 +7,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: older season headshot addresses
-        run: |
-          # Kobe 2005 LAL, LeBron 2008 CLE, Curry 2012 GSW, Duncan 2002 SAS, Shaq 2000 LAL, LeBron 2012 MIA, Curry 2014 GSW
-          for c in "1610612747 2005 977" "1610612739 2008 2544" "1610612744 2012 201939" "1610612759 2002 1495" "1610612747 2000 406" "1610612748 2012 2544" "1610612744 2014 201939"; do
-            set -- $c
-            for u in "https://cdn.nba.com/headshots/nba/$1/$2/1040x760/$3.png" "https://cdn.nba.com/headshots/nba/$1/$2/260x190/$3.png" \
-                     "https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/$1/$2/1040x760/$3.png" "https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/$1/$2/260x190/$3.png" \
-                     "https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/latest/1040x760/$3.png"; do
-              code=$(curl -s -o /tmp/o -w '%{http_code}' -A "Mozilla/5.0" "$u"); echo "$code $(wc -c </tmp/o) $(md5sum </tmp/o | cut -c1-8) $u"; done; done
-          echo; echo "stats.nba.com media:"; for p in 977 2544 893 406; do u="https://stats.nba.com/media/players/230x185/$p.png"; code=$(curl -s -m 10 -o /tmp/o -w '%{http_code}' -A "Mozilla/5.0" "$u"); echo "$code $(wc -c </tmp/o) $u"; done
-      - name: players with no current headshot
-        run: |
-          n=0; miss=0; : > missing.txt
-          while read p; do n=$((n+1)); code=$(curl -s -o /dev/null -w '%{http_code}' -I -A "Mozilla/5.0" "https://cdn.nba.com/headshots/nba/latest/1040x760/$p.png");
-            if [ "$code" != 200 ]; then miss=$((miss+1)); echo "$p $code" >> missing.txt; fi; done < ids.txt
-          echo "checked $n, missing $miss"; head -40 missing.txt
-          # do the old addresses have the missing ones?
-          for p in $(head -40 missing.txt | cut -d' ' -f1); do for u in "https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/latest/1040x760/$p.png" "https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/latest/260x190/$p.png"; do
-            code=$(curl -s -o /dev/null -w '%{http_code}' -I -A "Mozilla/5.0" "$u"); echo "old $code $u"; done; done
+      - run: |
+          echo "bogus id:"; curl -s -o /tmp/b -w '%{http_code} ' -A "Mozilla/5.0" https://cdn.nba.com/headshots/nba/latest/1040x760/99999999.png; md5sum </tmp/b | cut -c1-8
+          curl -sIL -A "Mozilla/5.0" https://stats.nba.com/media/players/230x185/977.png | grep -iE "^(HTTP|location)"
+          : > sums.txt
+          while read p; do curl -s -o /tmp/o -A "Mozilla/5.0" "https://cdn.nba.com/headshots/nba/latest/260x190/$p.png"; echo "$(md5sum </tmp/o | cut -c1-8) $(wc -c </tmp/o) $p" >> sums.txt; done < ids.txt
+          echo "most common images (a placeholder shows up many times):"; cut -d' ' -f1,2 sums.txt | sort | uniq -c | sort -rn | head -5
+          top=$(cut -d' ' -f1 sums.txt | sort | uniq -c | sort -rn | head -1 | awk '{print $2}'); echo "players on the top image:"; grep "^$top" sums.txt | cut -d' ' -f3 | tr '\n' ' ' | head -c 3000
