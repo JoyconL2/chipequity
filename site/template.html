@@ -451,7 +451,7 @@ td.sub{color:var(--ink-3);font-size:12px}
     <div id="lg-out"></div>
   </section>
 
-  <p class="note">Data: NBA.com, pbpstats.com and ESPN. <a href="#" data-method="src" style="color:var(--accent)">Method</a><br>Basketball Done Right is an independent, non-commercial fan project. It is not affiliated with or endorsed by the NBA, its teams, NBA.com, ESPN or pbpstats.com. Team names, logos and player photos are trademarks or property of their respective owners.</p>
+  <p class="note">Data: NBA.com, pbpstats.com and ESPN. <a href="#" data-method="src" style="color:var(--accent)">Method</a><br>Basketball Done Right is an independent, non-commercial fan project. It is not affiliated with or endorsed by the NBA, its teams, NBA.com, ESPN or pbpstats.com. Team names, logos and player photos are trademarks or property of their respective owners. Some photos of past players come from ESPN, or from Wikimedia Commons under free licenses (hover a Commons photo for its author and license).</p>
 </main>
 
 <script>
@@ -515,14 +515,21 @@ window.__imgFail = function(el){
   if (el.title) d.title = el.title;
   el.replaceWith(d);
 };
+// Players NBA.com only has a blank silhouette for: an ESPN headshot ("e" + ESPN id), or a free-license photo from
+// Wikimedia Commons, cropped around the face: ["w", image url, x0, y0, crop width, crop height (fractions), credit, file].
+// Built from Wikidata's NBA/ESPN player ids and a face finder (site/alt_headshots.json).
+const ALT_FACE = /*__ALTFACES__*/{};
 function faceImg(k, cls=""){
-  const id = DATA.ids[k], n = DATA.names[k];
+  const id = DATA.ids[k], n = DATA.names[k], A = ALT_FACE[id];
+  if (typeof A === "string") return `<img class="face ${cls}" src="https://a.espncdn.com/i/headshots/nba/players/full/${A.slice(1)}.png" data-fb="${esc(initialsOf(n))}" alt="${esc(n)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="__imgFail(this)">`;
+  if (A){ const [, u, x0, y0, cw, ch, cred, file] = A, px = cw < 1 ? x0 / (1 - cw) * 100 : 0, py = ch < 1 ? y0 / (1 - ch) * 100 : 0;
+    return `<div class="face wface ${cls}" role="img" aria-label="${esc(n)}" title="${esc(`Photo: ${cred || "Wikimedia Commons"} (Wikimedia Commons: ${file})`)}" style="background-image:url('${u.replace(/'/g, "%27").replace(/"/g, "%22")}');background-size:${(100 / cw).toFixed(1)}% auto;background-position:${px.toFixed(1)}% ${py.toFixed(1)}%"></div>`; }
   return `<img class="face ${cls}" src="https://cdn.nba.com/headshots/nba/latest/1040x760/${id}.png" data-alt="https://cdn.nba.com/headshots/nba/latest/260x190/${id}.png" data-fb="${esc(initialsOf(n))}" alt="${esc(n)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="__imgFail(this)">`;
 }
 // the headshot from that season (NBA.com keeps them by team and season from 2015-16 on); falls back to his current one
 function faceImgSeason(k, s, ab, cls=""){
   const ai = ab ? DATA.abbrs.indexOf(ab) : -1, y = +String(S[s] || "").slice(0, 4);
-  if (ai < 0 || !(y >= 2015) || !DATA.teamIds || !DATA.teamIds[ai]) return faceImg(k, cls);
+  if (ai < 0 || !(y >= 2015) || !DATA.teamIds || !DATA.teamIds[ai] || ALT_FACE[DATA.ids[k]]) return faceImg(k, cls);
   const id = DATA.ids[k], n = DATA.names[k];
   return `<img class="face ${cls}" src="https://cdn.nba.com/headshots/nba/${DATA.teamIds[ai]}/${y}/1040x760/${id}.png" data-alt="https://cdn.nba.com/headshots/nba/latest/1040x760/${id}.png|https://cdn.nba.com/headshots/nba/latest/260x190/${id}.png" data-fb="${esc(initialsOf(n))}" alt="${esc(n)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="__imgFail(this)">`;
 }
