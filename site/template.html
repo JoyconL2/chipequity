@@ -1379,28 +1379,29 @@ function seasonCard(k, s, tl, rsR, poR, myRank){
   const t = SC_T && poR.length ? 1 : 0, rows = t ? poR : rsR, L = rows.length ? scLine(rows) : null, pool = scPool(s, t), AT = scAllTime();
   const c1 = M.rwOf(k, s, 1), pc = POC.get(k*64 + s), won = wonTitle(k, s), name = DATA.names[k];
   const team = tl[tl.length - 1][0], ai = DATA.abbrs.indexOf(team), sr = ai >= 0 ? seasonResult(ai, s) : {txt: ""};
-  const chip = (big, lab) => `<div class="sc-chip"><b>${big}</b><span>${lab}</span></div>`;
-  const ordS = n => `${n}<sup>${ord(n).replace(/^\d+/, "")}</sup>`;
-  let chips = "";
-  if (!t && c1){ chips += chip(ordS(c1.rank), `in ${S[s]}`); const at = scRank(c1.r, AT.rs); if (at) chips += chip(ordS(at), s === LATEST && INPROG ? "all-time pace" : "all-time season"); }
-  if (t && pc){ chips += chip(ordS(pc.rank), `${S[s]} playoffs`); const at = scRank(pc.r, AT.po); if (at && pc.p >= 300) chips += chip(ordS(at), "all-time run"); }
-  const badges = [won ? `<span class="sc-badge gold">${TROPHY_SM} Champion</span>` : "", !won && sr.txt && sr.txt !== "Missed playoffs" ? `<span class="sc-badge">${esc(sr.txt)}</span>` : "",
-    !t && c1 && c1.rank === 1 ? `<span class="sc-badge acc">#1 in Chip Equity</span>` : "", !t && myRank === 1 ? `<span class="sc-badge">Career-best season</span>` : "",
-    ...(L ? SC_STATS.filter(([lab, c]) => !["gp","min","tov","tpa","fta","usg"].includes(c) && scRank(L[c], pool[c]) === 1).map(([lab]) => `<span class="sc-badge gold">${TROPHY_SM} Led in ${lab}</span>`) : [])].filter(Boolean).join("");
-  // Chip Equity: 1 / 2 / 3-year windows (regular season) or the playoff run
-  const ceCell = (lab, v, sub) => `<div class="sc-ce-c"><span class="sc-ce-l">${lab}</span>${v ? `<b>${pm(v.r)}</b><span class="sc-od">O ${pm(v.o)} · D ${pm(v.d)}</span><span class="sc-rk">${v.rank ? ord(v.rank) + (sub || "") : ""}</span>` : `<b class="muted">–</b><span class="sc-od">not enough possessions</span>`}</div>`;
-  const ce = t ? ceCell("Playoff Chip Equity", pc, pc ? ` of ${pc.n}` : "") : [1, 2, 3].map(w => ceCell(w === 1 ? "1-year Chip Equity" : `${w}-year`, M.rwOf(k, s, w), w === 1 ? " this season" : " · " + rwSpan(s, w))).join("");
-  const cell = ([lab, c]) => { const v = L ? L[c] : null, raw = L ? (c === "fgp" ? L.fgpRaw : c === "tpp" ? L.tppRaw : c === "ftp" ? L.ftpRaw : v) : null;
-    const rk = c === "gp" || c === "min" ? scRank(v, pool[c]) : scRank(v, pool[c]), d = c === "gp" ? 0 : 1;
-    return `<div class="sc-s"><span class="sc-sl">${lab}</span><b>${raw == null ? "–" : (c === "gp" ? Math.round(raw) : raw.toFixed(d))}</b><span class="sc-sr${rk === 1 && c !== "tov" ? " gold" : c === "tov" ? " muted" : ""}">${rk ? (rk === 1 && c !== "tov" ? TROPHY_SM : "") + ord(rk) : "&nbsp;"}</span></div>`; };
-  return `<div class="scard" id="scard">
-    <div class="sc-head">${faceImgSeason(k, s, team, "sc-face")}<div class="sc-id"><div class="sc-yr">${S[s]}${ipTag(s)}</div><h2>${esc(name)}</h2>
-      <div class="sc-team">${tl.map(([tm]) => tLink(tm, s, `${logoImg(tm, s)}${esc(teamName(tm, s))}`)).join(" · ")} <span class="muted">· ${recTxt(team, s)}</span></div></div></div>
-    ${chips ? `<div class="sc-chips">${chips}</div>` : ""}${badges ? `<div class="sc-badges">${badges}</div>` : ""}
-    <div class="sc-tog" role="group" aria-label="Season type"><button data-sct="0" aria-pressed="${!t}">Regular season</button><button data-sct="1" aria-pressed="${!!t}" ${poR.length ? "" : "disabled"}>Playoffs</button></div>
-    <div class="sc-ce${t ? " one" : ""}">${ce}</div>
-    <div class="sc-grid">${SC_STATS.map(cell).join("")}</div>
-    <div class="sc-foot"><span>${t ? "Playoffs" : "Regular season"} · per game · ranks among ${pool.n} players with ${(t ? 150 : s === LATEST && INPROG ? ipFloor() : 1000).toLocaleString()}+ possessions</span><span class="sc-brand">Courtside <b>Stats</b></span></div>
+  const tile = (v, lab, cls = "") => `<div class="tile ${cls}"><div class="v">${v}</div><div class="k">${lab}</div></div>`;
+  const facts = [];
+  if (won) facts.push(`${TROPHY_SM} Champion`); else if (sr.txt && sr.txt !== "Missed playoffs") facts.push(esc(sr.txt));
+  if (!t && c1){ facts.push(`${ord(c1.rank)} of ${c1.n || "–"} in Chip Equity`); const at = scRank(c1.r, AT.rs); if (at) facts.push(`${ord(at)} ${s === LATEST && INPROG ? "all-time pace" : "best season all-time"}`); }
+  if (t && pc){ const at = scRank(pc.r, AT.po); if (at && pc.p >= 300) facts.push(`${ord(at)} best playoff run all-time`); }
+  if (!t && myRank === 1) facts.push("career-best season");
+  if (L) SC_STATS.filter(([lab, c]) => !["gp","min","tov","tpa","fta","usg"].includes(c) && scRank(L[c], pool[c]) === 1).forEach(([lab]) => facts.push(`led the league in ${lab}`));
+  const ceT = (lab, v, sub, hero) => v ? tile(pm(v.r), `${lab}<br>${v.rank ? ord(v.rank) + (sub || "") : "&nbsp;"}<br>O ${pm(v.o)} / D ${pm(v.d)}`, hero ? "hero" : "")
+    : tile("–", `${lab}<br>not enough possessions`, hero ? "hero" : "");
+  const tiles = t ? ceT("Playoff Chip Equity", pc, pc ? ` of ${pc.n}` : "", 1)
+    : [1, 2, 3].map(w => ceT(`${w}-yr Chip Equity`, M.rwOf(k, s, w), w === 1 ? ` of ${(c1 && c1.n) || "–"}` : "", w === 1)).join("");
+  const fmtS = c => { const v = L ? (c === "fgp" ? L.fgpRaw : c === "tpp" ? L.tppRaw : c === "ftp" ? L.ftpRaw : L[c]) : null; return v == null ? "–" : c === "gp" ? Math.round(v) : v.toFixed(1); };
+  const rkS = c => { const rk = L ? scRank(L[c], pool[c]) : 0; return rk ? (rk === 1 && c !== "tov" ? TROPHY_SM : "") + ord(rk) : ""; };
+  return `<div class="box scard" id="scard"><div class="profile">${faceImgSeason(k, s, team)}<div style="min-width:0">
+      <h2 class="pname">${esc(name)} <span class="ps-yr">${S[s]}${ipTag(s)}</span></h2>
+      <div class="teamline">${tl.map(([tm]) => tLink(tm, s, `${logoImg(tm, s)}${esc(teamName(tm, s))}`)).join(" · ")} <span class="muted">· ${recTxt(team, s)}</span></div>
+      ${facts.length ? `<p class="sc-facts">${facts.join(" · ")}</p>` : ""}
+      <div class="seg sm" role="group" aria-label="Season type" style="margin-top:10px"><button data-sct="0" aria-pressed="${!t}">Regular season</button><button data-sct="1" aria-pressed="${!!t}" ${poR.length ? "" : "disabled"}>Playoffs</button></div>
+      <div class="tiles">${tiles}</div></div></div>
+    ${[[SC_STATS, "sc-wide"], [SC_STATS.slice(0, 5), "sc-narrow"], [SC_STATS.slice(5, 10), "sc-narrow"], [SC_STATS.slice(10), "sc-narrow"]].map(([cols, cls]) => `<table class="box-t sc-t ${cls}"><thead><tr><th></th>${cols.map(([lab]) => `<th>${lab}</th>`).join("")}</tr></thead>
+      <tbody><tr><td class="l">${t ? "Playoffs" : "Per game"}</td>${cols.map(([, c]) => `<td>${fmtS(c)}</td>`).join("")}</tr>
+      <tr class="sc-rkrow"><td class="l">Rank</td>${cols.map(([, c]) => `<td>${rkS(c)}</td>`).join("")}</tr></tbody></table>`).join("")}
+    <p class="note" style="margin-bottom:0">${t ? "Playoffs" : "Regular season"} · ranks among ${pool.n} players with ${(t ? 150 : s === LATEST && INPROG ? ipFloor() : 1000).toLocaleString()}+ possessions · Chip Equity in points per 100 possessions</p>
   </div>`;
 }
 function renderPlayerSeason(k, s){
