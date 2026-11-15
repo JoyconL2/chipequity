@@ -234,12 +234,19 @@ table.cmp.solo td.lbl{text-align:left;padding-right:28px}
 .gm-rec{padding:10px 14px;font-size:14px}
 
 /* season card (screenshot-ready summary) */
-.scard .tile .k{line-height:1.45}
-.sc-facts{margin:8px 0 0;font-size:13.5px;color:var(--ink-2)}
-.sc-tr{display:inline-block;height:14px;width:auto;vertical-align:-2px;margin-right:2px}
-.sc-t th,.sc-t td{text-align:center}.sc-t td.l{text-align:left;white-space:nowrap;color:var(--ink-3);font-size:12px}
-.sc-rkrow td{font-size:12px;color:var(--ink-3)}
-.sc-t{margin-top:14px}.sc-t.sc-narrow{display:none}
-@media (max-width:640px){.sc-t.sc-wide{display:none}.sc-t.sc-narrow{display:table;margin-top:10px}.sc-t th,.sc-t td{padding:5px 1px;font-size:12.5px;width:14%}.sc-t th:first-child,.sc-t td.l{width:16%}.sc-t th{font-size:10px;letter-spacing:.02em}.sc-t td.l{font-size:11px}
-  .scard .tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.scard .tile .v{font-size:24px}.scard .tile .k{font-size:9.5px}
-  .scard .profile .face{max-width:220px}}
+.scard{padding:14px 16px}
+.sc-top{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px;align-items:start}
+.sc-top .face{width:120px}
+.scard .pname{font-size:30px}.scard .teamline{margin-top:4px;font-size:13.5px}
+.sc-facts{margin:5px 0 0;font-size:12.5px;color:var(--ink-2);line-height:1.4}
+.sc-tr{display:inline-block;height:13px;width:auto;vertical-align:-2px;margin-right:2px}
+.scard .tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:10px}
+.scard .tile .v{font-size:28px}.scard .tile .k{line-height:1.4;margin-top:3px}
+.sc-t{margin-top:10px}.sc-t th,.sc-t td{text-align:center;padding:4px 3px}.sc-t td.l{text-align:left;white-space:nowrap;color:var(--ink-3);font-size:11.5px}
+.sc-rkrow td{font-size:11.5px;color:var(--ink-3)}.sc-t.sc-narrow{display:none}
+.sc-note{margin:8px 0 0;font-size:10.5px;color:var(--ink-3)}
+@media (max-width:640px){.scard{padding:12px}
+  .sc-top{grid-template-columns:auto minmax(0,1fr);gap:10px}.sc-top .face{width:84px}.sc-seg{grid-column:1/-1}
+  .scard .pname{font-size:22px}.scard .pname .ps-yr{display:inline-block}.scard .teamline{font-size:12px;display:block}.scard .teamline .logo{vertical-align:-4px}.sc-facts{font-size:11.5px}
+  .scard .tiles{gap:8px}.scard .tile .v{font-size:22px}.scard .tile .k{font-size:8.5px;letter-spacing:0;white-space:nowrap}.scard .teamline .muted{white-space:nowrap}
+  .sc-t.sc-wide{display:none}.sc-t.sc-narrow{display:table;margin-top:6px}.sc-t th,.sc-t td{padding:3px 1px;font-size:12px;width:14%}.sc-t th:first-child,.sc-t td.l{width:12%}.sc-t th{font-size:9.5px;letter-spacing:.02em}.sc-t td.l,.sc-rkrow td{font-size:10.5px}}
