@@ -8,16 +8,20 @@ jobs:
     steps:
       - run: |
           for u in \
-            "https://cdn.nba.com/headshots/nba/latest/1040x760/201939.png" \
-            "https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/1610612744/2015/260x190/201939.png" \
-            "https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/1610612744/2016/260x190/201939.png" \
-            "https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/1610612744/2019/260x190/201939.png" \
-            "https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/1610612744/2010/260x190/201939.png" \
-            "https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/1610612739/2016/260x190/2544.png" \
-            "https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/1610612748/2012/260x190/2544.png" \
-            "https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/1610612747/2005/260x190/977.png" \
-            "https://cdn.nba.com/headshots/nba/1610612744/2015/1040x760/201939.png" \
-            "https://cdn.nba.com/headshots/nba/1610612744/2015/260x190/201939.png" \
-            "https://stats.nba.com/media/players/230x185/201939.png" \
-            "https://cdn.nba.com/headshots/nba/2015/260x190/201939.png"; do
+            "https://cdn.nba.com/headshots/nba/1610612744/2016/1040x760/201142.png" \
+            "https://cdn.nba.com/headshots/nba/1610612760/2016/1040x760/201142.png" \
+            "https://cdn.nba.com/headshots/nba/1610612760/2015/1040x760/201142.png" \
+            "https://cdn.nba.com/headshots/nba/1610612748/2012/1040x760/2544.png" \
+            "https://cdn.nba.com/headshots/nba/1610612739/2008/1040x760/2544.png" \
+            "https://cdn.nba.com/headshots/nba/1610612747/2005/1040x760/977.png" \
+            "https://cdn.nba.com/headshots/nba/1610612747/2000/1040x760/406.png" \
+            "https://cdn.nba.com/headshots/nba/1610612744/2012/1040x760/201939.png" \
+            "https://cdn.nba.com/headshots/nba/1610612744/2013/1040x760/201939.png" \
+            "https://cdn.nba.com/headshots/nba/1610612744/2014/1040x760/201939.png" \
+            "https://cdn.nba.com/headshots/nba/1610612744/2016/1040x760/201939.png" \
+            "https://cdn.nba.com/headshots/nba/1610612744/2024/1040x760/201939.png" \
+            "https://cdn.nba.com/headshots/nba/1610612744/2025/1040x760/201939.png" \
+            "https://cdn.nba.com/headshots/nba/1610612743/2022/1040x760/203999.png" \
+            "https://cdn.nba.com/headshots/nba/1610612759/2025/1040x760/1641705.png" \
+            "https://cdn.nba.com/headshots/nba/1610612759/2023/1040x760/1641705.png"; do
             code=$(curl -s -o /tmp/o -w '%{http_code}' -A "Mozilla/5.0" "$u"); echo "$code $(wc -c </tmp/o) $(md5sum </tmp/o | cut -c1-8) $u"; done
