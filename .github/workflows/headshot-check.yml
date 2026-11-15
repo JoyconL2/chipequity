@@ -20,7 +20,7 @@ jobs:
           info = {}
           for i in range(0, len(W), 40):
               titles = "|".join("File:" + f for p, f in W[i:i+40])
-              q = urllib.parse.urlencode({"action": "query", "format": "json", "prop": "imageinfo", "iiprop": "url|extmetadata", "iiurlwidth": 420, "titles": titles, "redirects": 1})
+              q = urllib.parse.urlencode({"action": "query", "format": "json", "prop": "imageinfo", "iiprop": "url|extmetadata", "iiurlwidth": 330, "titles": titles, "redirects": 1})
               J = json.loads(subprocess.run(["curl", "-s", "-A", UA, "https://commons.wikimedia.org/w/api.php?" + q], capture_output=True, text=True).stdout)
               norm = {n["to"]: n["from"] for n in J["query"].get("normalized", [])}
               red = {n["to"]: n["from"] for n in J["query"].get("redirects", [])}
@@ -40,7 +40,7 @@ jobs:
           for j, (p, v) in enumerate(out.items()):
               u = "https://upload.wikimedia.org/wikipedia/commons/thumb/" + v[0]
               r = subprocess.run(["curl", "-sL", "-o", f"th/{j:03d}_{p}.img", "-w", "%{http_code}", "-A", UA, u], capture_output=True, text=True).stdout
-              if r != "200": print("thumb fail", r, p)
+              if r != "200": print("thumb fail", r, p, u)
               time.sleep(0.5)
           open("labels.txt", "w").write("\n".join(f"{j:03d}_{p} {names.get(p,'')}" for j, p in enumerate(out)))
           PY
