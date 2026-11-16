@@ -13,7 +13,7 @@ def api(titles, width):
 info = {}
 strip = lambda s: html.unescape(re.sub("<[^>]+>", "", s or "")).strip()
 for i in range(0, len(W), 40):
-    J = api("|".join("File:" + f for p, f in W[i:i+40]), 960)
+    J = api("|".join("File:" + f for p, f in W[i:i+40]), 500)
     norm = {n["to"]: n["from"] for n in J["query"].get("normalized", [])}; red = {n["to"]: n["from"] for n in J["query"].get("redirects", [])}
     for pg in J["query"]["pages"].values():
         t = pg["title"]; t0 = norm.get(red.get(t, t), red.get(t, t)); ii = (pg.get("imageinfo") or [{}])[0]; md = ii.get("extmetadata", {})
@@ -26,11 +26,12 @@ for j, (p, f) in enumerate(W):
     d = info.get(f)
     if not d or not d["u"]: why[p] = "no info"; continue
     fn = f"img/{p}.jpg"
-    for t in range(6):
-        code = subprocess.run(["curl", "-sL", "-o", fn, "-w", "%{http_code}", "-A", UA, d["u"]], capture_output=True, text=True).stdout
+    for t in range(3):
+        code = subprocess.run(["curl", "-sL", "-m", "30", "-o", fn, "-w", "%{http_code}", "-A", UA, d["u"]], capture_output=True, text=True).stdout
         if code == "200": break
-        time.sleep(4 * (t + 1))
-    time.sleep(0.8)
+        time.sleep(10)
+    time.sleep(1.5)
+    if j % 25 == 0: print("progress", j, code, flush=True)
     im = cv2.imread(fn)
     if im is None:
         # PNG/other: let ImageMagick convert
@@ -47,7 +48,7 @@ for j, (p, f) in enumerate(W):
     if ch > H: ch = H; cw = ch * 1040 / 760
     cx = x + w / 2; cy = y + h * 0.5
     x0 = min(max(cx - cw / 2, 0), Wd - cw); y0 = min(max(cy - ch * 0.42, 0), H - ch)
-    if cw < 150: why[p] = "too low resolution"; continue
+    if cw < 120: why[p] = "too low resolution"; continue
     crop = im[int(y0):int(y0 + ch), int(x0):int(x0 + cw)]; cv2.imwrite(f"crop/{j:03d}_{p}.jpg", cv2.resize(crop, (208, 152)))
     cred = ", ".join(x for x in [d["a"], d["l"]] if x)
     out[p] = [d["u"], round(x0 / Wd, 4), round(y0 / H, 4), round(cw / Wd, 4), round(ch / H, 4), cred, f]

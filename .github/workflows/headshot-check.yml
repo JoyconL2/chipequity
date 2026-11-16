@@ -5,16 +5,26 @@ on:
 permissions:
   contents: write
 jobs:
-  t:
+  faces:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - run: |
           sudo apt-get -qq install -y imagemagick >/dev/null; pip -q install opencv-python-headless==4.10.0.84 "numpy<2.3"
-          python3 tools/facecrop.py
+          python3 -u tools/facecrop.py
           names() { python3 -c "import sys; d=dict(l.split('\t') for l in open('players.tsv').read().splitlines()); print(d.get(sys.argv[1],''))" $1; }
           rm -rf sheets; mkdir -p sheets; ls crop | sort | split -l 48 - grp_
           for g in grp_*; do args=(); while read f; do p=${f%.jpg}; p=${p#*_}; args+=( -label "$(names $p)" "crop/$f" ); done < $g
             montage "${args[@]}" -geometry 104x76+3+3 -tile 8x -pointsize 10 -background '#222' -fill white sheets/$g.jpg || echo "montage failed $g"; done
           git config user.name "headshot-check"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A sheets wiki_faces.json && git commit -qm "face crops" && git push -q
+          git add -A sheets wiki_faces.json && git commit -qm "face crops" && for i in 1 2 3; do git pull -q --rebase && git push -q && break; sleep 5; done
+  espn:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          python3 -u tools/espn_all.py
+          git config user.name "headshot-check"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add espn_more.json && git commit -qm "espn by name" && for i in 1 2 3; do git pull -q --rebase && git push -q && break; sleep 5; done
