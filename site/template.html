@@ -1397,6 +1397,10 @@ function seasonCard(k, s, tl, rsR, poR, myRank){
     : [1, 2, 3].map(w => ceT(`${w}-yr Chip Equity`, M.rwOf(k, s, w), "", w === 1)).join("");
   const fmtS = c => { const v = L ? (c === "fgp" ? L.fgpRaw : c === "tpp" ? L.tppRaw : c === "ftp" ? L.ftpRaw : L[c]) : null; return v == null ? "–" : c === "gp" ? Math.round(v) : c === "rts" ? (v >= 0 ? "+" : "") + v.toFixed(1) : c === "ato" ? v.toFixed(2) : v.toFixed(1); };
   const rkS = c => { const rk = L ? scRank(L[c], pool[c]) : 0; return rk ? (rk === 1 && c !== "tov" ? TROPHY_SM : "") + ord(rk) : ""; };
+  // percentile in this season's qualified pool (turnovers in grey: more isn't better)
+  const pcS = c => { const rk = L ? scRank(L[c], pool[c]) : 0, n = pool[c] ? pool[c].length : 0; if (!rk || n < 2) return "";
+    const q = Math.max(0, Math.min(99, Math.round(100 * (n - rk) / (n - 1))));
+    return `<span class="pctl ${c === "tov" ? "pn" : q >= 90 ? "p90" : q >= 70 ? "p70" : q >= 50 ? "p50" : "p0"}" title="${ord(q)} percentile of ${n} players">${q}</span>`; };
   return `<div class="box scard" id="scard"><div class="sc-top">${faceImgSeason(k, s, team)}<div style="min-width:0">
       <h2 class="pname">${esc(name)} <span class="ps-yr">${S[s]}${ipTag(s)}</span></h2>
       <div class="teamline">${tl.map(([tm]) => tLink(tm, s, `${logoImg(tm, s)}${esc(team === tm && tl.length === 1 ? teamName(tm, s) : tm)}`)).join(" · ")} <span class="muted">· ${recTxt(team, s)}</span></div>
@@ -1405,7 +1409,8 @@ function seasonCard(k, s, tl, rsR, poR, myRank){
       <div class="tiles">${tiles}</div>
     ${[[SC_STATS, "sc-wide"], [SC_STATS.slice(0, 6), "sc-narrow"], [SC_STATS.slice(6, 12), "sc-narrow"], [SC_STATS.slice(12), "sc-narrow"]].map(([cols, cls]) => `<table class="box-t sc-t ${cls}"><thead><tr><th></th>${cols.map(([lab]) => `<th>${lab}</th>`).join("")}</tr></thead>
       <tbody><tr><td class="l">${plMode === "p75" ? "/75" : "Avg"}</td>${cols.map(([, c]) => `<td>${fmtS(c)}</td>`).join("")}</tr>
-      <tr class="sc-rkrow"><td class="l">Rank</td>${cols.map(([, c]) => `<td>${rkS(c)}</td>`).join("")}</tr></tbody></table>`).join("")}
+      <tr class="sc-rkrow"><td class="l">Rank</td>${cols.map(([, c]) => `<td>${rkS(c)}</td>`).join("")}</tr>
+      <tr class="sc-pcrow"><td class="l">Pctl</td>${cols.map(([, c]) => `<td>${pcS(c)}</td>`).join("")}</tr></tbody></table>`).join("")}
     <p class="sc-note">${t ? "Playoffs" : "Regular season"} · ${plMode === "p75" ? "per 75 poss." : "per game"} · ranks of ${pool.n} players with ${(t ? 150 : s === LATEST && INPROG ? ipFloor() : 1000).toLocaleString()}+ poss. · Chip Equity in pts per 100</p>
   </div>`;
 }

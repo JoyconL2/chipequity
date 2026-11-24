@@ -254,3 +254,5 @@ table.cmp.solo td.lbl{text-align:left;padding-right:28px}
 .face.wface{background-repeat:no-repeat;background-color:var(--panel-2)}
 details.gl summary{font-size:15px;color:var(--ink)}details.gl summary small{font-weight:400;color:var(--ink-3);font-size:12px;margin-left:6px}details.gl .tscroll{margin-top:10px}
 @media (max-width:640px){.scard .tile .v .pctl{font-size:9.5px;line-height:14px;padding:0 3px;margin-left:3px;vertical-align:3px}}
+.sc-pcrow td{padding-top:0}.sc-pcrow .pctl{margin-left:0}.pctl.pn{background:var(--panel-2);color:var(--ink-3)}
+@media (max-width:640px){.sc-pcrow .pctl{font-size:9.5px;line-height:14px;padding:0 4px}}
