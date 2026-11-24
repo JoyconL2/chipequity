@@ -1205,7 +1205,7 @@ function boxCells(a, r){
     <td>${q(a.ftm)}</td><td>${f1(per(a.fta))}</td><td>${a.miss ? "–" : pc(a.ftm, a.fta)}</td><td>${fmt(val(r,"TS"),"pct")}</td><td>${fmt(val(r,"RTS"),"rel")}</td>
     <td>${q(a.oreb)}</td><td>${q(a.dreb)}</td><td>${f1(per(a.reb))}</td><td>${f1(per(a.ast))}</td><td>${f1(per(a.stl))}</td><td>${f1(per(a.blk))}</td><td>${f1(per(a.tov))}</td><td>${q(a.pf)}</td><td>${a.tov ? (a.ast / a.tov).toFixed(2) : "–"}</td>`;
 }
-// this season so far, for players on a current roster: averages + game log from ESPN box scores (live, in the browser)
+// this season's game log, for players on a current roster, from ESPN box scores (live, in the browser); shown under Stats on the season page
 let PL_LIVE_TOKEN = 0;
 async function playerLive(k){
   const tok = ++PL_LIVE_TOKEN, slot = document.getElementById("pl-live"); if (!slot) return;
@@ -1217,22 +1217,15 @@ async function playerLive(k){
     for (const [a, t] of Object.entries(T)){ const q = (t.players || []).find(x => x.k === k); if (q){ ab = a; pl = q; break; } }
     if (!ab || pl.espnId == null){ slot.remove(); return; }
     let BX = CUR.boxOf(ab);
-    if (!BX || !(CUR.__plLiveDone || {})[ab]){ slot.innerHTML = `<div class="box"><h2>${esc(CUR.C.season)} so far</h2><div class="msg">Loading this season's games from ESPN…</div></div>`;
-      await CUR.seasonStarters(ab); (CUR.__plLiveDone = CUR.__plLiveDone || {})[ab] = 1; if (gone()) return; BX = CUR.boxOf(ab); }
+    if (!BX || !(CUR.__plLiveDone || {})[ab]){ await CUR.seasonStarters(ab); (CUR.__plLiveDone = CUR.__plLiveDone || {})[ab] = 1; if (gone()) return; BX = CUR.boxOf(ab); }
     const e = BX && BX.players.get(String(pl.espnId)), L = CUR.lineOf(e);
-    if (!L){ slot.innerHTML = `<div class="box"><h2>${esc(CUR.C.season)} so far <small>${esc(ab)}</small></h2><div class="msg">${BX ? `No games yet this season${pl.status ? ` (${esc(pl.status)})` : ""}.` : "Couldn't load this season's games from ESPN right now."}</div></div>`; return; }
-    const tile = (v, lab) => `<div class="tile"><div class="v">${v}</div><div class="k">${lab}</div></div>`, pct = v => Number.isFinite(v) ? (v*100).toFixed(1) + "%" : "–";
+    if (!L || !e.log.length){ slot.remove(); return; }
     const day = t => new Date(t).toLocaleDateString(undefined, {month: "short", day: "numeric"});
     const rows = e.log.slice().reverse().map(g => { const x = g.x, w = g.us > g.them;
       return `<tr><td class="l">${day(g.t)}</td><td class="l">${g.home === false ? "@ " : "vs "}${esc(g.opp || "")}</td><td class="l">${Number.isFinite(g.us) && Number.isFinite(g.them) ? `<span class="res ${w ? "won" : ""}">${w ? "W" : "L"} ${g.us}-${g.them}</span>` : ""}</td>
         <td>${Math.round(x[0])}</td><td><strong>${x[1]}</strong></td><td>${x[2]}</td><td>${x[3]}</td><td>${x[4]}</td><td>${x[5]}</td><td>${x[6]}</td><td>${x[7]}-${x[8]}</td><td>${x[9]}-${x[10]}</td><td>${x[11]}-${x[12]}</td><td>${x[15] > 0 ? "+" : ""}${x[15]}</td></tr>`; }).join("");
-    slot.innerHTML = `<div class="box"><h2>${esc(CUR.C.season)} so far <small>${esc(ab)} · live from ESPN box scores · ${L.gp} game${L.gp === 1 ? "" : "s"} · through ${day(e.log[e.log.length - 1].t)}</small></h2>
-      <div class="tiles">${tile(L.gp, "Games")}${tile(L.mpg.toFixed(1), "MPG")}${tile(L.pts.toFixed(1), "PTS")}${tile(L.reb.toFixed(1), "REB")}${tile(L.ast.toFixed(1), "AST")}${tile(L.stl.toFixed(1), "STL")}${tile(L.blk.toFixed(1), "BLK")}${tile(pct(L.ts), "True shooting")}${tile(pct(L.tp), "3P% · " + L.tpm.toFixed(1) + " made")}</div>
-      ${(c => { const sg = v => (v >= 0 ? "+" : "") + v.toFixed(1); return `<div class="tiles">${c
-        ? `<div class="tile hero"><div class="v">${sg(c.r)}${pctl(c)}</div><div class="k">${esc(S[LATEST])} Chip Equity so far</div></div><div class="tile"><div class="v">${sg(c.o)}${pctlO(c)}</div><div class="k">Offense</div></div><div class="tile"><div class="v">${sg(c.d)}${pctlD(c)}</div><div class="k">Defense</div></div>`
-        : `<div class="tile"><div class="v">–</div><div class="k">${esc(S[LATEST])} Chip Equity: needs ${ipFloor().toLocaleString()} possessions so far</div></div>`}</div>`; })(M.rwOf(k, LATEST, 1))}
-      <details class="how"><summary>Game log</summary><div class="tscroll"><table><thead><tr><th class="l">Date</th><th class="l">Opp</th><th class="l">Result</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>TO</th><th>FG</th><th>3PT</th><th>FT</th><th>+/-</th></tr></thead><tbody>${rows}</tbody></table></div></details>
-      <p class="note">Box-score stats are live from ESPN after every game. Chip Equity so far comes from NBA.com play-by-play and updates every morning; early in the season it moves a lot (it\'s pulled 40% toward his 3-year number to steady it).</p></div>`;
+    slot.innerHTML = `<div class="box"><details class="how gl"><summary>Game log <small>${L.gp} game${L.gp === 1 ? "" : "s"} · ${esc(ab)} · through ${day(e.log[e.log.length - 1].t)} · live from ESPN box scores</small></summary>
+      <div class="tscroll"><table><thead><tr><th class="l">Date</th><th class="l">Opp</th><th class="l">Result</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>TO</th><th>FG</th><th>3PT</th><th>FT</th><th>+/-</th></tr></thead><tbody>${rows}</tbody></table></div></details></div>`;
   } catch(err){ if (!gone()) slot.remove(); }
 }
 /* ---- similar players: closest regular seasons by style (box score per 75, shot diet, usage) and Chip Equity ---- */
@@ -1342,8 +1335,6 @@ function renderPlayer(){
   const ptSel = document.getElementById("pt-season"); if (ptSel) ptSel.onchange = () => { document.getElementById("pt-out").innerHTML = ptBox(k, +ptSel.value, TYPE); };
   const dSel = document.getElementById("dpt-season"); if (dSel) dSel.onchange = () => { document.getElementById("dpt-out").innerHTML = defBox(k, +dSel.value); };
   lineChart(document.getElementById("pl-chart"), [{name:DATA.names[k], pts: rows.map(i=>({x:P.s[i], y:rowVal(i,plStat.value), sub:playerTeams(k, P.s[i], AB(P.tm[i])).map(t=>t[0]).join("/")}))}], STATS[plStat.value], {bands});
-  if (TYPE === 0 && typeof CUR !== "undefined" && CUR && Date.now() >= +CUR.seasonStart){
-    const prof = plOut.querySelector(".box"); if (prof){ prof.insertAdjacentHTML("afterend", `<div id="pl-live"></div>`); playerLive(k); } }
 }
 
 /* ---------------- ONE PLAYER, ONE SEASON ---------------- */
@@ -1395,7 +1386,7 @@ function seasonCard(k, s, tl, rsR, poR, myRank){
   if (!t && myRank === 1) facts.push("career best");
   const led = L ? SC_STATS.filter(([lab, c]) => !["gp","min","tov","tpa","fta","usg","rts"].includes(c) && scRank(L[c], pool[c]) === 1).map(([lab]) => lab) : [];
   if (led.length) facts.push(`led NBA in ${led.join(", ")}`);
-  const ceT = (lab, v, sub, hero) => v ? tile(pm(v.r), `${lab}<br>${v.rank ? ord(v.rank) + (sub || "") : "&nbsp;"}<br>O ${pm(v.o)} · D ${pm(v.d)}`, hero ? "hero" : "")
+  const ceT = (lab, v, sub, hero) => v ? tile(pm(v.r) + (v.rank ? pctl(v, t ? `in the ${S[s]} playoffs` : undefined) : ""), `${lab}<br>${v.rank ? ord(v.rank) + (sub || "") : "&nbsp;"}<br>O ${pm(v.o)} · D ${pm(v.d)}`, hero ? "hero" : "")
     : tile("–", `${lab}<br>too few possessions`, hero ? "hero" : "");
   const tiles = t ? ceT("Playoff Chip Equity", pc, pc ? `/${pc.n}` : "", 1)
     : [1, 2, 3].map(w => ceT(`${w}-yr Chip Equity`, M.rwOf(k, s, w), "", w === 1)).join("");
@@ -1445,8 +1436,8 @@ function renderPlayerSeason(k, s){
   const ptB = [0, 1].filter(t => ptHas(k, s, t)).map(t => `<div class="box"><h2>${t ? "Playoff play types" : "Play types"} <small>${S[s]} ${t ? "playoffs" : "regular season"} · from play-by-play and shot charts</small></h2>${ptBox(k, s, t)}<p class="mlink"><a href="#" data-method="pt">How play types are measured ›</a></p></div>`).join("");
   const dptB = DPTMAP.has((k*64 + s)*2 + TYPE) ? `<div class="box"><h2>Defensive play types <small>${S[s]} ${typeName().toLowerCase()}</small></h2>${defBox(k, s)}<p class="mlink"><a href="#" data-method="dpt">How defensive play types are measured ›</a></p></div>` : "";
   const live = s === LATEST && TYPE === 0 && typeof CUR !== "undefined" && CUR && Date.now() >= +CUR.seasonStart;
-  plOut.innerHTML = nav + seasonCard(k, s, tl, rsR, poR, myRank) + `<div class="box"><div class="stints">${teamLine}</div>${hlLinks(k, s, poR.length > 0)}${ctx ? `<p class="note" style="margin-bottom:0">${ctx}</p>` : ""}</div>${live ? `<div id="pl-live"></div>` : ""}
-    ${ceBox}${boxBox}
+  plOut.innerHTML = nav + seasonCard(k, s, tl, rsR, poR, myRank) + `<div class="box"><div class="stints">${teamLine}</div>${hlLinks(k, s, poR.length > 0)}${ctx ? `<p class="note" style="margin-bottom:0">${ctx}</p>` : ""}</div>
+    ${ceBox}${boxBox}${live ? `<div id="pl-live"></div>` : ""}
     <div class="box"><h2>On / off <small>${S[s]} · team net rating per 100 possessions with him on vs. off the floor · garbage time out</small></h2><div id="ps-onoff"><div class="msg">Loading on/off…</div></div></div>
     ${ptB}${dptB}${simSeasonBox(k, s)}${playoffSeriesBox(k, s)}`;
   const sel = document.getElementById("ps-season"); sel.onchange = () => openPlayer(k, +sel.value);
