@@ -1367,12 +1367,17 @@ function scPool(s, t){                                  // that season's qualifi
 }
 const scRank = (v, arr) => { if (v == null || !arr || !arr.length) return null; let n = 0; for (const x of arr) if (x > v + 1e-9) n++; else break; return n + 1; };
 let SC_ALL = null;                                     // all-time single seasons (1,500+ possessions) and playoff runs (300+), best first
+// each player's peak (his best single regular season with 1,500+ possessions, or best playoff run with 300+), one per player
 function scAllTime(){
   if (SC_ALL) return SC_ALL;
-  const rs = DATA.rw.rows.filter(r => r[2] === 1 && r[7] >= 1500 && !(r[1] === LATEST && INPROG)).map(r => r[5]).sort((a, b) => b - a);
-  const po = [...POC.values()].filter(v => v.p >= 300).map(v => v.r).sort((a, b) => b - a);
+  const best = (m, k, v) => { if (!(m.get(k) >= v)) m.set(k, v); };
+  const rs = new Map(), po = new Map();
+  for (const r of DATA.rw.rows) if (r[2] === 1 && r[7] >= 1500 && !(r[1] === LATEST && INPROG)) best(rs, r[0], r[5]);
+  for (const [key, v] of POC) if (v.p >= 300) best(po, Math.floor(key / 64), v.r);
   return SC_ALL = {rs, po};
 }
+// where a season would rank among every other player's peak
+const scPeakRank = (m, k, v) => { let n = 1; for (const [j, b] of m) if (j !== k && b > v) n++; return n; };
 const TROPHY_SM = `<img class="sc-tr" src="trophy.png" alt="">`;
 function seasonCard(k, s, tl, rsR, poR, myRank){
   const t = SC_T && poR.length ? 1 : 0, rows = t ? poR : rsR, L = rows.length ? scLine(rows) : null, pool = scPool(s, t), AT = scAllTime();
@@ -1381,8 +1386,8 @@ function seasonCard(k, s, tl, rsR, poR, myRank){
   const tile = (v, lab, cls = "") => `<div class="tile ${cls}"><div class="v">${v}</div><div class="k">${lab}</div></div>`;
   const facts = [];
   if (won) facts.push(`${TROPHY_SM} Champion`); else if (sr.txt && sr.txt !== "Missed playoffs") facts.push(esc(sr.txt));
-  if (!t && c1){ const at = scRank(c1.r, AT.rs); if (at) facts.push(`${ord(at)} ${s === LATEST && INPROG ? "all-time pace" : "all-time season"}`); }
-  if (t && pc){ const at = scRank(pc.r, AT.po); if (at && pc.p >= 300) facts.push(`${ord(at)} all-time playoff run`); }
+  if (!t && c1) facts.push(`<span title="where this season would rank against every player's best season (one per player)">${ord(scPeakRank(AT.rs, k, c1.r))} among all-time peaks</span>`);
+  if (t && pc && pc.p >= 300) facts.push(`<span title="where this run would rank against every player's best playoff run (one per player)">${ord(scPeakRank(AT.po, k, pc.r))} among all-time playoff peaks</span>`);
   if (!t && myRank === 1) facts.push("career best");
   const led = L ? SC_STATS.filter(([lab, c]) => !["gp","min","tov","tpa","fta","usg","rts"].includes(c) && scRank(L[c], pool[c]) === 1).map(([lab]) => lab) : [];
   if (led.length) facts.push(`led NBA in ${led.join(", ")}`);
