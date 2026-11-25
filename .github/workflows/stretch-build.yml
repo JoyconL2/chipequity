@@ -1,0 +1,54 @@
+name: stretch build
+# one-off: regular-season stints for 1996-97..2019-20 from the public play-by-play archive (shufinskiy/nba_data)
+on:
+  push:
+    branches: [stretch-build]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        year: [1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip -q install pandas numpy
+      - name: fetch this season's play-by-play
+        run: |
+          Y=${{ matrix.year }}
+          git clone -q --filter=blob:none --sparse --depth 1 https://github.com/shufinskiy/nba_data.git nd
+          cd nd && git sparse-checkout set --no-cone "/datasets/nbastats_$Y.tar.xz" "/datasets/shotdetail_$Y.tar.xz" && ls -la datasets
+      - name: build stints
+        run: |
+          Y=${{ matrix.year }}; S="$Y-$(printf %02d $(( (Y+1) % 100 )))"; T=$PWD/tmp; mkdir -p $T out
+          tar -xJf nd/datasets/nbastats_$Y.tar.xz -C $T; tar -xJf nd/datasets/shotdetail_$Y.tar.xz -C $T 2>/dev/null || true
+          python3 - $T <<'PY'
+          import pandas as pd, json, glob, sys
+          T=sys.argv[1]; f=glob.glob(f'{T}/shotdetail*.csv'); m={}
+          if f:
+              d=pd.read_csv(f[0], usecols=['GAME_ID','GAME_DATE'], dtype=str).drop_duplicates('GAME_ID')
+              m={g.zfill(10): f'{x[:4]}-{x[4:6]}-{x[6:8]}' for g,x in zip(d.GAME_ID,d.GAME_DATE)}
+          json.dump(m, open(f'{T}/dates.json','w')); print("dates", len(m))
+          PY
+          cd stintbuild && python3 build_stints.py $T/nbastats_$Y.csv $S rs ../out/stints_${S}_rs.csv --dates $T/dates.json > ../out/log_$S.txt 2>&1 || (tail -20 ../out/log_$S.txt; exit 1)
+          cd .. && wc -l out/stints_${S}_rs.csv && python3 -c "import pandas as pd; d=pd.read_csv('out/stints_${S}_rs.csv'); print('games', d.game_id.nunique(), 'missing dates', d.game_date.isna().sum())"
+          xz -9 out/stints_${S}_rs.csv
+      - uses: actions/upload-artifact@v4
+        with: { name: "stints-${{ matrix.year }}", path: out/ }
+  collect:
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: arts }
+      - run: |
+          mkdir -p base/stints_hist && find arts -name "stints_*_rs.csv.xz" -exec cp {} base/stints_hist/ \; && ls -la base/stints_hist
+          git config user.name "stretch-build"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add base/stints_hist && git commit -qm "older regular-season stints" && git push -q
