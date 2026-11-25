@@ -36,6 +36,13 @@ def implied(american):
 def payout(american):
     a = float(american); return a / 100 if a > 0 else 100 / -a
 ncdf = lambda z: 0.5 * (1 + math.erf(z / math.sqrt(2)))
+def p_over(mu, sd, line):
+    """Chance of more than `line` (a .5 line) for a count with this mean and spread: negative binomial, which is
+    skewed like real stat lines (books set lines near the median, below the mean). Falls back to Poisson."""
+    k = int(math.floor(line)); var = max(sd * sd, mu * 1.05)
+    r = mu * mu / (var - mu); q = r / (r + mu); cdf = 0.0
+    for x in range(k + 1): cdf += math.exp(math.lgamma(x + r) - math.lgamma(r) - math.lgamma(x + 1) + r * math.log(q) + x * math.log(1 - q))
+    return max(0.0, min(1.0, 1 - cdf))
 
 os.makedirs(OUT, exist_ok=True)
 B = load("bets.json", {"season": "2026-27", "games": {}, "props": {}, "updated": None})
@@ -162,7 +169,7 @@ for g in boards.get(TODAY.isoformat(), []):
         rec = {"gid": g["id"], "day": TODAY.isoformat(), "aid": aid, "name": L["name"] if L else names.get(aid), "team": tm, "opp": opp, "stat": stat,
                "line": line, "over": over, "under": under, "q": round(q, 4), "at": NOW.strftime("%Y-%m-%d %H:%M")}
         if pj:
-            p = 1 - ncdf((line - pj["mu"]) / pj["sd"]); e = p - q
+            p = p_over(pj["mu"], pj["sd"], line); e = p - q
             rec.update({"proj": pj["mu"], "sd": pj["sd"], "mpg": pj["mpg"], "p": round(p, 4), "edge": round(e, 4), "side": "over" if e > 0 else "under", "flag": abs(e) >= PROP_EDGE})
         B["props"][f"{g['id']}|{aid}|{stat}"] = rec
     time.sleep(0.3)

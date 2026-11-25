@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: python3 update/bets_snap.py
+      - run: python3 update/props_bt.py
       - run: |
           git config user.name "bets-check"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add bets && git commit -qm "bets test" && git push -q
+          git add props_bt.json && git commit -qm "props backtest" && git push -q
