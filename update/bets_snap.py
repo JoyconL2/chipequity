@@ -188,6 +188,8 @@ for key, r in B["props"].items():
     r["actual"] = v; won = v > r["line"] if r["side"] == "over" else v < r["line"]; r["won"] = won
     r["units"] = round(payout(r["over"] if r["side"] == "over" else r["under"]) if won else -1, 3)
 
+cut = (TODAY - dt.timedelta(days=14)).isoformat()                                     # props are kept two weeks
+B["props"] = {k: r for k, r in B["props"].items() if r["day"] >= cut}
 B["updated"] = NOW.strftime("%Y-%m-%d %H:%M ET")
 json.dump(B, open(os.path.join(OUT, "bets.json"), "w"), separators=(",", ":"))
 json.dump(BOX, open(os.path.join(OUT, "boxlog.json"), "w"), separators=(",", ":"))
