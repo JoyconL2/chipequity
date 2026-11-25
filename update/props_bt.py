@@ -3,7 +3,7 @@ games BEFORE that day only, and grade against his box score. Prints results by e
 import json, sys, os, math, time, subprocess, collections
 sys.argv = ["x"]
 src = open("update/bets_snap.py").read().split("os.makedirs(OUT, exist_ok=True)")[0]
-ns = {"__name__": "bt"}; exec(src, ns)
+ns = {"__name__": "bt", "__file__": os.path.abspath("update/bets_snap.py")}; exec(src, ns)
 get, implied, payout, p_over, PROPS, MILE, CORE = ns["get"], ns["implied"], ns["payout"], ns["p_over"], ns["PROPS"], ns["MILE"], ns["CORE"]
 BOX = json.load(open("bets/boxlog.json"))["games"]
 games = sorted(BOX.items(), key=lambda kv: kv[1]["day"])
