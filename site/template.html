@@ -1343,7 +1343,6 @@ let PL_SEASON = null;
 function openPlayer(k, s = null){ plQ.value = optLabel(k); PL_SEASON = s; if (current !== "players") show("players"); else { renderPlayer(); pushNav(); } window.scrollTo({top: 0}); }
 const seasonLink = (k, s, html) => `<a href="#" class="plink" data-player="${k}" data-season="${s}" title="${esc(DATA.names[k])}, ${S[s]} season">${html}</a>`;
 /* ---- season card: a compact, screenshot-ready summary at the top of a season page ---- */
-let SC_T = 0;                                          // card view: 0 regular season, 1 playoffs
 const SC_STATS = [["G","gp"],["PTS","pts"],["REB","reb"],["AST","ast"],["STL","stl"],["BLK","blk"],["TOV","tov"],["AST/TO","ato"],["MIN","min"],
   ["FG%","fgp"],["3P%","tpp"],["3PA","tpa"],["FT%","ftp"],["FTA","fta"],["TS%","ts"],["rTS","rts"],["USG%","usg"]];
 function scLine(rows){
@@ -1380,7 +1379,7 @@ function scAllTime(){
 const scPeakRank = (m, k, v) => { let n = 1; for (const [j, b] of m) if (j !== k && b > v) n++; return n; };
 const TROPHY_SM = `<img class="sc-tr" src="trophy.png" alt="">`;
 function seasonCard(k, s, tl, rsR, poR, myRank){
-  const t = SC_T && poR.length ? 1 : 0, rows = t ? poR : rsR, L = rows.length ? scLine(rows) : null, pool = scPool(s, t), AT = scAllTime();
+  const t = TYPE && poR.length ? 1 : 0, rows = t ? poR : rsR, L = rows.length ? scLine(rows) : null, pool = scPool(s, t), AT = scAllTime();
   const c1 = M.rwOf(k, s, 1), pc = POC.get(k*64 + s), won = wonTitle(k, s), name = DATA.names[k];
   const team = tl[tl.length - 1][0], ai = DATA.abbrs.indexOf(team), sr = ai >= 0 ? seasonResult(ai, s) : {txt: ""};
   const tile = (v, lab, cls = "") => `<div class="tile ${cls}"><div class="v">${v}</div><div class="k">${lab}</div></div>`;
@@ -1439,11 +1438,11 @@ function renderPlayerSeason(k, s){
   const wRow = ({w, v}) => `<tr><td class="l">${w === 1 ? "Single season" : w + "-year"}</td><td class="l sub">${w === 1 ? S[s] : rwSpan(s, w)}</td><td class="nw"><strong>${pm(v.r)}</strong>${pctl(v)}</td><td class="nw">${pm(v.o)}${pctlO(v)}</td><td class="nw">${pm(v.d)}${pctlD(v)}</td><td class="sub">${v.rank ? ord(v.rank) + " of " + v.n : "–"}</td></tr>`;
   const poRow = pc ? `<tr><td class="l">Playoffs</td><td class="l sub">${S[s]} postseason</td><td class="nw"><strong>${pm(pc.r)}</strong>${pctl(pc, poSc)}</td><td>${pm(pc.o)}</td><td>${pm(pc.d)}</td><td class="sub">${ord(pc.rank)} of ${pc.n}</td></tr>` : "";
   const ceBox = wins.length || pc ? `<div class="box"><h2>Chip Equity <small>windows ending ${S[s]} · regular season + playoffs (the playoffs row: playoff possessions only) · points per 100 possessions</small></h2><div class="tscroll"><table>
-    <thead><tr><th class="l">Window</th><th class="l">Seasons</th><th>Total</th><th>Off</th><th>Def</th><th>Rank</th></tr></thead><tbody>${wins.map(wRow).join("")}${poRow}</tbody></table></div><p class="mlink"><a href="#" data-method="windows">How it's calculated ›</a></p></div>` : "";
+    <thead><tr><th class="l">Window</th><th class="l">Seasons</th><th>Total</th><th>Off</th><th>Def</th><th>Rank</th></tr></thead><tbody>${TYPE ? poRow + wins.map(wRow).join("") : wins.map(wRow).join("") + poRow}</tbody></table></div><p class="mlink"><a href="#" data-method="windows">How it's calculated ›</a></p></div>` : "";
   const boxRow = (lab, rows) => { if (!rows.length) return ""; const r = agg(rows); return `<tr><td class="l">${lab}</td><td>${r.gp}</td><td>${fmt(val(r,"MPG"),1)}</td>${boxCells(boxSum(rows), r)}<td>${fmt(val(r,"USG"),1)}</td></tr>`; };
   const boxBox = `<div class="box"><h2>Stats <small>${S[s]} · ${plMode === "p75" ? "per 75 possessions" : "per game"} · rTS = true shooting minus the league average</small></h2><div class="tscroll"><table class="box-t">
-    <thead><tr><th class="l"></th><th>GP</th><th>MPG</th>${BOX_HEAD}<th>USG</th></tr></thead><tbody>${boxRow("Regular season", rsR)}${boxRow("Playoffs", poR)}</tbody></table></div></div>`;
-  const ptB = [0, 1].filter(t => ptHas(k, s, t)).map(t => `<div class="box"><h2>${t ? "Playoff play types" : "Play types"} <small>${S[s]} ${t ? "playoffs" : "regular season"} · from play-by-play and shot charts</small></h2>${ptBox(k, s, t)}<p class="mlink"><a href="#" data-method="pt">How play types are measured ›</a></p></div>`).join("");
+    <thead><tr><th class="l"></th><th>GP</th><th>MPG</th>${BOX_HEAD}<th>USG</th></tr></thead><tbody>${TYPE ? boxRow("Playoffs", poR) + boxRow("Regular season", rsR) : boxRow("Regular season", rsR) + boxRow("Playoffs", poR)}</tbody></table></div></div>`;
+  const ptB = (TYPE ? [1, 0] : [0, 1]).filter(t => ptHas(k, s, t)).map(t => `<div class="box"><h2>${t ? "Playoff play types" : "Play types"} <small>${S[s]} ${t ? "playoffs" : "regular season"} · from play-by-play and shot charts</small></h2>${ptBox(k, s, t)}<p class="mlink"><a href="#" data-method="pt">How play types are measured ›</a></p></div>`).join("");
   const dptB = DPTMAP.has((k*64 + s)*2 + TYPE) ? `<div class="box"><h2>Defensive play types <small>${S[s]} ${typeName().toLowerCase()}</small></h2>${defBox(k, s)}<p class="mlink"><a href="#" data-method="dpt">How defensive play types are measured ›</a></p></div>` : "";
   const live = s === LATEST && TYPE === 0 && typeof CUR !== "undefined" && CUR && Date.now() >= +CUR.seasonStart;
   plOut.innerHTML = nav + seasonCard(k, s, tl, rsR, poR, myRank) + `<div class="box"><div class="stints">${teamLine}</div>${hlLinks(k, s, poR.length > 0)}${ctx ? `<p class="note" style="margin-bottom:0">${ctx}</p>` : ""}</div>
@@ -1451,7 +1450,7 @@ function renderPlayerSeason(k, s){
     <div class="box"><h2>On / off <small>${S[s]} · team net rating per 100 possessions with him on vs. off the floor · garbage time out</small></h2><div id="ps-onoff"><div class="msg">Loading on/off…</div></div></div>
     ${ptB}${dptB}${simSeasonBox(k, s)}${playoffSeriesBox(k, s)}`;
   const sel = document.getElementById("ps-season"); sel.onchange = () => openPlayer(k, +sel.value);
-  plOut.querySelectorAll("[data-sct]").forEach(b => b.onclick = () => { SC_T = +b.dataset.sct; renderPlayerSeason(k, s); });
+  plOut.querySelectorAll("[data-sct]").forEach(b => b.onclick = () => setType(+b.dataset.sct));       // same switch as the page's Regular season / Playoffs
   const fillOnOff = () => {
     const el = document.getElementById("ps-onoff"); if (!el || PL_SEASON !== s) return;
     if (!WOWY){ if (WOWY_ERR) el.innerHTML = `<div class="msg">Couldn't load the on/off data (${esc(WOWY_ERR)}).</div>`; else loadWowy().then(fillOnOff); return; }
