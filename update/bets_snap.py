@@ -39,6 +39,7 @@ ncdf = lambda z: 0.5 * (1 + math.erf(z / math.sqrt(2)))
 def p_over(mu, sd, line):
     """Chance of more than `line` (a .5 line) for a count with this mean and spread: negative binomial, which is
     skewed like real stat lines (books set lines near the median, below the mean). Falls back to Poisson."""
+    if mu <= 0.05: return 0.0
     k = int(math.floor(line)); var = max(sd * sd, mu * 1.05)
     r = mu * mu / (var - mu); q = r / (r + mu); cdf = 0.0
     for x in range(k + 1): cdf += math.exp(math.lgamma(x + r) - math.lgamma(r) - math.lgamma(x + 1) + r * math.log(q) + x * math.log(1 - q))
