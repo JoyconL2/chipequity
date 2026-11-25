@@ -10,34 +10,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
-          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
-          echo "== scoreboard odds today"; curl -s -A "$UA" "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard" | python3 -c "
-          import json,sys; d=json.load(sys.stdin)
-          for e in d['events'][:3]:
-              c=e['competitions'][0]; print(e['id'], e['shortName'], json.dumps(c.get('odds'))[:900])"
           python3 - <<'PY'
-          import json, subprocess, time
+          import json, subprocess
           UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
           get = lambda u: subprocess.run(["curl", "-s", "-m", "20", "-A", UA, u], capture_output=True, text=True).stdout
-          P = json.load(open("dist/picks.json"))["games"]; out = {}
-          for i, gid in enumerate(P):
-              try: d = json.loads(get(f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={gid}"))
-              except Exception as e: print("fail", gid, e); continue
-              if i == 0: print("== summary pickcenter sample", json.dumps(d.get("pickcenter"))[:1500]); print("== odds sample", json.dumps(d.get("odds"))[:600])
-              comp = d["header"]["competitions"][0]; sc = {c["homeAway"]: c.get("score") for c in comp["competitors"]}
-              out[gid] = {"status": comp["status"]["type"]["name"], "home": sc.get("home"), "away": sc.get("away"), "pc": d.get("pickcenter")}
-              time.sleep(0.3)
-          json.dump(out, open("bets_backfill.json", "w"))
-          print("saved", len(out), "with pickcenter", sum(1 for v in out.values() if v["pc"]))
-          gid = list(P)[-1]
-          o = get(f"https://sports.core.api.espn.com/v2/sports/basketball/leagues/nba/events/{gid}/competitions/{gid}/odds"); print("== core odds", o[:800])
-          try:
-              items = json.loads(o).get("items", [])
-              for it in items[:3]:
-                  ref = it.get("$ref") or ""; pid = ref.split("/odds/")[-1].split("?")[0] if ref else ""
-                  print("provider", pid, (it.get("provider") or {}).get("name"))
-                  if pid: print("== propBets", get(f"https://sports.core.api.espn.com/v2/sports/basketball/leagues/nba/events/{gid}/competitions/{gid}/odds/{pid}/propBets?limit=5")[:800])
-          except Exception as e: print("core parse", e)
+          sb = json.loads(get("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"))
+          gid = sb["events"][-1]["id"]
+          props = json.loads(get(f"https://sports.core.api.espn.com/v2/sports/basketball/leagues/nba/events/{gid}/competitions/{gid}/odds/100/propBets?limit=1000"))
+          json.dump(props, open("probe_props.json", "w"))
+          print("props", props.get("count"), "types", sorted({i["type"]["name"] for i in props["items"]}))
+          a = props["items"][0]["athlete"]["$ref"].replace("http://", "https://"); json.dump(json.loads(get(a)), open("probe_athlete.json", "w"))
+          json.dump(sb, open("probe_scoreboard.json", "w"))
+          summ = json.loads(get("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=401910045"))
+          json.dump({"boxscore": summ.get("boxscore"), "header": summ.get("header")}, open("probe_box.json", "w"))
           PY
           git config user.name "bets-check"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add bets_backfill.json && git commit -qm "backfill" && git push -q
+          git add probe_*.json && git commit -qm "probe" && git push -q
