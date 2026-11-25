@@ -56,7 +56,7 @@ json.dump(rows, open("props_bt.json", "w"))
 print("props graded", len(rows), "days", len(cache))
 y = [r["v"] > r["line"] for r in rows]
 print(f"over hit rate {sum(y)/len(y):.3f}; market says {sum(r['q'] for r in rows)/len(rows):.3f}; model says {sum(r['p'] for r in rows)/len(rows):.3f}")
-ll = lambda key: -sum(math.log(r[key] if r["v"] > r["line"] else 1 - r[key]) for r in rows) / len(rows)
+ll = lambda key: -sum(math.log(min(.99, max(.01, r[key])) if r["v"] > r["line"] else 1 - min(.99, max(.01, r[key]))) for r in rows) / len(rows)
 print(f"log loss market {ll('q'):.4f} model {ll('p'):.4f}")
 for a in (0.25, 0.5):
     for r in rows: r["b"] = a * r["p"] + (1 - a) * r["q"]
