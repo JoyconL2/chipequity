@@ -1375,6 +1375,161 @@ function scAllTime(){
   for (const [key, v] of POC) if (v.p >= 300) best(po, Math.floor(key / 64), v.r);
   return SC_ALL = {rs, po};
 }
+// ---- stretch Chip Equity: Chip Equity over any run of games inside a regular season ----
+// One fit over the whole season's lineup data (dist/stretch/<season>.bin, update/stretch_pack.py): every player gets a
+// base offense/defense rating, held loosely to his season Chip Equity, plus a change for each stretch that applies only to
+// possessions inside it and is pulled toward zero, so a short or noisy stretch barely moves. Stretch Chip Equity = his
+// season Chip Equity + that change. Several stretches (e.g. every month) are fit together in one pass.
+const STRETCH = { cache: new Map(), LAM_BASE: 100, LAM_DEV: 3000, LAM_HOME: 1 };
+STRETCH.load = function(s){
+  if (this.cache.has(s)) return this.cache.get(s);
+  const pr = fetch(`stretch/${S[s]}.bin`).then(r => { if (!r.ok) throw new Error("no stretch data for " + S[s]); return r.arrayBuffer(); }).then(buf => {
+    const h = new DataView(buf); if (h.getUint32(0, true) !== 0x54534543) throw new Error("bad stretch file");
+    const np = h.getUint32(8, true), ng = h.getUint32(12, true), ns = h.getUint32(16, true), era = h.getFloat32(20, true);
+    let o = 24; const take = (T, n) => { const a = new T(buf.slice(o, o + n * T.BYTES_PER_ELEMENT)); o += n * T.BYTES_PER_ELEMENT; return a; };
+    const site = take(Int32Array, np), day = take(Uint16Array, ng), sg = take(Uint16Array, ns), pp = take(Uint16Array, ns * 10);
+    const ht = take(Uint8Array, ng), at = take(Uint8Array, ng), hp = take(Uint8Array, ns), apo = take(Uint8Array, ns), hpt = take(Uint8Array, ns), apt = take(Uint8Array, ns);
+    const local = new Map(); site.forEach((k, i) => { if (k >= 0) local.set(k, i); });
+    return {s, np, ng, ns, era, site, day, sg, pp, ht, at, hp, ap: apo, hpt, apt, local};
+  });
+  this.cache.set(s, pr); pr.catch(() => this.cache.delete(s)); return pr;
+};
+// games a player was on the floor for (stretch-file game indices, in date order)
+STRETCH.gamesOf = function(F, k){
+  const i = F.local.get(k); if (i == null) return [];
+  const seen = new Uint8Array(F.ng);
+  for (let r = 0; r < F.ns; r++){ const b = r * 10; for (let j = 0; j < 10; j++) if (F.pp[b + j] === i){ seen[F.sg[r]] = 1; break; } }
+  const out = []; for (let g = 0; g < F.ng; g++) if (seen[g]) out.push(g); return out;
+};
+// segs: array of game-index arrays (a game in at most one). Returns, per segment, Float64Array dev O / dev D by local player.
+STRETCH.solve = function(F, segs){
+  const n = F.np, nseg = segs.length, segOf = new Int16Array(F.ng).fill(-1);
+  segs.forEach((g, j) => g.forEach(x => { segOf[x] = j; }));
+  const B = 2 * n, DEV = B, HOME = B + 2 * n * nseg, INT = HOME + 1, NV = INT + 1;
+  // rows: two per stint (home offense, away offense)
+  const nr = 2 * F.ns, y = new Float64Array(nr), w = new Float64Array(nr); let wsum = 0, ysum = 0;
+  for (let r = 0; r < F.ns; r++){
+    if (F.hp[r] > 0){ y[2*r] = F.hpt[r] / F.hp[r] * 100 * F.era; w[2*r] = F.hp[r]; }
+    if (F.ap[r] > 0){ y[2*r+1] = F.apt[r] / F.ap[r] * 100 * F.era; w[2*r+1] = F.ap[r]; }
+  }
+  for (let i = 0; i < nr; i++){ wsum += w[i]; ysum += w[i] * y[i]; }
+  const ym = ysum / wsum, wm = wsum / nr; for (let i = 0; i < nr; i++){ y[i] -= ym; w[i] /= wm; }
+  // prior: base = season Chip Equity offense / defense (the pooled low-minute column at -1 / -1, like the model)
+  const b0 = new Float64Array(NV);
+  for (let i = 0; i < n; i++){ const k = F.site[i]; if (k < 0){ b0[i] = -1; b0[n + i] = -1; continue; } const v = M.rwOf(k, F.s, 1); if (v){ b0[i] = v.o; b0[n + i] = v.d; } }
+  const pen = new Float64Array(NV).fill(this.LAM_DEV); for (let i = 0; i < B; i++) pen[i] = this.LAM_BASE; pen[HOME] = this.LAM_HOME; pen[INT] = 1e-6;
+  // X v for one row
+  const rowDot = (r, side, v) => { const b = r * 10, off = side ? 5 : 0, dfn = side ? 0 : 5, sj = segOf[F.sg[r]];
+    let t = v[INT] + (side ? -v[HOME] : v[HOME]);
+    for (let j = 0; j < 5; j++){ const po = F.pp[b + off + j], pd = F.pp[b + dfn + j]; t += v[po] - v[n + pd];
+      if (sj >= 0){ const d0 = DEV + 2 * n * sj; t += v[d0 + po] - v[d0 + n + pd]; } }
+    return t; };
+  const rowAdd = (r, side, c, out) => { const b = r * 10, off = side ? 5 : 0, dfn = side ? 0 : 5, sj = segOf[F.sg[r]];
+    out[INT] += c; out[HOME] += side ? -c : c;
+    for (let j = 0; j < 5; j++){ const po = F.pp[b + off + j], pd = F.pp[b + dfn + j]; out[po] += c; out[n + pd] -= c;
+      if (sj >= 0){ const d0 = DEV + 2 * n * sj; out[d0 + po] += c; out[d0 + n + pd] -= c; } } };
+  const Av = v => { const out = new Float64Array(NV);
+    for (let r = 0; r < F.ns; r++) for (let side = 0; side < 2; side++){ const i = 2 * r + side; if (!w[i]) continue; rowAdd(r, side, w[i] * rowDot(r, side, v), out); }
+    for (let j = 0; j < NV; j++) out[j] += pen[j] * v[j]; return out; };
+  // right side: X'W (y - X b0); diagonal for the preconditioner
+  const rhs = new Float64Array(NV), diag = new Float64Array(NV);
+  for (let r = 0; r < F.ns; r++) for (let side = 0; side < 2; side++){ const i = 2 * r + side; if (!w[i]) continue;
+    rowAdd(r, side, w[i] * (y[i] - rowDot(r, side, b0)), rhs);
+    const b = r * 10, off = side ? 5 : 0, dfn = side ? 0 : 5, sj = segOf[F.sg[r]]; diag[INT] += w[i]; diag[HOME] += w[i];
+    for (let j = 0; j < 5; j++){ const po = F.pp[b + off + j], pd = F.pp[b + dfn + j]; diag[po] += w[i]; diag[n + pd] += w[i];
+      if (sj >= 0){ const d0 = DEV + 2 * n * sj; diag[d0 + po] += w[i]; diag[d0 + n + pd] += w[i]; } } }
+  for (let j = 0; j < NV; j++) diag[j] += pen[j];
+  // preconditioned conjugate gradient for (X'WX + pen) x = rhs
+  const x = new Float64Array(NV), r0 = rhs.slice(), z = r0.map((v, j) => v / diag[j]), p = z.slice();
+  let rz = 0; for (let j = 0; j < NV; j++) rz += r0[j] * z[j];
+  const bn = Math.sqrt(rhs.reduce((a, v) => a + v * v, 0)) || 1;
+  for (let it = 0; it < 600; it++){
+    const Ap = Av(p); let pAp = 0; for (let j = 0; j < NV; j++) pAp += p[j] * Ap[j];
+    const al = rz / pAp; let rr = 0;
+    for (let j = 0; j < NV; j++){ x[j] += al * p[j]; r0[j] -= al * Ap[j]; rr += r0[j] * r0[j]; }
+    if (Math.sqrt(rr) / bn < 1e-7) break;
+    let rz2 = 0; for (let j = 0; j < NV; j++){ z[j] = r0[j] / diag[j]; rz2 += r0[j] * z[j]; }
+    const be = rz2 / rz; rz = rz2; for (let j = 0; j < NV; j++) p[j] = z[j] + be * p[j];
+  }
+  return segs.map((g, j) => { const d0 = DEV + 2 * n * j; return {o: x.slice(d0, d0 + n), d: x.slice(d0 + n, d0 + 2 * n)}; });
+};
+// a player's possessions on the floor and team net rating per 100 in a set of games
+STRETCH.onCourt = function(F, k, games){
+  const i = F.local.get(k), set = new Uint8Array(F.ng); games.forEach(g => { set[g] = 1; });
+  let pos = 0, pf = 0, pa = 0, pfp = 0, pap = 0;
+  if (i == null) return {pos: 0, net: null};
+  for (let r = 0; r < F.ns; r++){ if (!set[F.sg[r]]) continue; const b = r * 10; let side = -1;
+    for (let j = 0; j < 10; j++) if (F.pp[b + j] === i){ side = j < 5 ? 0 : 1; break; }
+    if (side < 0) continue; const mp = side ? F.ap[r] : F.hp[r], op = side ? F.hp[r] : F.ap[r];
+    pos += (mp + op) / 2; pf += side ? F.apt[r] : F.hpt[r]; pa += side ? F.hpt[r] : F.apt[r]; pfp += mp; pap += op; }
+  return {pos, ortg: pfp ? pf / pfp * 100 : null, drtg: pap ? pa / pap * 100 : null};
+};
+
+// the season page's "Stretch Chip Equity" section: presets (last 10 / 20 games, before / after the All-Star break, by month)
+// and any date range; the lineup file for the season loads on first use
+function stretchBox(k, s){
+  const box = document.getElementById("st-box"), c1 = M.rwOf(k, s, 1); if (!box || !c1) return;
+  const D0 = Date.UTC(1970, 0, 1), dayStr = d => new Date(D0 + d * 864e5).toISOString().slice(0, 10);
+  const dayLbl = d => new Date(D0 + d * 864e5).toLocaleDateString(undefined, {month: "short", day: "numeric", timeZone: "UTC"});
+  const head = `<h2>Stretch Chip Equity <small>${S[s]} regular season · any run of games, against his season Chip Equity (${pm(c1.r)}) · points per 100 possessions</small></h2>`;
+  let F = null, mine = [], asb = null, sel = null;
+  const presets = () => [["l10", "Last 10 games"], ["l20", "Last 20 games"], ...(asb ? [["pre", "Before All-Star"], ["post", "After All-Star"]] : []), ["month", "By month"]];
+  const draw = (res) => {
+    const lo = mine.length ? F.day[mine[0]] : 0, hi = mine.length ? F.day[mine[mine.length - 1]] : 0;
+    box.innerHTML = head + `<div class="st-ctl"><div class="seg sm st-pre" role="group" aria-label="Preset stretches">${presets().map(([id, l]) => `<button data-st="${id}" aria-pressed="${sel === id}">${l}</button>`).join("")}</div>
+      <div class="st-range"><label>From <input type="date" id="st-a" min="${dayStr(lo)}" max="${dayStr(hi)}" value="${dayStr(sel && sel.a != null ? sel.a : lo)}"></label><label>To <input type="date" id="st-b" min="${dayStr(lo)}" max="${dayStr(hi)}" value="${dayStr(sel && sel.b != null ? sel.b : hi)}"></label><button id="st-go" class="btn sm">Go</button></div></div>
+      <div id="st-out">${res || ""}</div><p class="mlink"><a href="#" data-method="stretch">How stretch Chip Equity works ›</a></p>`;
+    box.querySelectorAll("[data-st]").forEach(b => b.onclick = () => run(b.dataset.st));
+    box.querySelector("#st-go").onclick = () => { const a = Date.parse(box.querySelector("#st-a").value), b = Date.parse(box.querySelector("#st-b").value);
+      if (!Number.isFinite(a) || !Number.isFinite(b)) return; run({a: Math.round((Math.min(a, b) - D0) / 864e5), b: Math.round((Math.max(a, b) - D0) / 864e5)}); };
+    const ml = box.querySelector("[data-method]"); if (ml) ml.onclick = e => { e.preventDefault(); openMethod("stretch"); };
+  };
+  const tiles = (v, g) => {
+    const i = F.local.get(k), oc = STRETCH.onCourt(F, k, g), r = c1.r + v.o[i] + v.d[i], dv = v.o[i] + v.d[i];
+    return {r, o: c1.o + v.o[i], d: c1.d + v.d[i], dv, pos: oc.pos, net: oc.ortg != null && oc.drtg != null ? oc.ortg - oc.drtg : null, games: g.length};
+  };
+  const vs = (dv, short) => `<span class="${dv >= 0.05 ? "pos" : dv <= -0.05 ? "neg" : "muted"}">${Math.abs(dv) < 0.05 ? "" : dv > 0 ? "+" : "−"}${Math.abs(dv).toFixed(1)}${short ? "" : " vs season"}</span>`;
+  const one = (g, lbl) => {
+    if (!g.length) return `<div class="msg">He didn't play in that stretch.</div>`;
+    const t = tiles(STRETCH.solve(F, [g])[0], g), few = t.pos < 300;
+    const tile = (v, l, c = "") => `<div class="tile ${c}"><div class="v">${v}</div><div class="k">${l}</div></div>`;
+    return `<div class="tiles">${tile(pm(t.r), `Stretch Chip Equity · ${vs(t.dv)}`, "hero")}${tile(`${pm(t.o)} / ${pm(t.d)}`, "Offense / defense")}${tile(`${t.games} · ${Math.round(t.pos).toLocaleString()}`, "Games · possessions")}${tile(t.net == null ? "–" : pm(t.net), "Team net rating with him on")}</div>
+      <p class="note" style="margin-bottom:0">${esc(lbl)}: ${dayLbl(F.day[g[0]])} – ${dayLbl(F.day[g[g.length - 1]])}.${few ? " Short stretch: with this few possessions it stays close to his season number." : ""}</p>`;
+  };
+  const months = () => {
+    const by = []; mine.forEach(g => { const d = new Date(D0 + F.day[g] * 864e5), key = d.getUTCFullYear() * 12 + d.getUTCMonth(); const last = by[by.length - 1];
+      if (last && last.key === key) last.g.push(g); else by.push({key, g: [g]}); });
+    for (let j = 0; j < by.length; j++) if (by[j].g.length < 4 && by.length > 1){ const t = j + 1 < by.length ? j + 1 : j - 1; by[t].g = j < t ? by[j].g.concat(by[t].g) : by[t].g.concat(by[j].g); by[t].merged = (by[t].merged || []).concat(by[j].key, by[j].merged || []); by.splice(j, 1); j--; }
+    const mn = key => new Date(Date.UTC(Math.floor(key / 12), key % 12, 1)).toLocaleDateString(undefined, {month: "short", timeZone: "UTC"});
+    const sol = STRETCH.solve(F, by.map(x => x.g));
+    const rows = by.map((x, j) => { const t = tiles(sol[j], x.g), ks = [x.key, ...(x.merged || [])].sort((a, b) => a - b);
+      return `<tr><td class="l">${ks.length > 1 ? `${mn(ks[0])}–${mn(ks[ks.length - 1])}` : mn(ks[0])}</td><td>${t.games}</td><td>${Math.round(t.pos).toLocaleString()}</td><td class="nw"><strong>${pm(t.r)}</strong></td><td class="nw">${vs(t.dv, 1)}</td><td>${pm(t.o)}</td><td>${pm(t.d)}</td><td>${t.net == null ? "–" : pm(t.net)}</td></tr>`; }).join("");
+    return `<div class="tscroll"><table><thead><tr><th class="l">Month</th><th>G</th><th>Poss</th><th>Chip Equity</th><th title="change from his season Chip Equity">vs season</th><th>Off</th><th>Def</th><th title="team net rating per 100 with him on the floor">On-court net</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="note" style="margin-bottom:0">Months with fewer than 4 of his games are folded into the next one. All months are fit together, so they average back to his season.</p>`;
+  };
+  const run = which => {
+    sel = which; const out = () => box.querySelector("#st-out");
+    draw(`<div class="msg">Working it out…</div>`);
+    setTimeout(() => { if (PL_SEASON !== s || !document.getElementById("st-box")) return;
+      let html;
+      if (which === "l10" || which === "l20"){ const n = which === "l10" ? 10 : 20; html = one(mine.slice(-n), `His last ${Math.min(n, mine.length)} games`); }
+      else if (which === "pre") html = one(mine.filter(g => F.day[g] < asb), "Before the All-Star break");
+      else if (which === "post") html = one(mine.filter(g => F.day[g] > asb), "After the All-Star break");
+      else if (which === "month") html = months();
+      else html = one(mine.filter(g => F.day[g] >= which.a && F.day[g] <= which.b), "Stretch");
+      draw(html); }, 20);
+  };
+  box.innerHTML = head + `<div class="msg">Loading ${S[s]} lineup data…</div>`;
+  STRETCH.load(s).then(f => { if (PL_SEASON !== s || !document.getElementById("st-box")) return;
+    F = f; if (!F.local.has(k)){ box.innerHTML = head + `<div class="msg">Not enough minutes this season for a stretch breakdown.</div>`; return; }
+    mine = STRETCH.gamesOf(F, k);
+    // All-Star break: the longest gap between league game days from February 1 to March 10
+    let best = 0; for (let g = 1; g < F.ng; g++){ const d0 = new Date(D0 + F.day[g - 1] * 864e5), m = d0.getUTCMonth(), gap = F.day[g] - F.day[g - 1];
+      if ((m === 1 || (m === 2 && d0.getUTCDate() <= 10)) && gap > best){ best = gap; asb = F.day[g - 1] + 1; } }
+    if (best < 3) asb = null;
+    run("month");
+  }).catch(e => { box.innerHTML = head + `<div class="msg">Couldn't load the lineup data for ${S[s]} (${esc(e.message)}).</div>`; });
+}
 // where a season would rank among every other player's peak
 const scPeakRank = (m, k, v) => { let n = 1; for (const [j, b] of m) if (j !== k && b > v) n++; return n; };
 const TROPHY_SM = `<img class="sc-tr" src="trophy.png" alt="">`;
@@ -1446,11 +1601,12 @@ function renderPlayerSeason(k, s){
   const dptB = DPTMAP.has((k*64 + s)*2 + TYPE) ? `<div class="box"><h2>Defensive play types <small>${S[s]} ${typeName().toLowerCase()}</small></h2>${defBox(k, s)}<p class="mlink"><a href="#" data-method="dpt">How defensive play types are measured ›</a></p></div>` : "";
   const live = s === LATEST && TYPE === 0 && typeof CUR !== "undefined" && CUR && Date.now() >= +CUR.seasonStart;
   plOut.innerHTML = nav + seasonCard(k, s, tl, rsR, poR, myRank) + `<div class="box"><div class="stints">${teamLine}</div>${hlLinks(k, s, poR.length > 0)}${ctx ? `<p class="note" style="margin-bottom:0">${ctx}</p>` : ""}</div>
-    ${ceBox}${boxBox}${live ? `<div id="pl-live"></div>` : ""}
+    ${ceBox}${TYPE === 0 && c1 ? `<div class="box" id="st-box"></div>` : ""}${boxBox}${live ? `<div id="pl-live"></div>` : ""}
     <div class="box"><h2>On / off <small>${S[s]} · team net rating per 100 possessions with him on vs. off the floor · garbage time out</small></h2><div id="ps-onoff"><div class="msg">Loading on/off…</div></div></div>
     ${ptB}${dptB}${simSeasonBox(k, s)}${playoffSeriesBox(k, s)}`;
   const sel = document.getElementById("ps-season"); sel.onchange = () => openPlayer(k, +sel.value);
   plOut.querySelectorAll("[data-sct]").forEach(b => b.onclick = () => setType(+b.dataset.sct));       // same switch as the page's Regular season / Playoffs
+  if (document.getElementById("st-box")) stretchBox(k, s);
   const fillOnOff = () => {
     const el = document.getElementById("ps-onoff"); if (!el || PL_SEASON !== s) return;
     if (!WOWY){ if (WOWY_ERR) el.innerHTML = `<div class="msg">Couldn't load the on/off data (${esc(WOWY_ERR)}).</div>`; else loadWowy().then(fillOnOff); return; }
@@ -3025,7 +3181,12 @@ function renderMethod(){
   <div class="box" id="m-windows"><h2>3. Seasons, peaks and decades</h2>
     <ul><li><b>Single seasons</b> are steadied: 40% of each season comes from that player's three-year number, so one hot season can't outrank a sustained peak.</li>
       <li><b>2- to 5-year windows</b> and <b>decades</b> pool every possession in the span. A player's headline number is his best 5-year window (best 3-year for shorter careers).</li>
-      <li>Leaderboards show all-time ranks, and the single-season board starts in 1997-98.</li></ul></div>
+      <li>Leaderboards show all-time ranks, and the single-season board starts in 1997-98.</li></ul>
+    <h3 id="m-stretch">Stretches inside a season</h3>
+    <ul><li><b>Stretch Chip Equity</b> (on each player's season page) is Chip Equity over any run of games: his last 10, before or after the All-Star break, a month, or any dates you pick.</li>
+      <li>It's worked out in your browser from that season's lineup data. One fit covers the whole season: each player gets a base rating held close to his season Chip Equity, plus a change for the stretch that only counts possessions inside it.</li>
+      <li>That change is pulled toward zero, so a stretch only moves away from his season number when the lineups in it really were better or worse. A 10-game stretch moves a little, a half season can move a point or more. Months are fit together and average back to the season.</li>
+      <li>Garbage time is left out, as everywhere else.</li></ul></div>
 
   <div class="box" id="m-po"><h2>4. Playoffs</h2>
     <ul><li><b>In Chip Equity:</b> playoff possessions are part of the plus-minus, and playoff stretches count double in lead margin, credited for the strength of the opponent.</li>
