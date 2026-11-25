@@ -256,3 +256,9 @@ details.gl summary{font-size:15px;color:var(--ink)}details.gl summary small{font
 @media (max-width:640px){.scard .tile .v .pctl{font-size:9.5px;line-height:14px;padding:0 3px;margin-left:3px;vertical-align:3px}}
 .sc-pcrow td{padding-top:0}.sc-pcrow .pctl{margin-left:0}.pctl.pn{background:var(--panel-2);color:var(--ink-3)}
 @media (max-width:640px){.sc-pcrow .pctl{font-size:9.5px;line-height:14px;padding:0 4px}}
+.st-ctl{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin:6px 0 12px}.st-pre{flex-wrap:wrap}
+.st-range{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--ink-3)}.st-range input{font:inherit;color:var(--ink);background:var(--panel-2,rgba(255,255,255,.06));border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:4px 6px;margin-left:4px;color-scheme:dark}
+#st-out .pos{color:#7fe0a8}#st-out .neg{color:#ff9393}#st-out .tile .k .pos,#st-out .tile .k .neg,#st-out .tile .k .muted{font-size:inherit}
+.st-range .btn{padding:4px 12px}
+@media (max-width:640px){#st-out th,#st-out td{padding-left:4px;padding-right:4px;font-size:12px}}
+@media (max-width:640px){#st-out th{font-size:9.5px;letter-spacing:.02em;white-space:normal;line-height:1.2;vertical-align:bottom}}

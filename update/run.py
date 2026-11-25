@@ -205,6 +205,9 @@ def main():
     json.dump(W, open(os.path.join(DIST, "wowy.json"), "w"), separators=(",", ":"))
     os.makedirs(os.path.join(DIST, "lineups"), exist_ok=True)       # history's lineup files are already in dist/lineups
     shutil.copy(os.path.join(ROOT, f"wowy/lineups/{CUR}.json"), os.path.join(DIST, "lineups", f"{CUR}.json"))
+    # this season's lineup file for stretch Chip Equity (earlier seasons are already in dist/stretch)
+    f = os.path.join(ROOT, f"stints/stints_{CUR}_rs.csv")
+    if os.path.exists(f): run([PY, "update/stretch_pack.py", f, "--force"], cwd=ROOT, out=os.path.join(tmp, "stretch_pack.log"))
     run([PY, "build.py"], cwd="site")
     run([PY, "assemble.py", os.path.join(DIST, "index.html"), a.site_url], cwd="loadout")
     if os.path.exists(os.path.join(ROOT, "site/preview.png")): shutil.copy(os.path.join(ROOT, "site/preview.png"), os.path.join(DIST, "preview.png"))
