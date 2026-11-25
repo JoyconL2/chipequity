@@ -44,6 +44,22 @@ def p_over(mu, sd, line):
     for x in range(k + 1): cdf += math.exp(math.lgamma(x + r) - math.lgamma(r) - math.lgamma(x + 1) + r * math.log(q) + x * math.log(1 - q))
     return max(0.0, min(1.0, 1 - cdf))
 
+# a player's projection for one stat tonight (uses the profiles built below: logs, team, lg_pace, lg_drtg, pace, drtg)
+def project(aid, stat, opp):
+    L = logs.get(aid)
+    if not L or len(L["g"]) < 5: return None
+    g = L["g"]; val = lambda x: x[2] + x[3] + x[4] if stat == "pra" else x[{"pts": 2, "reb": 3, "ast": 4, "fg3m": 5}[stat]]
+    mins = sum(x[1] for x in g)
+    if mins < 150: return None
+    rate_s = sum(val(x) for x in g) / mins; last = g[-10:]; rate_l = sum(val(x) for x in last) / sum(x[1] for x in last)
+    rate = 0.5 * rate_s + 0.5 * rate_l; mpg = sum(x[1] for x in g[-5:]) / len(g[-5:])
+    f = 1 + 0.5 * ((pace(L["team"]) + pace(opp)) / 2 / lg_pace - 1)                   # half the matchup's pace difference
+    if stat in ("pts", "pra"): f *= 1 + 0.5 * (drtg(opp) / lg_drtg - 1)                # and half the opponent's points allowed
+    mu = rate * mpg * f
+    res = [val(x) - rate * x[1] for x in g]                                            # game-to-game spread around his rate
+    sd = max(math.sqrt(sum(r * r for r in res) / max(1, len(res) - 1)), math.sqrt(max(mu, 0.5)))
+    return {"mu": round(mu, 2), "sd": round(sd, 2), "mpg": round(mpg, 1), "n": len(g)}
+
 os.makedirs(OUT, exist_ok=True)
 B = load("bets.json", {"season": "2026-27", "games": {}, "props": {}, "updated": None})
 BOX = load("boxlog.json", {"games": {}, "scanned": []})
@@ -110,21 +126,6 @@ lg_pace = sum(x["pos"] for x in team.values()) / max(1, sum(x["n"] for x in team
 lg_drtg = sum(x["allowed"] for x in team.values()) / max(1, sum(x["opp_pos"] for x in team.values())) * 100
 pace = lambda ab: team[ab]["pos"] / team[ab]["n"] if ab in team and team[ab]["n"] else lg_pace
 drtg = lambda ab: team[ab]["allowed"] / team[ab]["opp_pos"] * 100 if ab in team and team[ab]["opp_pos"] else lg_drtg
-
-def project(aid, stat, opp):
-    L = logs.get(aid)
-    if not L or len(L["g"]) < 5: return None
-    g = L["g"]; val = lambda x: x[2] + x[3] + x[4] if stat == "pra" else x[{"pts": 2, "reb": 3, "ast": 4, "fg3m": 5}[stat]]
-    mins = sum(x[1] for x in g)
-    if mins < 150: return None
-    rate_s = sum(val(x) for x in g) / mins; last = g[-10:]; rate_l = sum(val(x) for x in last) / sum(x[1] for x in last)
-    rate = 0.5 * rate_s + 0.5 * rate_l; mpg = sum(x[1] for x in g[-5:]) / len(g[-5:])
-    f = 1 + 0.5 * ((pace(L["team"]) + pace(opp)) / 2 / lg_pace - 1)                   # half the matchup's pace difference
-    if stat in ("pts", "pra"): f *= 1 + 0.5 * (drtg(opp) / lg_drtg - 1)                # and half the opponent's points allowed
-    mu = rate * mpg * f
-    res = [val(x) - rate * x[1] for x in g]                                            # game-to-game spread around his rate
-    sd = max(math.sqrt(sum(r * r for r in res) / max(1, len(res) - 1)), math.sqrt(max(mu, 0.5)))
-    return {"mu": round(mu, 2), "sd": round(sd, 2), "mpg": round(mpg, 1), "n": len(g)}
 
 # ---- games: model vs market ----
 picks = json.load(open(os.path.join(ROOT, "dist/picks.json")))["games"]

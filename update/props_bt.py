@@ -28,6 +28,7 @@ for gid, g in games:
         logs, team = profiles(g["day"]); ns["logs"], ns["team"] = logs, team
         ns["lg_pace"] = sum(x["pos"] for x in team.values()) / max(1, sum(x["n"] for x in team.values()))
         ns["lg_drtg"] = sum(x["allowed"] for x in team.values()) / max(1, sum(x["opp_pos"] for x in team.values())) * 100
+        exec('pace = lambda ab: team[ab]["pos"] / team[ab]["n"] if ab in team and team[ab]["n"] else lg_pace\ndrtg = lambda ab: team[ab]["allowed"] / team[ab]["opp_pos"] * 100 if ab in team and team[ab]["opp_pos"] else lg_drtg', ns)
         cache[g["day"]] = 1
     j = get(f"{CORE}/events/{gid}/competitions/{gid}/odds/100/propBets?limit=1000"); time.sleep(0.3)
     if not j or not j.get("items"): print("no props", gid, g["day"]); continue
