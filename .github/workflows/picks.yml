@@ -24,11 +24,14 @@ jobs:
       - run: npm install --no-save --no-package-lock playwright@1.48.2
       - run: npx playwright install --with-deps chromium
       - run: node update/snap_picks.mjs
+      - name: betting board (owner's private picks page)
+        run: python3 update/bets_snap.py
+        continue-on-error: true
       - name: commit
         run: |
           git config user.name "model-picks[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add dist/picks.json
+          git add dist/picks.json bets
           if git diff --cached --quiet; then echo "no changes"; exit 0; fi
           git commit -q -m "Model picks $(date -u +%Y-%m-%dT%H:%MZ)"
           for i in 1 2 3 4 5; do git pull -q --rebase origin main && git push -q && exit 0; sleep 20; done

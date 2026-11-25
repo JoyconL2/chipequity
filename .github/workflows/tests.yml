@@ -1,7 +1,7 @@
 name: tests
 on:
   push:
-    paths-ignore: ["dist/picks.json"]     # the hourly model-picks commits
+    paths-ignore: ["dist/picks.json", "bets/**"]     # the hourly model-picks commits
   pull_request:
 jobs:
   test:
