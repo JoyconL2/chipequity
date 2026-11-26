@@ -1,0 +1,29 @@
+name: y03 season check
+# one-off: rebuild this season with the best-at-both inputs and keep the intermediate files (no commit)
+on:
+  push:
+    branches: [y03-season]
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: python -m pip install --quiet numpy pandas scipy requests
+      - run: python update/setup_pbp.py
+      - uses: actions/cache/restore@v4
+        with: { path: live, key: live-none, restore-keys: live- }
+      - run: mkdir -p update/tmp && python update/run.py 2>&1 | tail -40
+      - uses: actions/upload-artifact@v4
+        with:
+          name: y03
+          path: |
+            cepm/disp1.csv
+            cepm/disp3.csv
+            load/margin_attr_od.csv
+            load/po_lead.csv
+            load/tm_sums.csv
+            load/comp_share.csv
+            site/data.json
