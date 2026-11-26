@@ -24,6 +24,8 @@ d["left"] = d.PCTIMESTRING.map(secs)
 d["desc"] = (d.HOMEDESCRIPTION.fillna("") + " " + d.VISITORDESCRIPTION.fillna("")).str.upper()
 KEYS = ["fga", "pts", "placed_fga", "late_fga", "late_pts", "late_3a", "early_fga", "early_pts", "hc_early_fga", "hc_early_pts", "hc_mid_fga", "hc_mid_pts", "putback_fga", "putback_pts"]
 acc = {}
+import os
+SHOTS = [] if os.environ.get("SHOTS") else None          # SHOTS=<path>: also write every shot (game, period, clock, team, shooter, bucket, points)
 def add(pid, tid, **kv):
     r = acc.setdefault((int(pid), int(tid)), dict.fromkeys(KEYS, 0))
     for k, v in kv.items(): r[k] += v
@@ -52,6 +54,9 @@ for gid, g in d.groupby("GAME_ID", sort=False):
                     if kind in ("new", "start") and clock - el <= 10 and clock - el > 6: kv.update(hc_mid_fga=1, hc_mid_pts=pts)  # half court, 7-10 left
                     if kind == "oreb" and el <= 4: kv.update(putback_fga=1, putback_pts=pts)
             add(e.PLAYER1_ID, team, **kv); last_shot = team
+            if SHOTS is not None:
+                bk = "late" if kv.get("late_fga") else "early" if kv.get("early_fga") else "hc_early" if kv.get("hc_early_fga") else "hc_mid" if kv.get("hc_mid_fga") else "putback" if kv.get("putback_fga") else "other"
+                SHOTS.append((gid, e.PERIOD, left, team, int(e.PLAYER1_ID), bk, pts))
             if t == 1: off, reset_left, kind = other(team), left, "new"      # made: the other team's ball
             else: off = team
         elif t == 3:                                                         # a made last free throw ends the possession
@@ -62,6 +67,7 @@ for gid, g in d.groupby("GAME_ID", sort=False):
             last_shot = None
         elif t == 5:                                                         # turnover
             off, reset_left, kind = other(team), left, "new"
+if SHOTS is not None: pd.DataFrame(SHOTS, columns=["game_id", "period", "left", "team_id", "player_id", "bucket", "pts"]).to_csv(os.environ["SHOTS"], index=False)
 rows = [{"player_id": p, "team_id": tm, "season": season, **v} for (p, tm), v in acc.items()]
 pd.DataFrame(rows).to_csv(out, index=False)
 T = pd.DataFrame(rows).sum(numeric_only=True)
