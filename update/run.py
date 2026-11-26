@@ -137,7 +137,11 @@ def main():
         log("playoff play types added")
 
     # 4  features + priors for windows ending this season
-    run([PY, "update/features_season.py", os.path.join(wd, f"box_{CUR}_rs.csv"), CUR, "mymodel/features_rs.csv"])
+    relief = os.path.join(tmp, "relief.csv")
+    if glob.glob(os.path.join(wd, "pbp_rs", "*.json")):     # clock relief: team shot timing with him on vs off (clockbuild/relief.py)
+        run([PY, "clockbuild/relief.py", os.path.join(wd, "pbp_rs"), CUR, f"stints/stints_{CUR}_rs.csv", relief], out=os.path.join(tmp, "relief.log"))
+        log(open(os.path.join(tmp, "relief.log")).read().strip().splitlines()[-1])
+    run([PY, "update/features_season.py", os.path.join(wd, f"box_{CUR}_rs.csv"), CUR, "mymodel/features_rs.csv", relief])
     env = {"ONLY_END": CUR}
     run([PY, "box_prior.py"], cwd="cepm", env=env, out=os.path.join(tmp, "box_prior.log"))
     run([PY, "split_priors.py"], cwd="cepm", out=os.path.join(tmp, "split_priors.log"))
