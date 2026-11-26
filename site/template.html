@@ -333,6 +333,7 @@ td.sub{color:var(--ink-3);font-size:12px}
       <button role="tab" data-tab="league" id="tab-league">League</button>
       <button role="tab" data-tab="games" id="tab-games">Live Feed</button>
       <button role="tab" data-tab="method" id="tab-method">Method</button>
+      <button role="tab" data-tab="patch" id="tab-patch">Patch notes</button>
     </nav>
     <div class="seg" id="season-type" role="group" aria-label="Season type">
       <button id="st-reg" aria-pressed="true">Regular season</button>
@@ -389,6 +390,7 @@ td.sub{color:var(--ink-3);font-size:12px}
   </section>
 
   <section class="panel" id="p-method" hidden><div id="me-out"></div></section>
+  <section class="panel" id="p-patch" hidden><div id="pn-out"></div></section>
 
   <section class="panel" id="p-classic" hidden><div id="cl-out"></div></section>
 
@@ -3281,10 +3283,51 @@ function renderMethod(){
 function openMethod(sec){ show("method"); setTimeout(()=>{ const t = document.getElementById("m-" + (sec||"what")); if (t) t.scrollIntoView({block:"start"}); else window.scrollTo({top:0}); }, 30); }
 document.addEventListener("click", e => { const a = e.target.closest("[data-method]"); if (!a) return; e.preventDefault(); openMethod(a.dataset.method); });
 
+/* ---------------- patch notes ---------------- */
+const PATCH_VERSION = "1.1";
+function renderPatch(){
+  const out = document.getElementById("pn-out"); if (out.dataset.done) return; out.dataset.done = 1;
+  const row = (a, b, c) => `<tr><td>${a}</td><td>${b}</td><td>${c}</td></tr>`;
+  out.innerHTML = `<div class="method">
+  <div class="box"><h2>Patch notes <small>what changed in Chip Equity, version by version</small></h2>
+    <p>Current version: <b>${PATCH_VERSION}</b>. Every change is tested on seasons the model didn't see before it ships; a change that makes predictions worse doesn't go in, whoever it helps or hurts.</p></div>
+  <div class="box" id="pn-1-1"><h2>1.1 <small>November 26, 2026</small></h2>
+    <h3>What's new</h3>
+    <ul>
+      <li><b>Clock relief.</b> The box-score part of the model now reads the game clock: how a team's shot timing changes with a player on the floor vs off. More shots in transition and early in half-court possessions (10+ seconds left on the shot clock) is credited; fewer forced late-clock shots too. Players with fewer than 300 team shots on or off the floor get no adjustment.</li>
+      <li><b>Mid-range assists count.</b> Assists used to be valued only when they created a rim shot or a three. Every other assist, mostly mid-range, now counts at a quarter of a rim assist. Assists on threes keep their own weight.</li>
+      <li><b>Efficient volume.</b> Scoring above league efficiency now counts for more when it comes on a heavy load (shots and turnovers per 100 possessions). The same efficiency in a small role counts as before.</li>
+      <li><b>This season gets the same treatment.</b> The clock reading runs on NBA.com's live play-by-play every day. Checked on 2024-25 against the archived play-by-play, the two agree almost exactly (correlation above 0.99).</li>
+    </ul>
+    <h3>Why</h3>
+    <p>Out of sample, the box-score model's error on offense drops 2.8% (1.7% overall), and it now explains about 51% of 3-year plus-minus, up from 50%. Ten versions of these ideas were tested; this was the most accurate one. Versions that read half-court efficiency with a player on vs off the floor looked far better, but they partly grade themselves (that input comes from the same possessions the ratings do), so they were left out.</p>
+    <h3>How history was updated</h3>
+    <p>Stored ratings for 1996-97 to 2025-26 weren't rebuilt from scratch. Every window was fit twice with the same code, once with the old inputs and once with the new, and the difference was added to the stored ratings. Nothing else about history moved.</p>
+    <h3>What moved</h3>
+    <p>Most single seasons moved by about 0.1. The biggest changes, before → after:</p>
+    <div class="mscroll"><table><thead><tr><th>Season</th><th>Before</th><th>After</th></tr></thead><tbody>
+      ${row("Stephen Curry 2015-16", "+8.31", "+9.12")}
+      ${row("LeBron James 2009-10", "+8.54", "+8.89")}
+      ${row("James Harden 2018-19", "+5.82", "+6.21")}
+      ${row("LeBron James 2008-09", "+9.80", "+9.48")}
+      ${row("LeBron James 2016-17", "+8.83", "+8.53")}
+      ${row("Michael Jordan 2001-02", "+1.03", "−0.09")}
+    </tbody></table></div>
+    <ul>
+      <li>The top three single seasons are unchanged: LeBron 2008-09 (+9.48), Jokić 2024-25 (+9.29) and Curry 2016-17 (+9.23). Shai Gilgeous-Alexander's 2024-25 moves up to 5th.</li>
+      <li>Among all-time peaks (one per player), Harden moves from 25th to 19th, Westbrook from 23rd to 26th and Dončić from 29th to 31st.</li>
+      <li>This season, Victor Wembanyama goes from +7.70 to +8.45 and stays first.</li>
+    </ul>
+  </div>
+  <div class="box" id="pn-1-0"><h2>1.0 <small>first release</small></h2>
+    <p>Chip Equity as described on the Method page: a regression on every lineup stint since 1996-97 with a box-score starting point, blended with lead margin and scaled by meaningful minutes.</p>
+  </div>
+  </div>`;
+}
 /* ---------------- tabs + season type ---------------- */
 const tabs = [...document.querySelectorAll("nav.tabs button")];
 const renderLiveFeed = () => { renderGames(); if (!gcGame) renderSeason(); };
-const renderers = {classic:renderClassic, wowy:renderWowy, home:renderHome, players:renderPlayer, compare:renderCompare, matchup:renderMatchup, method:renderMethod, leaders:renderLeaders, teams:renderTeams, league:renderLeague, games:renderLiveFeed};
+const renderers = {classic:renderClassic, wowy:renderWowy, home:renderHome, players:renderPlayer, compare:renderCompare, matchup:renderMatchup, method:renderMethod, patch:renderPatch, leaders:renderLeaders, teams:renderTeams, league:renderLeague, games:renderLiveFeed};
 let current = "players";
 const stSeg = document.getElementById("season-type");
 document.addEventListener("click", e => {          // any team link opens that team's page for that season
@@ -3351,7 +3394,7 @@ function show(tab){
   current = tab;
   tabs.forEach(b=>b.setAttribute("aria-selected", b.dataset.tab===tab));
   document.querySelectorAll(".panel").forEach(p=>p.hidden = p.id!=="p-"+tab);
-  stSeg.style.visibility = (tab==="classic" || tab==="home" || tab==="matchup" || tab==="method" || tab==="league" || tab==="games" || tab==="wowy") ? "hidden" : "visible";
+  stSeg.style.visibility = (tab==="classic" || tab==="home" || tab==="matchup" || tab==="method" || tab==="patch" || tab==="league" || tab==="games" || tab==="wowy") ? "hidden" : "visible";
   stSeg.hidden = false; document.getElementById("st-both").hidden = true;   // leaders may swap these back
   if (tab!=="games") clearTimeout(gmTimer);
   renderers[tab]();
