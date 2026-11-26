@@ -1378,9 +1378,9 @@ function scAllTime(){
 // ---- stretch Chip Equity: Chip Equity over any run of games inside a regular season ----
 // One fit over the whole season's lineup data (dist/stretch/<season>.bin, update/stretch_pack.py): every player gets a
 // base offense/defense rating, held loosely to his season Chip Equity, plus a change for each stretch that applies only to
-// possessions inside it and is pulled toward zero, so a short or noisy stretch barely moves. Stretch Chip Equity = his
-// season Chip Equity + that change. Several stretches (e.g. every month) are fit together in one pass.
-const STRETCH = { cache: new Map(), LAM_BASE: 100, LAM_DEV: 3000, LAM_HOME: 1 };
+// possessions inside it, only lightly held (enough to keep a few games solvable), so stretches swing with what happened.
+// Stretch Chip Equity = his season Chip Equity + that change. Several stretches (e.g. every month) are fit together in one pass.
+const STRETCH = { cache: new Map(), LAM_BASE: 100, LAM_DEV: 30, LAM_HOME: 1 };     // LAM_DEV: barely held to the season (raw stretches by request)
 STRETCH.load = function(s){
   if (this.cache.has(s)) return this.cache.get(s);
   const pr = fetch(`stretch/${S[s]}.bin`).then(r => { if (!r.ok) throw new Error("no stretch data for " + S[s]); return r.arrayBuffer(); }).then(buf => {
@@ -1494,18 +1494,23 @@ function stretchBox(k, s){
     const t = tiles(STRETCH.solve(F, [g])[0], g), few = t.pos < 300;
     const tile = (v, l, c = "") => `<div class="tile ${c}"><div class="v">${v}</div><div class="k">${l}</div></div>`;
     return `<div class="tiles">${tile(pm(t.r), `Stretch Chip Equity · ${vs(t.dv)}`, "hero")}${tile(`${pm(t.o)} / ${pm(t.d)}`, "Offense / defense")}${tile(`${t.games} · ${Math.round(t.pos).toLocaleString()}`, "Games · possessions")}${tile(t.net == null ? "–" : pm(t.net), "Team net rating with him on")}</div>
-      <p class="note" style="margin-bottom:0">${esc(lbl)}: ${dayLbl(F.day[g[0]])} – ${dayLbl(F.day[g[g.length - 1]])}.${few ? " Short stretch: with this few possessions it stays close to his season number." : ""}</p>`;
+      <p class="note" style="margin-bottom:0">${esc(lbl)}: ${dayLbl(F.day[g[0]])} – ${dayLbl(F.day[g[g.length - 1]])}.${few ? " Short stretch: this few possessions swings a lot from game to game." : ""}</p>`;
   };
   const months = () => {
     const by = []; mine.forEach(g => { const d = new Date(D0 + F.day[g] * 864e5), key = d.getUTCFullYear() * 12 + d.getUTCMonth(); const last = by[by.length - 1];
       if (last && last.key === key) last.g.push(g); else by.push({key, g: [g]}); });
     for (let j = 0; j < by.length; j++) if (by[j].g.length < 4 && by.length > 1){ const t = j + 1 < by.length ? j + 1 : j - 1; by[t].g = j < t ? by[j].g.concat(by[t].g) : by[t].g.concat(by[j].g); by[t].merged = (by[t].merged || []).concat(by[j].key, by[j].merged || []); by.splice(j, 1); j--; }
     const mn = key => new Date(Date.UTC(Math.floor(key / 12), key % 12, 1)).toLocaleDateString(undefined, {month: "short", timeZone: "UTC"});
-    const sol = STRETCH.solve(F, by.map(x => x.g));
+    const sol = STRETCH.solve(F, by.map(x => x.g)), i = F.local.get(k);
+    // every game is in some month, so the months also soak up the season's level: re-center them on his season (his
+    // possession-weighted average of the months = his season Chip Equity), keeping the swings between months
+    const w = by.map(x => STRETCH.onCourt(F, k, x.g).pos), W = w.reduce((a, b) => a + b, 0) || 1;
+    const mo = sol.reduce((a, v, j) => a + v.o[i] * w[j], 0) / W, md = sol.reduce((a, v, j) => a + v.d[i] * w[j], 0) / W;
+    sol.forEach(v => { v.o[i] -= mo; v.d[i] -= md; });
     const rows = by.map((x, j) => { const t = tiles(sol[j], x.g), ks = [x.key, ...(x.merged || [])].sort((a, b) => a - b);
       return `<tr><td class="l">${ks.length > 1 ? `${mn(ks[0])}–${mn(ks[ks.length - 1])}` : mn(ks[0])}</td><td>${t.games}</td><td>${Math.round(t.pos).toLocaleString()}</td><td class="nw"><strong>${pm(t.r)}</strong></td><td class="nw">${vs(t.dv, 1)}</td><td>${pm(t.o)}</td><td>${pm(t.d)}</td><td>${t.net == null ? "–" : pm(t.net)}</td></tr>`; }).join("");
     return `<div class="tscroll"><table><thead><tr><th class="l">Month</th><th>G</th><th>Poss</th><th>Chip Equity</th><th title="change from his season Chip Equity">vs season</th><th>Off</th><th>Def</th><th title="team net rating per 100 with him on the floor">On-court net</th></tr></thead><tbody>${rows}</tbody></table></div>
-      <p class="note" style="margin-bottom:0">Months with fewer than 4 of his games are folded into the next one. All months are fit together, so they average back to his season.</p>`;
+      <p class="note" style="margin-bottom:0">Months with fewer than 4 of his games are folded into the next one. Months are centered on his season, so they average back to it.</p>`;
   };
   const run = which => {
     sel = which; const out = () => box.querySelector("#st-out");
@@ -3185,7 +3190,7 @@ function renderMethod(){
     <h3 id="m-stretch">Stretches inside a season</h3>
     <ul><li><b>Stretch Chip Equity</b> (on each player's season page) is Chip Equity over any run of games: his last 10, before or after the All-Star break, a month, or any dates you pick.</li>
       <li>It's worked out in your browser from that season's lineup data. One fit covers the whole season: each player gets a base rating held close to his season Chip Equity, plus a change for the stretch that only counts possessions inside it.</li>
-      <li>That change is pulled toward zero, so a stretch only moves away from his season number when the lineups in it really were better or worse. A 10-game stretch moves a little, a half season can move a point or more. Months are fit together and average back to the season.</li>
+      <li>That change is only lightly held back, so a stretch shows what happened in it: a 10-game run can move several points. That also means short stretches are noisy. Testing on two seasons, a player's last 30 days didn't predict his next month better than his season number, so treat a hot or cold stretch as a description, not a forecast.</li>
       <li>Garbage time is left out, as everywhere else.</li></ul></div>
 
   <div class="box" id="m-po"><h2>4. Playoffs</h2>
