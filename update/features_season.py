@@ -27,6 +27,8 @@ with tempfile.TemporaryDirectory() as d:
 old = pd.read_csv(feat)
 # assists: rim assists plus a quarter of the credit for the rest (mostly mid-range); threes on their own
 new["o_ast_rim_mid"] = new.o_ast_rim + 0.25 * (new.o_ast - new.o_ast_rim - new.o_ast_three)
+# efficient volume: scoring above league efficiency times usage (shots + turnovers per 100, vs league)
+new["o_eff_x_use"] = new.o_pts_added * (new.o_tsa + new.o_tov_live + new.o_tov_dead) / 10
 # clock relief (clockbuild/relief.py); players under 300 shots on or off the floor get 0, as in the history
 RELIEF = ["o_relief_late", "o_relief_early", "o_relief_hc_early"]
 if len(sys.argv) > 4 and os.path.exists(sys.argv[4]):
