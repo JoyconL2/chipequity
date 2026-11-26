@@ -72,28 +72,34 @@ The prior is a linear model of box-score stats, learned from pure plus-minus (3-
 
 Inputs x are per 100 possessions and relative to that season's league average, averaged over the window by possessions:
 - Scoring: points added above league efficiency, true-shooting attempts, shot diet (rim, mid-range, three, free throws), unassisted points (self-creation).
-- Passing: assists, plus assists that created rim shots and threes counted separately (assists valued by the shot they create).
+- Passing: assists valued by the shot they create: assists on threes, and assists on rim shots with every other assist (mostly mid-range) counted at a quarter of a rim assist.
+- Efficient volume: points added above league efficiency times usage (shots and turnovers per 100, vs league), so scoring efficiently on a heavy load counts for more than the same efficiency in a small role.
+- Clock relief: how his team's shot timing changes with him on the floor vs off (share of shots in transition, in the half court with 10+ seconds left, and late in the shot clock), from the play-by-play game clock. Players with fewer than 300 team shots on or off get 0.
 - Possession: live-ball and dead-ball turnovers separately, fouls drawn, offensive fouls.
 - Rebounding: offensive and defensive rebounds as separate inputs.
 - Defense: steals, blocks, fouls, charges drawn.
 - Role: minutes per game.
 
-Coefficients come from a ridge fit weighted by √possessions, with its own penalty (30) chosen by out-of-sample error. To avoid leakage, the prior for any window is predicted by a model trained only on windows that share no season with it. Out of sample, the box model explains about 50% of 3-year RAPM. Some learned weights (points per 100 per unit):
+Coefficients come from a ridge fit weighted by √possessions, with its own penalty (30) chosen by out-of-sample error. To avoid leakage, the prior for any window is predicted by a model trained only on windows that share no season with it. Out of sample, the box model explains about 51% of 3-year RAPM. Some learned weights (points per 100 per unit):
 
     Input (per 100)                        Offense   Defense
     ------------------------------------   -------   -------
-    Points added above league efficiency   +0.50     +0.07
-    Assist creating a rim shot             +0.42     +0.12
-    Assist creating a three                +0.29     +0.30
-    Offensive rebound                      +0.34     −0.19
-    Live-ball turnover                     −0.50     −0.47
-    Dead-ball turnover                     −0.86     +0.03
+    Points added above league efficiency   +0.48     +0.05
+    Efficient volume (per 10 units)        +0.14     +0.07
+    Assist on a rim shot (mid-range at ¼)  +0.39     +0.03
+    Assist creating a three                +0.33     +0.27
+    Clock relief, transition share (1 pt)  +0.06     +0.08
+    Offensive rebound                      +0.36     −0.18
+    Live-ball turnover                     −0.51     −0.48
+    Dead-ball turnover                     −0.87     −0.02
     Defensive rebound                      +0.00     +0.14
-    Steal                                  +0.24     +0.88
-    Block                                  −0.07     +0.51
-    Charge drawn                           +0.30     +0.61
+    Steal                                  +0.20     +0.82
+    Block                                  −0.09     +0.49
+    Charge drawn                           +0.35     +0.66
 
 1996-97 to 1999-00 box stats are rebuilt from play-by-play.
+
+Clock relief, the mid-range assist credit and efficient volume were added in November 2026. The stored history (1996-97 to 2025-26) took the change as a difference: every window was fit twice with the same code, once with the old inputs and once with the new, and the gap was added to the stored ratings, so nothing else about history moved.
 
 6. WINDOWS, PEAKS AND DECADES
 =============================
