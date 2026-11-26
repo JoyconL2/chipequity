@@ -3301,21 +3301,23 @@ function renderPatch(){
     </ul>
     <h3>Why</h3>
     <p>Out of sample, the box-score model's error on offense drops 2.8% (1.7% overall), and it now explains about 51% of 3-year plus-minus, up from 50%. Ten versions of these ideas were tested; this was the most accurate one. Versions that read half-court efficiency with a player on vs off the floor looked far better, but they partly grade themselves (that input comes from the same possessions the ratings do), so they were left out.</p>
+    <p>End to end, full Chip Equity predicts next season's team results about as well as 1.0 did (the difference is within noise), so this patch mainly changes how credit is shared out, not how accurate the totals are.</p>
     <h3>How history was updated</h3>
     <p>Stored ratings for 1996-97 to 2025-26 weren't rebuilt from scratch. Every window was fit twice with the same code, once with the old inputs and once with the new, and the difference was added to the stored ratings. Nothing else about history moved.</p>
+    <p class="note"><b>Correction, November 26:</b> the first 1.1 build stored each past season's total as offense plus defense instead of the total fit, which moved many past ratings by more than this patch does. It was fixed the same day; the numbers on this page are the corrected ones.</p>
     <h3>What moved</h3>
-    <p>Most single seasons moved by about 0.1. The biggest changes, before → after:</p>
+    <p>Most single seasons moved by less than 0.1. The biggest changes, before → after:</p>
     <div class="mscroll"><table><thead><tr><th>Season</th><th>Before</th><th>After</th></tr></thead><tbody>
-      ${row("Stephen Curry 2015-16", "+8.31", "+9.12")}
-      ${row("LeBron James 2009-10", "+8.54", "+8.89")}
-      ${row("James Harden 2018-19", "+5.82", "+6.21")}
-      ${row("LeBron James 2008-09", "+9.80", "+9.48")}
-      ${row("LeBron James 2016-17", "+8.83", "+8.53")}
-      ${row("Michael Jordan 2001-02", "+1.03", "−0.09")}
+      ${row("Stephen Curry 2015-16", "+8.31", "+9.04")}
+      ${row("LeBron James 2009-10", "+8.54", "+9.17")}
+      ${row("Kevin Durant 2013-14", "+6.36", "+6.95")}
+      ${row("Giannis Antetokounmpo 2021-22", "+6.56", "+7.14")}
+      ${row("LeBron James 2008-09", "+9.80", "+10.06")}
+      ${row("Michael Jordan 2001-02", "+1.03", "+0.09")}
     </tbody></table></div>
     <ul>
-      <li>The top three single seasons are unchanged: LeBron 2008-09 (+9.48), Jokić 2024-25 (+9.29) and Curry 2016-17 (+9.23). Shai Gilgeous-Alexander's 2024-25 moves up to 5th.</li>
-      <li>Among all-time peaks (one per player), Harden moves from 25th to 19th, Westbrook from 23rd to 26th and Dončić from 29th to 31st.</li>
+      <li>The top three single seasons are unchanged: LeBron 2008-09 (+10.06), Jokić 2024-25 (+9.41) and Curry 2016-17 (+9.19). Shai Gilgeous-Alexander's 2024-25 moves up to 5th.</li>
+      <li>Among all-time peaks (one per player), Harden moves from 25th to 22nd, Westbrook from 23rd to 26th, and Dončić stays 29th.</li>
       <li>This season, Victor Wembanyama goes from +7.70 to +8.45 and stays first.</li>
     </ul>
   </div>
