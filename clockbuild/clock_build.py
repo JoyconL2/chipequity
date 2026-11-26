@@ -4,7 +4,9 @@ For each field-goal attempt: seconds since the shot clock last reset (start of t
 read from the game clock. A shot is
   late   when 6 or fewer seconds were left on the shot clock (24-second clock; after an offensive rebound it resets
          to 24, or to 14 from 2018-19 on),
-  early  when it came within 7 seconds of a new possession (not after an offensive rebound): mostly transition.
+  early  when it came within 7 seconds of a new possession (not after an offensive rebound): mostly transition,
+  hc_early  a half-court shot (7+ seconds into a new possession) with more than 10 seconds left on the shot clock,
+  hc_mid    a half-court shot with 7-10 seconds left (late is 6 or fewer), putback  within 4 seconds of an offensive rebound.
 Possessions that started with less than 24 seconds on the game clock are skipped (the game clock runs out first), and
 so are attempts that can't be placed in a possession.
 Output per player and team: fga, pts (field-goal points), placed_fga, late_fga, late_pts, late_3a, early_fga, early_pts.
@@ -20,7 +22,7 @@ def secs(s):
     except Exception: return np.nan
 d["left"] = d.PCTIMESTRING.map(secs)
 d["desc"] = (d.HOMEDESCRIPTION.fillna("") + " " + d.VISITORDESCRIPTION.fillna("")).str.upper()
-KEYS = ["fga", "pts", "placed_fga", "late_fga", "late_pts", "late_3a", "early_fga", "early_pts"]
+KEYS = ["fga", "pts", "placed_fga", "late_fga", "late_pts", "late_3a", "early_fga", "early_pts", "hc_early_fga", "hc_early_pts", "hc_mid_fga", "hc_mid_pts", "putback_fga", "putback_pts"]
 acc = {}
 def add(pid, tid, **kv):
     r = acc.setdefault((int(pid), int(tid)), dict.fromkeys(KEYS, 0))
@@ -46,6 +48,9 @@ for gid, g in d.groupby("GAME_ID", sort=False):
                     kv["placed_fga"] = 1
                     if clock - el <= 6: kv.update(late_fga=1, late_pts=pts, late_3a=int("3PT" in e.desc))
                     if kind in ("new", "start") and el <= 7: kv.update(early_fga=1, early_pts=pts)
+                    if kind in ("new", "start") and 7 < el and clock - el > 10: kv.update(hc_early_fga=1, hc_early_pts=pts)     # half court, 10+ left
+                    if kind in ("new", "start") and clock - el <= 10 and clock - el > 6: kv.update(hc_mid_fga=1, hc_mid_pts=pts)  # half court, 7-10 left
+                    if kind == "oreb" and el <= 4: kv.update(putback_fga=1, putback_pts=pts)
             add(e.PLAYER1_ID, team, **kv); last_shot = team
             if t == 1: off, reset_left, kind = other(team), left, "new"      # made: the other team's ball
             else: off = team
