@@ -6,7 +6,7 @@ Exported 2026-10-18
 
 Chip Equity is how many points per 100 possessions a player is worth to his team over an average player, counting how much of the game he actually carries. It has three parts:
 
-    Chip Equity = (0.65 × Regression + 0.35 × LeadMargin) × CompShare
+    Chip Equity = (0.60 × Regression + 0.40 × LeadMargin) × CompShare
 - Regression: a regularized adjusted plus-minus (RAPM). It looks at the score while each player is on the floor, accounts for every teammate and opponent sharing the floor with him, and solves for everyone at once. Where the on-court evidence is thin, it leans on a box-score estimate learned from the plus-minus data itself instead of shrinking the player to zero. Sections 3 to 5 describe it.
 - LeadMargin: his team's scoring margin per 100 possessions in the stretches where he is the best player on the floor, garbage time left out. Playoff stretches count double and are adjusted for how good the opponent was (section 6).
 - CompShare: the share of his team's competitive minutes he played, in the games he played (section 6).
@@ -73,6 +73,7 @@ The prior is a linear model of box-score stats, learned from pure plus-minus (3-
 Inputs x are per 100 possessions and relative to that season's league average, averaged over the window by possessions:
 - Scoring: points added above league efficiency, true-shooting attempts, shot diet (rim, mid-range, three, free throws), unassisted points (self-creation).
 - Passing: assists valued by the shot they create: assists on threes, and assists on rim shots with every other assist (mostly mid-range) counted at a quarter of a rim assist.
+- Self-creation at volume: unassisted points times usage (shots and turnovers per 100, vs league).
 - Efficient volume: points added above league efficiency times usage (shots and turnovers per 100, vs league), so scoring efficiently on a heavy load counts for more than the same efficiency in a small role.
 - Clock relief: how his team's shot timing changes with him on the floor vs off (share of shots in transition, in the half court with 10+ seconds left, and late in the shot clock), from the play-by-play game clock. Players with fewer than 300 team shots on or off get 0.
 - Possession: live-ball and dead-ball turnovers separately, fouls drawn, offensive fouls.
@@ -85,21 +86,21 @@ Coefficients come from a ridge fit weighted by √possessions, with its own pena
     Input (per 100)                        Offense   Defense
     ------------------------------------   -------   -------
     Points added above league efficiency   +0.48     +0.05
-    Efficient volume (per 10 units)        +0.14     +0.07
-    Assist on a rim shot (mid-range at ¼)  +0.39     +0.03
-    Assist creating a three                +0.33     +0.27
+    Efficient volume (per 10 units)        +0.12     +0.06
+    Assist on a rim shot (mid-range at ¼)  +0.41     +0.04
+    Assist creating a three                +0.34     +0.27
     Clock relief, transition share (1 pt)  +0.06     +0.08
     Offensive rebound                      +0.36     −0.18
-    Live-ball turnover                     −0.51     −0.48
-    Dead-ball turnover                     −0.87     −0.02
+    Live-ball turnover                     −0.52     −0.48
+    Dead-ball turnover                     −0.83     −0.00
     Defensive rebound                      +0.00     +0.14
-    Steal                                  +0.20     +0.82
+    Steal                                  +0.19     +0.82
     Block                                  −0.09     +0.49
-    Charge drawn                           +0.35     +0.66
+    Charge drawn                           +0.32     +0.65
 
 1996-97 to 1999-00 box stats are rebuilt from play-by-play.
 
-Clock relief, the mid-range assist credit and efficient volume were added in November 2026. The stored history (1996-97 to 2025-26) took the change as a difference: every window was fit twice with the same code, once with the old inputs and once with the new, and the gap was added to the stored ratings, so nothing else about history moved.
+Clock relief, the mid-range assist credit, efficient volume and self-creation at volume were added in November 2026 (1.1). The stored history (1996-97 to 2025-26) took the change as a difference: every window was fit twice with the same code, once with the old inputs and once with the new, and the gap was added to the stored ratings. The new weights for combining regression, lead margin, minutes and playoffs apply to every season.
 
 6. WINDOWS, PEAKS AND DECADES
 =============================
@@ -115,15 +116,16 @@ From the regression to Chip Equity
 
 The regression is a rate: how much a player helps per 100 possessions while he's on the floor. Chip Equity also counts how much of his team's winning he carries, by blending in the margin his team runs up when he's the main man and scaling by the meaningful minutes he plays:
 
-    Chip Equity = (0.65 × Regression + 0.35 × LeadMargin) × CompShare
-- LeadMargin: his team's scoring margin per 100 possessions in the stretches where he is the best player on the floor, garbage time left out, pulled toward zero for small samples (n / (n + 3,000) lead possessions). A player who blows teams out as the main man gets credit for the blowouts; a teammate riding along doesn't, because the star was the lead in those minutes. It is split into offense and defense against the league average.
+    Chip Equity = (0.60 × Regression + 0.40 × LeadMargin) × CompShare
+- LeadMargin: his team's scoring margin per 100 possessions in the stretches where he is the best player on the floor, garbage time left out, pulled toward zero for small samples (n / (n + 6,000) lead possessions). A player who blows teams out as the main man gets credit for the blowouts; a teammate riding along doesn't, because the star was the lead in those minutes. It is split into offense and defense against the league average.
 - Who counts as the lead: the player with the highest 3-year regression on the floor (the window ending that season). An earlier version used the single-season number, which let a role player having a hot year take the star's credit in the minutes they shared (Lamar Odom over Kobe Bryant in 2008-09). The steadier pick kept the same predictive accuracy. When two players are close, the one running the offense breaks the tie: the score is the 3-year rating plus 2 × (his usage rate ÷ the league's − 1). Without it, a co-star whose 3-year number lagged could take the lead from the player actually running the team (Kyrie Irving over Luka Dončić in 2023-24). Usage only decides who counts as the lead; it adds nothing to anyone's value.
 - Teammate adjustment: lead margin is the whole lineup's result, so a star on a deep team would get credit that belongs partly to his teammates, and a star carrying a thin roster would be marked down for them. In his lead stretches, half of his four teammates' 3-year offensive and defensive ratings (measured against the season's average lineup) is taken back out. A full adjustment overcorrected; half held up best on the playoff and next-season tests.
 - Playoffs and opponents: his playoff stretches as the lead count too, each playoff possession worth two regular-season ones, and the margin is adjusted for the opponent: the opponent team's regular-season offense and defense (against the league, garbage time out) are added back. Going +5 against a +6 team counts as +11; the same +5 against an average team counts as +5. Playoff opponents average about +4.8 per 100, so deep runs against good teams count for the most. Adjusting for the five opponents on the floor instead overcounted, so the team number is used.
 - CompShare: the share of his team's competitive minutes he played, in the games he played. Garbage time is left out, so a star who sits the fourth quarter of a 30-point win isn't penalized for it.
-- Single seasons are steadied: 40% of both the regression and the lead margin come from the three-season window ending that year (the first full window, 1996-99, for 1996-97 and 1997-98), so one hot season counts for less than a sustained peak. Single-season regressions use lighter shrinkage for players with fewer than 3,000 possessions.
+- Single seasons are steadied: 60% of both the regression and the lead margin come from the three-season window ending that year (the first full window, 1996-99, for 1996-97 and 1997-98), so one hot season counts for less than a sustained peak. A season with playoffs then blends in his playoff-only Chip Equity with weight 0.3 × n / (n + 500), n = his playoff possessions. Single-season regressions use lighter shrinkage for players with fewer than 3,000 possessions.
 - Multi-year windows (2 to 5 years) and decades use the same formula with every input pooled over the window's seasons. The playoff model uses it too, with regular-season-only inputs (section 10).
-- How it was chosen. Versions were judged on prediction: playoff series and next season's team results. Load built from usage, stint length or on-ball share rewarded high-volume players whose teams didn't win more with them; plain on-court margin rewarded great teammates; lead margin fixed both. This version picks 76.2% of past playoff series (log loss 0.4941) and misses next season's team wins by 6.9 on average. Counting opponent-adjusted playoff stretches and the teammate adjustment raised the playoff picks from 75.1%.
+- 1.1 (November 2026): 100 variants were scored on predicting next season's team net rating (863 team-seasons, 1997-98 to 2025-26; a second check on 2012-13 onward fit only on earlier seasons). 1.1's average miss is 2.99 points per 100 (1.0: 3.00); on 2012-13 onward both miss by 3.00.
+- How it was chosen (1.0). Versions were judged on prediction: playoff series and next season's team results. Load built from usage, stint length or on-ball share rewarded high-volume players whose teams didn't win more with them; plain on-court margin rewarded great teammates; lead margin fixed both. This version picks 76.2% of past playoff series (log loss 0.4941) and misses next season's team wins by 6.9 on average. Counting opponent-adjusted playoff stretches and the teammate adjustment raised the playoff picks from 75.1%.
 - The single-season leaderboard starts at 1997-98. 1996-97 is the first season in the data, with nothing earlier to check it against, and it ran noticeably high; its numbers still show everywhere else.
 - The headline all-time number is each player's best 5-year Chip Equity (best 3-year for shorter careers).
 
@@ -136,7 +138,7 @@ The regression is a rate: how much a player helps per 100 possessions while he's
 
 where n_i is his playoff possessions. Players need 150 possessions for their own column, and lists show 300 or more. Career playoff Chip Equity is the possession-weighted average over every postseason, shown for 2,000+ playoff possessions.
 
-The playoff number uses the same recipe as the main stat: 0.65 × this playoff-only fit + 0.35 × his opponent-adjusted playoff lead margin (pulled toward zero by n / (n + 1,000) lead possessions), times his share of his team's competitive playoff minutes. A run against strong opponents counts for more than the same margin against weak ones.
+The playoff number uses the same recipe as the main stat: 0.60 × this playoff-only fit + 0.40 × his opponent-adjusted playoff lead margin (pulled toward zero by n / (n + 1,000) lead possessions), times his share of his team's competitive playoff minutes. A run against strong opponents counts for more than the same margin against weak ones.
 
 8. READING THE NUMBERS
 ======================
