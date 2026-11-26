@@ -3317,12 +3317,18 @@ function renderPatch(){
     <h3>How history was updated</h3>
     <p>Stored ratings for 1996-97 to 2025-26 weren't rebuilt from scratch. Every window was fit twice with the same code, once with the old box-score inputs and once with the new, and the difference was added to the stored ratings; the new way of combining the parts then applies to every season.</p>
     <h3>What moved</h3>
-    <p data-pn="moved">The biggest changes in single seasons, before → after:</p>
+    <p data-pn="moved">A typical single season moved by about 0.17. Seasons with a short sample or an unusually strong lead margin moved the most, since both are now pulled harder toward the three-year number. The biggest changes among full seasons, before → after:</p>
     <div class="mscroll"><table><thead><tr><th>Season</th><th>Before</th><th>After</th></tr></thead><tbody>
-
+      ${row("Giannis Antetokounmpo 2022-23", "+4.14", "+5.04")}
+      ${row("LeBron James 2017-18", "+5.42", "+6.11")}
+      ${row("Lamar Odom 2008-09", "+5.32", "+4.08")}
+      ${row("Chris Paul 2008-09", "+7.12", "+5.93")}
+      ${row("Kevin Garnett 2002-03", "+7.21", "+6.07")}
+      ${row("Dirk Nowitzki 2010-11", "+7.21", "+6.16")}
     </tbody></table></div>
     <ul>
-
+      <li>The top three single seasons keep their order: LeBron James 2008-09 (+9.14), Nikola Jokić 2024-25 (+8.77) and Stephen Curry 2016-17 (+8.71). The very top runs about half a point lower than before because single seasons are steadied more.</li>
+      <li>This season, Victor Wembanyama leads at about +8.1.</li>
     </ul>
   </div>
   <div class="box" id="pn-1-0"><h2>1.0 <small>first release</small></h2>
