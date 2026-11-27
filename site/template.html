@@ -927,14 +927,7 @@ statOptions(plStat, CHART_KEYS, "RW2");
 segToggle(document.getElementById("pl-pg"), document.getElementById("pl-75"), m => { plMode = m; renderPlayer(); });
 /* ---------------- PLAYOFF SERIES LINES + TITLE RUNS ---------------- */
 // psl row: [k, series, gp, sec, pts, reb, ast, stl, blk, tov, fga, fta, poss, onOffPoss, onPts, team]
-const PSL = DATA.psl || [], PCTX = DATA.pctx || [];
-// playoff-only Chip Equity is shown on the regular-season scale: one multiplier for every postseason, so order and ranks never change.
-// It is the regular-season spread over the playoff spread for the same players in the same seasons (about 1.37).
-const PO_SCALE = (() => { const rs = new Map(); for (const v of (DATA.rw || {rows: []}).rows) if (v[2] === 1) rs.set(v[0]*64 + v[1], v[5]);
-  const a = [], b = []; for (const r of (DATA.pcepm || [])){ const x = rs.get(r[0]*64 + r[1]); if (x != null){ a.push(r[2]); b.push(x); } }
-  const sd = l => { const m = l.reduce((s, v) => s + v, 0)/l.length; return Math.sqrt(l.reduce((s, v) => s + (v - m)*(v - m), 0)/l.length); };
-  const f = a.length > 50 ? sd(b)/sd(a) : 1; return isFinite(f) && f > 0 ? f : 1; })();
-const PCEPM = (DATA.pcepm || []).map(r => { const q = r.slice(); q[2] = +(r[2]*PO_SCALE).toFixed(2); q[3] = +(r[3]*PO_SCALE).toFixed(1); q[4] = +(+q[2].toFixed(1) - q[3]).toFixed(1); return q; });   // defense = total - offense, so the shown parts add up
+const PSL = DATA.psl || [], PCTX = DATA.pctx || [], PCEPM = DATA.pcepm || [];
 // playoff-only Chip Equity per player-postseason (rank among that postseason's 300+ possession players) and per career
 const POC = (() => { const m = new Map(), nS = new Map(); for (const r of PCEPM) nS.set(r[1], (nS.get(r[1]) || 0) + 1);
   for (const r of PCEPM) m.set(r[0]*64 + r[1], {r:r[2], o:r[3], d:r[4], p:r[5], rank:r[6], n:nS.get(r[1]), s:r[1]});
@@ -1361,7 +1354,7 @@ function renderPlayer(){
     <div class="box"><h2>Peak &amp; decade impact <small>career-level · all-time ranks</small></h2>${peakTable(k)}
       <p class="mlink"><a href="#" data-method="what">What Chip Equity is and how it's calculated ›</a></p></div>
     <div class="box"><h2>${esc(STATS[plStat.value].label)}</h2>${(st0 => st0 && st0.rw ? `<div class="pl-cectl"><div class="seg sm" role="group" aria-label="Side of the ball">${[["r","Total"],["o","Offense"],["d","Defense"]].map(([q,l])=>`<button data-ceside="${q}" aria-pressed="${(st0.part||"r")===q}">${l}</button>`).join("")}</div><div class="seg sm" role="group" aria-label="Window">${[1,2,3,4,5].map(w=>`<button data-cew="${w}" aria-pressed="${st0.rw===w}">${w}-yr</button>`).join("")}</div></div>` : "")(STATS[plStat.value])}<div id="pl-chart"></div></div>
-    ${TYPE === 1 ? `<div class="box" style="margin-top:16px"><h2>Playoff Chip Equity by postseason <small>playoff possessions only · opponent-adjusted lead margin · on the regular-season scale</small></h2>${poTable(k)}</div>`
+    ${TYPE === 1 ? `<div class="box" style="margin-top:16px"><h2>Playoff Chip Equity by postseason <small>playoff possessions only · opponent-adjusted lead margin · points per 100 possessions</small></h2>${poTable(k)}</div>`
       : `<div class="box" style="margin-top:16px"><h2>Chip Equity by window <small>single-season (1-yr) and 2- to 5-year Chip Equity ending each season · click a season for its own page · regular season + playoffs · points per 100 possessions</small></h2>${rwTable(k)}</div>`}
     <div class="box"><h2>Season by season <small>click a season for its own page · ${typeName().toLowerCase()} · ${plMode==="p75"?"per 75 possessions":"per game"} · shooting splits are made / attempted · rTS = true shooting minus that season's league average</small></h2><div class="tscroll"><table class="box-t">
       <thead><tr><th>Season</th><th class="l">Team</th><th>Team W-L</th><th class="l">Playoffs</th><th>GP</th><th>MPG</th>${BOX_HEAD}<th>USG</th>${TYPE === 1 ? `<th title="Chip Equity on that postseason's playoff possessions only">Playoff Chip Equity</th><th>Off</th><th>Def</th>` : `<th title="Chip Equity fit on that season alone">1-yr Chip Equity</th><th>2-yr Chip Equity</th><th>3-yr Chip Equity</th><th title="3-year offensive Chip Equity">3-yr offensive Chip Equity</th><th title="3-year defensive Chip Equity">3-yr defensive Chip Equity</th>`}</tr></thead>
@@ -3263,8 +3256,7 @@ function renderMethod(){
 
   <div class="box" id="m-po"><h2>4. Playoffs</h2>
     <ul><li><b>In Chip Equity:</b> playoff possessions are part of the plus-minus, and playoff stretches count six times as much as regular-season ones in lead margin, credited for the strength of the opponent.</li>
-      <li><b>Playoffs-only Chip Equity</b> is the same recipe run on one postseason at a time. It drives the career playoff board and the most impressive title runs, which are ranked by how well a champion did against the field it beat.</li>
-      <li><b>Same scale as the regular season:</b> one postseason is a small sample, so the playoff fit is pulled harder toward zero and its numbers run smaller. For display they are multiplied by one factor (about 1.37): the regular-season spread divided by the playoff spread, for the same players in the same seasons. Every postseason gets the same factor, so the order and ranks do not change.</li></ul></div>
+      <li><b>Playoffs-only Chip Equity</b> is the same recipe run on one postseason at a time. It drives the career playoff board and the most impressive title runs, which are ranked by how well a champion did against the field it beat.</li></ul></div>
 
   <div class="box" id="m-read"><h2>5. How we know it works</h2>
     <p>Every version of the model was tested on seasons it never saw: it was fit on all the other seasons, then asked to predict the missing one.</p>
