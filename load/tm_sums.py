@@ -25,4 +25,4 @@ for stype in ("rs", "po"):
                 a = acc.setdefault(ids_[b], [0.0, 0.0, 0.0]); a[0] += w; a[1] += w * to; a[2] += w * td
         for p, a in acc.items(): out.append(dict(p=p, season=season, stype=stype, n=a[0], tmo=a[1] / a[0], tmd=a[2] / a[0]))
         print(stype, season, len(acc), flush=True)
-R = pd.DataFrame(out); _t = os.environ.get("LEADBY", "c2"); R.to_csv("tm_sums.csv" if _t == "c2" else f"tm_sums_{_t}.csv", index=False); print(R.groupby("stype")[["tmo", "tmd"]].describe().round(2).T)
+R = pd.DataFrame(out); _t = os.environ.get("LEADBY", "b1"); R.to_csv("tm_sums.csv" if _t == "b1" else f"tm_sums_{_t}.csv", index=False); print(R.groupby("stype")[["tmo", "tmd"]].describe().round(2).T)

@@ -1,6 +1,7 @@
 """Who counts as the lead in a stint: highest score on the floor.
   r3      3-year regression (window ending that season; 1-year if none)
-  c<k>    3-year regression + k x (shot creation / league - 1): the site's rule (c2, 1.1). Shot creation = self-created
+  b<k>    3-year regression + k x (shot creation / league - 1) + k x (usage / league usage - 1): the site's rule (b1, 1.1)
+  c<k>    3-year regression + k x (shot creation / league - 1). Shot creation = self-created
           rim, mid and three attempts + rim, mid, three and transition shots assisted, per 75 (play types)
   u<k>    3-year regression + k x (usage / league usage - 1): the player running the offense breaks near-ties (before 1.1)
           (u15 = 1.5, u3 = 3). Usage is the regular-season possession-weighted usage rate from data.json."""
@@ -11,6 +12,9 @@ def lead_map(tag="u2", base="."):
     m3 = {(int(p), s): r for p, s, r in zip(d3.player, d3.window_end, d3.rapm)}
     out = {k: (m3[k] if k in m3 else v) for k, v in m1.items()}
     if tag == "r3": return out
+    if tag.startswith("b"):          # both tie-breaks: k x (shot creation - 1) + k x (usage - 1)  (b1 = the site's rule, 1.1)
+        k_ = float(tag[1:]); c = lead_map("c" + tag[1:], base); u = lead_map("u2", base)
+        return {k: c.get(k, v) + (k_ / 2.0) * (u.get(k, v) - v) for k, v in out.items()}
     if tag.startswith("c"):          # creation: self-created shots + shots created for teammates (play types), per 75, vs league
         k_ = float(tag[1:]); F = pd.read_csv(f"{base}/../playtypes/pt_features.csv")
         F["cr"] = F.rim_self75 + F.mid_self75 + F.three_self75 + F.ast_rim75 + F.ast_mid75 + F.ast_three75 + F.ast_transition75
