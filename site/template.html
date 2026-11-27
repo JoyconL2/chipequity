@@ -2285,15 +2285,25 @@ async function feedESPN(day){
 // never changed. Recounting old games with today's ratings and today's injury list would keep changing the record.
 // picks.json also holds the record carried over from before the saved picks began ("base", through that date).
 // A finished game with no saved pick (the job didn't run in time) falls back to today's model.
-let REC_P = null; const REC_DAYS = new Map();
+let REC_P = null, PICKS_P = null; const REC_DAYS = new Map();
+function getPicks(){            // picks.json for this season, or null; loaded once and shared by the record and the game cards
+  if (!PICKS_P) PICKS_P = getJSON("picks.json").then(PK => (PK && PK.season === DATA.seasons[DATA.seasons.length - 1]) ? PK : null, () => { PICKS_P = null; return null; });
+  return PICKS_P;
+}
+// the pick saved before tip-off for a game (by ESPN id, or by date and teams for the NBA.com feed): P(home wins), or null
+function savedPick(PK, g){
+  if (!PK || !PK.games) return null;
+  let x = PK.games[g.id];
+  if (!x){ const d = isoDay(g.start); x = Object.values(PK.games).find(v => v[0] === d && ((v[1] === g.home.ab && v[2] === g.away.ab) || (v[1] === g.away.ab && v[2] === g.home.ab))) || null; }
+  if (!x || x[3] == null) return null;
+  return x[1] === g.home.ab ? x[3] : (x[2] === g.home.ab ? 1 - x[3] : null);
+}
 function modelRecord(){
   if (REC_P) return REC_P;
   REC_P = (async () => {
     if (typeof CUR === "undefined" || !CUR) throw new Error("no season model");
     if (!CUR.ready()) await CUR.ensure();
-    let PK = null; try { PK = await getJSON("picks.json"); } catch (e) { PK = null; }
-    const season = DATA.seasons[DATA.seasons.length - 1];
-    if (PK && PK.season !== season) PK = null;
+    const PK = await getPicks();
     const base = PK && PK.base ? PK.base : null, saved = (PK && PK.games) || {};
     const today = new Date(); today.setHours(12, 0, 0, 0); const days = [];
     for (let d = new Date(CUR.seasonStart); d <= today; d.setDate(d.getDate() + 1)) { const x = new Date(d); x.setHours(12, 0, 0, 0); if (!base || isoDay(x) > base.through) days.push(x); }
@@ -2301,7 +2311,7 @@ function modelRecord(){
     let w = base ? base.w : 0, l = base ? base.l : 0, last = base ? new Date(base.through + "T12:00:00") : null, gaps = 0, unsaved = 0;
     lists.forEach((L, i) => { if (!L) { gaps++; return; }
       for (const g of L) { if (g.state !== "post" || g.start < CUR.seasonStart || g.home.score == null || g.stype === 1) continue;   // 1 = preseason
-        let pH = saved[g.id] ? saved[g.id][3] : null;
+        let pH = savedPick(PK, g);
         if (pH == null) { const p = gamePred(g); if (!p) continue; pH = p.pHome; if (PK) unsaved++; }
         ((pH >= 0.5) === (g.home.score > g.away.score)) ? w++ : l++; last = days[i]; } });
     if (!w && !l) throw new Error("no finished games found");
@@ -2354,16 +2364,23 @@ async function renderGames(){
   const when = day.toLocaleDateString(undefined, {weekday:"long", month:"long", day:"numeric"});
   if (!games.length){ gmOut.innerHTML = `<div class="msg">No NBA games on ${esc(when)}.</div>`; return; }
   games.sort((a,b)=>a.start-b.start); window.__gmList = games;
+  const PK = games.some(g => g.state === "post") ? await getPicks() : null;
+  const baseThrough = PK && PK.base ? PK.base.through : null;
   const logo = t => t.logo ? `<img src="${esc(t.logo)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'logo badge',textContent:'${esc(t.ab)}'}))">` : logoImg(t.ab, LATEST);
   const card = g => {
-    const p = gamePred(g), done = g.state==="post", live = g.state==="in";
+    const done = g.state==="post", live = g.state==="in";
+    // a finished game shows the pick saved before tip-off, the one the season record counts; today's ratings would grade it with hindsight
+    const sp = done ? savedPick(PK, g) : null, p = sp != null ? {pHome: sp, margin: null} : gamePred(g);
+    const hind = done && sp == null && p;     // no saved pick: today's model, which the record does not use for this game
     const win = done ? (g.home.score > g.away.score ? "home" : "away") : null;
     const row = (t, side) => `<div class="tr ${win && win!==side ? "lose" : ""}">${logo(t)}<div class="tn">${esc(t.name)}<small>${esc(t.rec)}</small></div><div class="sc">${t.score==null ? "" : t.score}</div></div>`;
     const tip = g.start.toLocaleTimeString(undefined, {hour:"numeric", minute:"2-digit"});
     let pred = "";
     if (p){ const fav = p.pHome >= 0.5 ? g.home : g.away, pf = Math.max(p.pHome, 1-p.pHome), mg = Math.abs(p.margin);
       const right = done ? ((p.pHome >= 0.5) === (win==="home")) : null;
-      pred = `<div class="pred"><span>Model: <b>${esc(fav.name)} ${pctTxt(pf)}</b> · by ${mg.toFixed(1)}</span>${done ? `<span class="${right?"ok":"miss"}">${right ? "✓ Model was right" : "✗ Upset"}</span>` : `<a href="#" data-mu="${g.away.ab}|${g.home.ab}">Full matchup ›</a>`}</div>`; }
+      const lab = sp != null ? "Pick before tip-off" : hind ? "Today's model" : "Model";
+      const tag = hind ? `<span class="muted" title="${baseThrough && isoDay(g.start) <= baseThrough ? "Games through " + baseThrough + " count in the season record as one total; each pick wasn't saved separately" : "The pick before tip-off wasn't saved for this game"}, so this is today's model looking back. It isn't what the season record counts.">${right ? "✓" : "✗"} in hindsight</span>` : `<span class="${right?"ok":"miss"}">${right ? "✓ Model was right" : "✗ Upset"}</span>`;
+      pred = `<div class="pred"><span>${lab}: <b>${esc(fav.name)} ${pctTxt(pf)}</b>${p.margin == null ? "" : ` · by ${mg.toFixed(1)}`}</span>${done ? tag : `<a href="#" data-mu="${g.away.ab}|${g.home.ab}">Full matchup ›</a>`}</div>`; }
     else pred = `<div class="pred"><span class="muted">${live ? "Live" : done ? "Final" : "Upcoming"}</span><span>Play-by-play ›</span></div>`;
     return `<div class="game" tabindex="0" role="button" data-gid="${esc(g.id)}" aria-label="${esc(g.away.name)} at ${esc(g.home.name)}: open play-by-play"><div class="gh"><span class="${live?"live":""}">${live ? "LIVE · " + esc(g.status) : done ? esc(g.status) : esc(tip)}</span><span>${esc(g.away.ab)} @ ${esc(g.home.ab)}</span></div>${row(g.away,"away")}${row(g.home,"home")}${pred}</div>`;
   };
