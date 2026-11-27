@@ -3369,7 +3369,7 @@ function renderPatch(){
       <li><b>Playoffs blended in.</b> A season with playoffs blends in the player's playoff-only Chip Equity, up to 30% depending on how many playoff possessions he played.</li>
     </ul>
     <h3>How it was tested</h3>
-    <p>100 variants were built from these ideas and scored on one question: how well each season's ratings predict next season's team net rating (863 team-seasons, 1997-98 to 2025-26), with a separate check on 2012-13 onward using only earlier seasons to fit. Changes to the box-score inputs alone moved that test by about 0.01 points per 100 or less; the larger effects came from how the regression, lead margin, minutes and playoffs are combined. Counting playoff stretches six times instead of twice costs about 0.03 points per 100 on this test; it gives deep playoff runs more weight, at that cost. Breaking lead near-ties by shot creation instead of usage tested even (within 0.003 either way). On playoff series it does slightly better: 76.4% of the 450 series since 1997 picked right (was 75.8%), Brier score 0.1596 (was 0.1599).</p>
+    <p>100 variants were built from these ideas and scored on one question: how well each season's ratings predict next season's team net rating (863 team-seasons, 1997-98 to 2025-26), with a separate check on 2012-13 onward using only earlier seasons to fit. Changes to the box-score inputs alone moved that test by about 0.01 points per 100 or less; the larger effects came from how the regression, lead margin, minutes and playoffs are combined. Counting playoff stretches six times instead of twice costs about 0.03 points per 100 on this test; it gives deep playoff runs more weight, at that cost. Breaking lead near-ties by shot creation instead of usage tested even (within 0.003 either way). On playoff series, 1.1 picks 76.4% of the 450 series since 1997 right (1.0: 75.8%), with a Brier score of 0.1603 (1.0: 0.1599).</p>
     <div class="mscroll"><table><thead><tr><th>Next-season team net rating</th><th>1.0</th><th>1.1</th></tr></thead><tbody>
       ${row("Average miss, all seasons (pts/100)", "3.00", "3.03")}
       ${row("Average miss, 2012-13 on", "3.00", "3.05")}
@@ -3378,17 +3378,17 @@ function renderPatch(){
     <h3>How history was updated</h3>
     <p>Stored ratings for 1996-97 to 2025-26 weren't rebuilt from scratch. Every window was fit twice with the same code, once with the old box-score inputs and once with the new, and the difference was added to the stored ratings; the new way of combining the parts then applies to every season.</p>
     <h3>What moved</h3>
-    <p data-pn="moved">A typical full season moved by about 0.18. Seasons with deep playoff runs moved up the most, and seasons with a short sample or an unusually strong regular-season lead margin moved down, since both are now pulled harder toward the three-year number. The biggest changes among full seasons, before → after:</p>
+    <p data-pn="moved">A typical full season moved by about 0.22. Lead playmakers and deep playoff runs moved up the most; finishers who shared the floor with a lead creator, and seasons with a short sample, moved down. The biggest changes among full seasons, before → after:</p>
     <div class="mscroll"><table><thead><tr><th>Season</th><th>Before</th><th>After</th></tr></thead><tbody>
-      ${row("LeBron James 2017-18", "+5.42", "+7.01")}
-      ${row("Kevin Garnett 2013-14", "+0.94", "+2.21")}
-      ${row("Kyle Korver 2016-17", "+0.10", "+1.34")}
-      ${row("Chris Paul 2008-09", "+7.12", "+5.77")}
-      ${row("Tony Parker 2011-12", "+3.62", "+2.51")}
-      ${row("Nikola Jokić 2021-22", "+6.49", "+5.67")}
+      ${row("LeBron James 2017-18", "+5.42", "+7.18")}
+      ${row("John Stockton 1996-97", "+3.99", "+5.51")}
+      ${row("Rajon Rondo 2010-11", "+1.79", "+3.37")}
+      ${row("LaMarcus Aldridge 2013-14", "+4.00", "+2.16")}
+      ${row("Rudy Gobert 2020-21", "+5.35", "+3.78")}
+      ${row("Myles Turner 2023-24", "+3.61", "+2.09")}
     </tbody></table></div>
     <ul>
-      <li>The top three single seasons: LeBron James 2008-09 (+9.89), Stephen Curry 2016-17 (+9.26) and Nikola Jokić 2024-25 (+9.22).</li>
+      <li>The top three single seasons: LeBron James 2008-09 (+10.00), Stephen Curry 2016-17 (+9.29) and Nikola Jokić 2024-25 (+9.28).</li>
       ${(() => { const L = S.length - 1, top = ((DATA.rw || {rows: []}).rows).filter(v => v[2] === 1 && v[1] === L).sort((a, b) => b[5] - a[5])[0]; return top ? `<li>This season, ${esc(DATA.names[top[0]])} leads at about ${pm(top[5])}.</li>` : ""; })()}
     </ul>
   </div>
