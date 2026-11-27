@@ -12,7 +12,7 @@ rs = df[(df.season_type == "rs") & ~df.isgt]; po = df[df.season_type == "po"]
 C1 = pd.read_csv("../cepm/disp1.csv"); R1 = {(int(p), s): (r, o, d) for p, s, r, o, d in zip(C1.player, C1.window_end, C1.rapm, C1.o_rapm, C1.d_rapm)}
 
 import os
-_TAG = os.environ.get("LEADBY", "u2")   # lead = highest 3-year regression + 2 x (usage vs league - 1) on the floor (lead_map.py)
+_TAG = os.environ.get("LEADBY", "c2")   # lead = highest 3-year regression + 2 x (shot creation vs league - 1) on the floor (lead_map.py)
 from lead_map import lead_map as _lm
 LEADV = _lm(_TAG)
 
@@ -54,4 +54,4 @@ for season, d in po.groupby("season"):
                         off_t=off + x[3] / n, de_t=de + x[4] / n, off_l=off + x[5] / n, de_l=de + x[6] / n, po_share=share, po_sec=sum(mine.values()), po_tsec=tot))
     print(season, len(acc), flush=True)
 R = pd.DataFrame(out, columns=["p", "season", "n", "off", "de", "lead", "off_t", "de_t", "off_l", "de_l", "po_share", "po_sec", "po_tsec"]); R["lead_t"] = R.off_t + R.de_t; R["lead_l"] = R.off_l + R.de_l
-R.to_csv("po_lead.csv" if _TAG == "u2" else f"po_lead_{_TAG}.csv", index=False); print(len(R)); print(R.describe().round(2).to_string())
+R.to_csv("po_lead.csv" if _TAG == "c2" else f"po_lead_{_TAG}.csv", index=False); print(len(R)); print(R.describe().round(2).to_string())

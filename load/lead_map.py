@@ -1,6 +1,8 @@
 """Who counts as the lead in a stint: highest score on the floor.
   r3      3-year regression (window ending that season; 1-year if none)
-  u<k>    3-year regression + k x (usage / league usage - 1): the player running the offense breaks near-ties
+  c<k>    3-year regression + k x (shot creation / league - 1): the site's rule (c2, 1.1). Shot creation = self-created
+          rim, mid and three attempts + rim, mid, three and transition shots assisted, per 75 (play types)
+  u<k>    3-year regression + k x (usage / league usage - 1): the player running the offense breaks near-ties (before 1.1)
           (u15 = 1.5, u3 = 3). Usage is the regular-season possession-weighted usage rate from data.json."""
 import json, pandas as pd
 def lead_map(tag="u2", base="."):

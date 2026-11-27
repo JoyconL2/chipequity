@@ -187,7 +187,7 @@ def main():
     # 6  lead margin etc. on this season's stints only, then Chip Equity
     full = pd.read_pickle(os.path.join(ROOT, "rapm_out/stints_all.pkl"))
     full[full.season == CUR].to_pickle(os.path.join(ROOT, "rapm_out/stints_cur.pkl")); del full
-    env = {"STINTS_PKL": "../rapm_out/stints_cur.pkl", "LEADBY": "u2"}   # u2 = the lead rule the site uses (load/lead_map.py)
+    env = {"STINTS_PKL": "../rapm_out/stints_cur.pkl", "LEADBY": "c2"}   # c2 = the lead rule the site uses (load/lead_map.py)
     for n in LOAD_FILES: shutil.move(os.path.join(ROOT, f"load/{n}.csv"), os.path.join(ROOT, f"load/{n}_base.csv"))
     for n in LOAD_FILES:
         run([PY, f"{n}.py"], cwd="load", env=env, out=os.path.join(tmp, f"{n}.log"))
