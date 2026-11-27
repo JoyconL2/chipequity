@@ -5,7 +5,7 @@
                (points scored vs league) and defense (points allowed vs league), garbage time out, x n/(n+3000)
   CompShare  = his share of his team's non-garbage minutes, in games he played. Only half of its gap from 1 counts
                (tested 1997-2026: better next-season player and team prediction than the full share)
-LeadMargin also counts his playoff lead stints, each playoff possession worth 2 regular-season ones, with the margin
+LeadMargin also counts his playoff lead stints, each playoff possession worth 6 regular-season ones (1.1; was 2), with the margin
 adjusted for the opponent: + the opponent team's regular-season offense/defense vs league (load/po_lead.py).
 Lead margin is also adjusted for teammates, offense and defense separately: the four teammates' 3-year o (or d), centred
 by season, x 0.5 when they are above average and x 2.0 when below.
@@ -20,7 +20,7 @@ Writes data.json rw (1-5 year rows), peak (best 2-5 year windows + decades), cer
 and empties the old Chip Equity layer (ce, cepeak)."""
 import json, numpy as np, pandas as pd
 from decimal import Decimal, ROUND_HALF_UP
-WL, B, K1, KS, MPO, KPO = 0.40, 0.6, 6000, 9000, 2.0, 1000
+WL, B, K1, KS, MPO, KPO = 0.40, 0.6, 6000, 9000, 6.0, 1000
 POB, POK = 0.3, 500          # playoff-only Chip Equity blended into each season with playoffs
 D = json.load(open("../site/data.json")); S = D["seasons"]; SI = {s: i for i, s in enumerate(S)}
 ids = [int(x) for x in D["ids"]]; kOf = {p: k for k, p in enumerate(ids)}

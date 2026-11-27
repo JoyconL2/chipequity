@@ -3244,7 +3244,7 @@ function renderMethod(){
   <div class="box" id="m-what"><h2>1. What Chip Equity is</h2>
     <p><b>Chip Equity</b> is how many points per 100 possessions a player is worth to his team compared with an average player, counting how much of the game he actually carries. <b>0 is average.</b> In a typical season about 25 players reach +2 (All-Star level), about 5 reach +4 (top-five player) and about one reaches +6 (an MVP-level season). It's built from three things:</p>
     <ul><li><b>Regression (60%).</b> For every stretch of every game, the model knows the ten players on the floor and the score. A regression solves for all players at once, so a player isn't credited for great teammates or blamed for bad ones. Where a player has little court time, it leans on his box score instead.</li>
-      <li><b>Lead margin (40%).</b> How his team does in the stretches where he's the main man: the best player on the floor, judged on his last three seasons, with the one running the offense breaking near-ties. Playoff stretches count double and are adjusted for how good the opponent was, and his teammates' quality is accounted for, offense and defense separately: where his help is good, half of it is taken back out so stars on stacked teams don't get their teammates' credit; where his help is poor, he gets twice the shortfall back, so a star carrying a thin roster isn't marked down for it.</li>
+      <li><b>Lead margin (40%).</b> How his team does in the stretches where he's the main man: the best player on the floor, judged on his last three seasons, with the one running the offense breaking near-ties. Playoff stretches count six times as much as regular-season ones and are adjusted for how good the opponent was, and his teammates' quality is accounted for, offense and defense separately: where his help is good, half of it is taken back out so stars on stacked teams don't get their teammates' credit; where his help is poor, he gets twice the shortfall back, so a star carrying a thin roster isn't marked down for it.</li>
       <li><b>Minutes that matter.</b> The total is scaled by his share of his team's competitive minutes (garbage time out), so a star who carries a big load counts for more than a great role player in short minutes. Only half of that penalty applies: a player at 60% of the minutes keeps 80% of his value, not 60%. Tested on every season since 1997, the half penalty predicted next season's players and teams better than the full one.</li></ul>
     <p>Every number splits into <b>offense</b> and <b>defense</b>, and the two always add up to the total.</p></div>
 
@@ -3262,7 +3262,7 @@ function renderMethod(){
       <li>Garbage time is left out, as everywhere else.</li></ul></div>
 
   <div class="box" id="m-po"><h2>4. Playoffs</h2>
-    <ul><li><b>In Chip Equity:</b> playoff possessions are part of the plus-minus, and playoff stretches count double in lead margin, credited for the strength of the opponent.</li>
+    <ul><li><b>In Chip Equity:</b> playoff possessions are part of the plus-minus, and playoff stretches count six times as much as regular-season ones in lead margin, credited for the strength of the opponent.</li>
       <li><b>Playoffs-only Chip Equity</b> is the same recipe run on one postseason at a time. It drives the career playoff board and the most impressive title runs, which are ranked by how well a champion did against the field it beat.</li>
       <li><b>Same scale as the regular season:</b> one postseason is a small sample, so the playoff fit is pulled harder toward zero and its numbers run smaller. For display they are multiplied by one factor (about 1.37): the regular-season spread divided by the playoff spread, for the same players in the same seasons. Every postseason gets the same factor, so the order and ranks do not change.</li></ul></div>
 
@@ -3357,7 +3357,7 @@ function renderPatch(){
   const row = (a, b, c) => `<tr><td>${a}</td><td>${b}</td><td>${c}</td></tr>`;
   out.innerHTML = `<div class="method">
   <div class="box"><h2>Patch notes <small>what changed in Chip Equity, version by version</small></h2>
-    <p>Current version: <b>${PATCH_VERSION}</b>. Every change is tested on seasons the model didn't see before it ships; a change that makes predictions worse doesn't go in, whoever it helps or hurts.</p></div>
+    <p>Current version: <b>${PATCH_VERSION}</b>. Every change is tested on seasons the model didn't see before it ships, and the results are listed with it.</p></div>
   <div class="box" id="pn-1-1"><h2>1.1 <small>November 26, 2026</small></h2>
     <h3>What's new in the box-score part</h3>
     <ul>
@@ -3372,30 +3372,31 @@ function renderPatch(){
       <li><b>Regression 60%, lead margin 40%</b> (was 65% / 35%).</li>
       <li><b>Small samples count for less.</b> A single season's lead margin is pulled toward zero by n / (n + 6,000) lead possessions (was 3,000).</li>
       <li><b>Steadier single seasons.</b> 60% of each season now comes from the player's three-year number (was 40%).</li>
+      <li><b>Playoff stretches count more.</b> In lead margin, each playoff possession now counts as six regular-season ones (was two), still adjusted for the opponent. Deep playoff runs carry more weight in the ratings.</li>
       <li><b>Playoffs blended in.</b> A season with playoffs blends in the player's playoff-only Chip Equity, up to 30% depending on how many playoff possessions he played.</li>
     </ul>
     <h3>How it was tested</h3>
-    <p>100 variants were built from these ideas and scored on one question: how well each season's ratings predict next season's team net rating (863 team-seasons, 1997-98 to 2025-26), with a separate check on 2012-13 onward using only earlier seasons to fit. Changes to the box-score inputs alone moved that test by about 0.01 points per 100 or less; the larger effects came from how the regression, lead margin, minutes and playoffs are combined.</p>
+    <p>100 variants were built from these ideas and scored on one question: how well each season's ratings predict next season's team net rating (863 team-seasons, 1997-98 to 2025-26), with a separate check on 2012-13 onward using only earlier seasons to fit. Changes to the box-score inputs alone moved that test by about 0.01 points per 100 or less; the larger effects came from how the regression, lead margin, minutes and playoffs are combined. Counting playoff stretches six times instead of twice costs about 0.03 points per 100 on this test; it gives deep playoff runs more weight, at that cost.</p>
     <div class="mscroll"><table><thead><tr><th>Next-season team net rating</th><th>1.0</th><th>1.1</th></tr></thead><tbody>
-      ${row("Average miss, all seasons (pts/100)", "3.00", "2.99")}
-      ${row("Average miss, 2012-13 on", "3.00", "3.00")}
+      ${row("Average miss, all seasons (pts/100)", "3.00", "3.03")}
+      ${row("Average miss, 2012-13 on", "3.00", "3.04")}
       ${row("Box-score part: share of 3-year plus-minus explained", "50%", "51%")}
     </tbody></table></div>
     <h3>How history was updated</h3>
     <p>Stored ratings for 1996-97 to 2025-26 weren't rebuilt from scratch. Every window was fit twice with the same code, once with the old box-score inputs and once with the new, and the difference was added to the stored ratings; the new way of combining the parts then applies to every season.</p>
     <h3>What moved</h3>
-    <p data-pn="moved">A typical single season moved by about 0.17. Seasons with a short sample or an unusually strong lead margin moved the most, since both are now pulled harder toward the three-year number. The biggest changes among full seasons, before → after:</p>
+    <p data-pn="moved">A typical full season moved by about 0.16. Seasons with deep playoff runs moved up the most, and seasons with a short sample or an unusually strong regular-season lead margin moved down, since both are now pulled harder toward the three-year number. The biggest changes among full seasons, before → after:</p>
     <div class="mscroll"><table><thead><tr><th>Season</th><th>Before</th><th>After</th></tr></thead><tbody>
-      ${row("Giannis Antetokounmpo 2022-23", "+4.14", "+5.04")}
-      ${row("LeBron James 2017-18", "+5.42", "+6.11")}
-      ${row("Lamar Odom 2008-09", "+5.32", "+4.08")}
-      ${row("Chris Paul 2008-09", "+7.12", "+5.93")}
-      ${row("Kevin Garnett 2002-03", "+7.21", "+6.07")}
-      ${row("Dirk Nowitzki 2010-11", "+7.21", "+6.16")}
+      ${row("LeBron James 2017-18", "+5.42", "+6.67")}
+      ${row("Kevin Garnett 2013-14", "+0.94", "+2.21")}
+      ${row("Kyle Korver 2016-17", "+0.10", "+1.18")}
+      ${row("Chris Paul 2008-09", "+7.12", "+5.68")}
+      ${row("Tony Parker 2011-12", "+3.62", "+2.42")}
+      ${row("Nikola Jokić 2021-22", "+6.49", "+5.31")}
     </tbody></table></div>
     <ul>
-      <li>The top three single seasons keep their order: LeBron James 2008-09 (+9.14), Nikola Jokić 2024-25 (+8.77) and Stephen Curry 2016-17 (+8.71). The very top runs about half a point lower than before because single seasons are steadied more.</li>
-      <li>This season, Victor Wembanyama leads at about +8.1.</li>
+      <li>The top three single seasons: LeBron James 2008-09 (+9.60), Stephen Curry 2016-17 (+9.09) and Nikola Jokić 2024-25 (+9.01).</li>
+      ${(() => { const L = S.length - 1, top = ((DATA.rw || {rows: []}).rows).filter(v => v[2] === 1 && v[1] === L).sort((a, b) => b[5] - a[5])[0]; return top ? `<li>This season, ${esc(DATA.names[top[0]])} leads at about ${pm(top[5])}.</li>` : ""; })()}
     </ul>
   </div>
   <div class="box" id="pn-1-0"><h2>1.0 <small>first release</small></h2>
