@@ -934,7 +934,7 @@ const PO_SCALE = (() => { const rs = new Map(); for (const v of (DATA.rw || {row
   const a = [], b = []; for (const r of (DATA.pcepm || [])){ const x = rs.get(r[0]*64 + r[1]); if (x != null){ a.push(r[2]); b.push(x); } }
   const sd = l => { const m = l.reduce((s, v) => s + v, 0)/l.length; return Math.sqrt(l.reduce((s, v) => s + (v - m)*(v - m), 0)/l.length); };
   const f = a.length > 50 ? sd(b)/sd(a) : 1; return isFinite(f) && f > 0 ? f : 1; })();
-const PCEPM = (DATA.pcepm || []).map(r => { const q = r.slice(); q[2] = +(r[2]*PO_SCALE).toFixed(2); q[3] = +(r[3]*PO_SCALE).toFixed(1); q[4] = +(r[4]*PO_SCALE).toFixed(1); return q; });
+const PCEPM = (DATA.pcepm || []).map(r => { const q = r.slice(); q[2] = +(r[2]*PO_SCALE).toFixed(2); q[3] = +(r[3]*PO_SCALE).toFixed(1); q[4] = +(+q[2].toFixed(1) - q[3]).toFixed(1); return q; });   // defense = total - offense, so the shown parts add up
 // playoff-only Chip Equity per player-postseason (rank among that postseason's 300+ possession players) and per career
 const POC = (() => { const m = new Map(), nS = new Map(); for (const r of PCEPM) nS.set(r[1], (nS.get(r[1]) || 0) + 1);
   for (const r of PCEPM) m.set(r[0]*64 + r[1], {r:r[2], o:r[3], d:r[4], p:r[5], rank:r[6], n:nS.get(r[1]), s:r[1]});
