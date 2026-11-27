@@ -8,7 +8,7 @@ alt = open(os.path.join(d,'alt_headshots.json')).read().strip() if os.path.exist
 assert '</' not in alt
 mtxt = open(os.path.join(d,'METHOD_technical.txt')).read() if os.path.exists(os.path.join(d,'METHOD_technical.txt')) else ''
 # JSON.parse reads a big data blob faster than an object literal
-page = t.replace('/*__DATA__*/null', 'JSON.parse(' + _json.dumps(data) + ')').replace('/*__MODEL__*/', model).replace('/*__ALTFACES__*/{}', alt).replace('/*__METHODTXT__*/""', _json.dumps(mtxt).replace('</', '<\\/'))
+page = t.replace('/*__DATA__*/null', 'JSON.parse(' + _json.dumps(data) + ')').replace('/*__MODEL__*/', model).replace('/*__ALTFACES__*/{}', alt).replace('/*__ERAFACES__*/{}', open('era_faces.json').read().strip() if __import__('os').path.exists('era_faces.json') else '{}').replace('/*__METHODTXT__*/""', _json.dumps(mtxt).replace('</', '<\\/'))
 open(os.path.join(d,'courtside_page.html'),'w').write(page)
 he = page.index('</style>') + len('</style>')
 full = ('<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
