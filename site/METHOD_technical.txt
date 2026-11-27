@@ -132,6 +132,8 @@ where n_i is his playoff possessions. Players need 150 possessions for their own
 
 The playoff number uses the same recipe as the main stat: 0.65 × this playoff-only fit + 0.35 × his opponent-adjusted playoff lead margin (pulled toward zero by n / (n + 1,000) lead possessions), times his share of his team's competitive playoff minutes. A run against strong opponents counts for more than the same margin against weak ones.
 
+Display scale: playoff values (total, offense and defense) are multiplied by one constant, sd(1-yr regular-season Chip Equity) / sd(playoff Chip Equity), taken over player-seasons that have both (about 1.37). The heavier small-sample shrinkage of the playoff fit is what makes it smaller. One constant for every postseason leaves order and ranks unchanged.
+
 8. READING THE NUMBERS
 ======================
 - Units are points per 100 possessions compared with an average player, so the five players on the floor add up to the lineup's expected margin per 100.
