@@ -1132,16 +1132,50 @@ function ptBox_(k, si){
   const lg = PT.lg[String(si)] || [], cats = ["transition","putback","rim","mid","three"], lgpps = c => { const i = cats.indexOf(c); return lg[i] ? lg[5+i] / lg[i] : NaN; };
   const parts = ptParts(r), mx = Math.max(4, ...parts.map(p=>p.v));
   const zoneShots = c => r[PTC[c+"_fga"]], ppsCell = (p, span) => { const n = zoneShots(p.cat), d = p.pps - lgpps(p.cat);
-    return `<td class="pt-pps" rowspan="${span}">${n >= 25 && Number.isFinite(d) ? `<strong class="${d>=0?"pos":"neg"}">${(d>=0?"+":"")+d.toFixed(2)}</strong><span class="sub"> on ${n} shots</span>` : `<span class="sub">${n} shots</span>`}</td>`; };
+    return `<td class="pt-pps" rowspan="${span}">${n >= 25 && Number.isFinite(d) ? `<strong>${p.pps.toFixed(2)}</strong> <span class="${d>=0?"pos":"neg"}">${(d>=0?"+":"")+d.toFixed(2)}</span><span class="sub"> on ${n} shots</span>` : `<span class="sub">${n} shots</span>`}</td>`; };
+  const totV = parts.reduce((a, p) => a + p.v, 0) || 1;
   const rowsH = parts.map((p, i) => { const pc = ptPct(si, q => ptParts(q).find(x=>x.key===p.key).v, p.v);
     const first = i < 2 || p.key.endsWith("_self"), span = i < 2 ? 1 : 2;
-    return `<tr><td class="l">${esc(p.label)}</td><td class="pt-bar"><i style="width:${Math.min(100, p.v/mx*100)}%"></i></td><td><strong>${p.v.toFixed(1)}</strong></td><td>${pc!=null ? pctlQ(Math.min(99,pc), poolTxt(si)) : "–"}</td>${first ? ppsCell(p, span) : ""}</tr>`; }).join("");
-  const tbl = `<div class="tscroll"><table class="pt-tbl"><thead><tr><th class="l">Play type</th><th></th><th title="Shots per 75 possessions">Per 75</th><th title="Percentile ${poolTxt(si)}">Pct</th><th title="Points per shot against the league average for that play type (half-court rows share one value per zone)">Pts/shot vs lg</th></tr></thead><tbody>${rowsH}</tbody></table></div>`;
-  const astH = PT_AST.map(([c,l]) => { const v = ptRate(r, r[PTC[c]]), pc = ptPct(si, q => ptRate(q, q[PTC[c]]), v);
-    return `<div class="tile"><div class="v">${v.toFixed(1)}</div><div class="k">${esc(l)} created / 75${pc!=null ? pctlQ(Math.min(99,pc), poolTxt(si)) : ""}</div></div>`; }).join("");
+    return `<tr><td class="l">${esc(p.label)}</td><td class="pt-bar"><i style="width:${Math.min(100, p.v/mx*100)}%"></i></td><td><strong>${p.v.toFixed(1)}</strong></td><td>${Math.round(100 * p.v / totV)}%</td><td>${pc!=null ? pctlQ(Math.min(99,pc), poolTxt(si)) : "–"}</td>${first ? ppsCell(p, span) : ""}</tr>`; }).join("");
+  const tbl = `<div class="tscroll"><table class="pt-tbl"><thead><tr><th class="l">Play type</th><th></th><th title="Shots per 75 possessions">Per 75</th><th title="Share of his shots">Freq</th><th title="Percentile ${poolTxt(si)}">Pct</th><th title="Points per shot, and the difference from the league average for that play type (half-court rows share one value per zone)">Pts/shot (vs lg)</th></tr></thead><tbody>${rowsH}</tbody></table></div>`;
+  // assists by the shot they created: per 75, share of his assists, points created (rim/mid 2, three 3, transition and
+  // putback at the league's points per made shot of that kind that season)
+  const ppm = c => { const i = cats.indexOf(c), m = lg[10 + (c === "putback" ? 1 : 0)]; return m ? lg[5+i] / m : 2.2; };
+  const AT = [["ast_rim","Rim shots",2],["ast_mid","Mid-range",2],["ast_three","Threes",3],["ast_transition","Transition",ppm("transition")]].concat(PTC.ast_putback != null ? [["ast_putback","Putbacks",ppm("putback")]] : []);
+  const aTot = AT.reduce((a, [c]) => a + (r[PTC[c]] || 0), 0), aPts = AT.reduce((a, [c,,w]) => a + (r[PTC[c]] || 0) * w, 0);
+  const lgRows = PTSEASON.get(si) || [], lgA = lgRows.reduce((a, q) => a + AT.reduce((b, [c]) => b + (q[PTC[c]] || 0), 0), 0), lgP = lgRows.reduce((a, q) => a + AT.reduce((b, [c,,w]) => b + (q[PTC[c]] || 0) * w, 0), 0);
+  const astRows = AT.map(([c,l,w]) => { const n = r[PTC[c]] || 0, v = ptRate(r, n), pc = ptPct(si, q => ptRate(q, q[PTC[c]] || 0), v);
+    return `<tr><td class="l">${esc(l)}</td><td><strong>${v.toFixed(1)}</strong></td><td>${aTot ? Math.round(100 * n / aTot) : 0}%</td><td>${pc!=null ? pctlQ(Math.min(99,pc), poolTxt(si)) : "–"}</td><td>${ptRate(r, n * w).toFixed(1)}</td></tr>`; }).join("");
+  const astH = `<div class="tscroll"><table class="pt-tbl"><thead><tr><th class="l">Assist on</th><th title="Assists per 75 possessions">Per 75</th><th title="Share of his assists">Freq</th><th title="Percentile ${poolTxt(si)}">Pct</th><th title="Points his assists created per 75 possessions">Pts created / 75</th></tr></thead><tbody>${astRows}
+    <tr><td class="l"><strong>All assists</strong></td><td><strong>${ptRate(r, aTot).toFixed(1)}</strong></td><td>100%</td><td></td><td><strong>${ptRate(r, aPts).toFixed(1)}</strong></td></tr></tbody></table></div>
+    <p class="sub" style="margin:6px 0 0">${aTot ? `${(aPts / aTot).toFixed(2)} points per assist (league ${lgA ? (lgP / lgA).toFixed(2) : "–"}): more threes and fewer mid-range setups push it up.` : ""}</p>`;
   const self = r[PTC.rim_self75] + r[PTC.mid_self75] + r[PTC.three_self75], hc = ptRate(r, r[PTC.rim_fga] + r[PTC.mid_fga] + r[PTC.three_fga]);
-  return `<p class="sub" style="margin:0 0 8px">Shots per 75 possessions by play type, and points per shot against the league (pps). ${hc ? `${Math.round(100*self/hc)}% of his half-court shots were self-created.` : ""}</p>
-    ${tbl}<h3 style="margin:14px 0 6px;font-size:13px">Shots created for teammates</h3><div class="tiles">${astH}</div>`;
+  return `<p class="sub" style="margin:0 0 8px">Shots per 75 possessions by play type, how often he used each (share of his shots), and points per shot with the difference from the league. ${hc ? `${Math.round(100*self/hc)}% of his half-court shots were self-created.` : ""}</p>
+    ${tbl}<h3 style="margin:14px 0 6px;font-size:13px">Assists by the shot they created</h3>${astH}`;
+}
+/* ---- six factors: his effect on the four factors at each end (factors/factor_rapm.py), 2000-01 to 2024-25 ---- */
+const FAC = DATA.fac || {cols:[], rows:[], pts:{}}, FCC = Object.fromEntries(FAC.cols.map((c,i)=>[c,i]));
+const FACMAP = new Map(), FACPOOL = new Map();
+for (const r of FAC.rows){ FACMAP.set(r[0]*64 + r[1], r); if (r[FCC.poss] >= 1000) (FACPOOL.get(r[1]) || FACPOOL.set(r[1], []).get(r[1])).push(r); }
+const facHas = (k, s) => FACMAP.has(k*64 + s);
+const fmt1 = v => Math.abs(v) < 0.05 ? "0.0" : (v > 0 ? "+" : "") + v.toFixed(1);
+function facBox(k, si){
+  const r = FACMAP.get(k*64 + si); if (!r) return "";
+  const W = FAC.pts, pool = FACPOOL.get(si) || [];
+  // points per 100: offense gains from his own team's rates, defense from what the opponent's rates did (sign flipped)
+  const F = [["efg","Shooting (eFG%)","Opp. shooting (eFG%)"],["tov","Turnovers (TOV%)","Forced turnovers (opp. TOV%)"],["orb","Offensive rebounding (OREB%)","Defensive rebounding (opp. OREB%)"],["ftr","Getting to the line (FT rate)","Fouling (opp. FT rate)"]];
+  const oPts = (q, f) => W[f] * q[FCC["o_"+f]], dPts = (q, f) => -W[f] * q[FCC["d_"+f]];
+  const cell = (v, pts, f, side) => { const pc = poolPct(pool, q => side === "o" ? oPts(q, f) : dPts(q, f), pts);
+    return `<td>${fmt1(v)}</td><td><strong class="${pts>=0?"pos":"neg"}">${fmt1(pts)}</strong></td><td>${pc!=null ? pctlQ(pc, "among players with 1,000+ possessions that season") : "–"}</td>`; };
+  let ot = 0, dt = 0;
+  const rows = F.map(([f, lo, ld]) => { const o = r[FCC["o_"+f]], d = r[FCC["d_"+f]], op = oPts(r, f), dp = dPts(r, f); ot += op; dt += dp;
+    return `<tr><td class="l">${esc(lo)}</td>${cell(o, op, f, "o")}<td class="l">${esc(ld)}</td>${cell(d, dp, f, "d")}</tr>`; }).join("");
+  const tot = (pts, side) => { const pc = poolPct(pool, q => F.reduce((a,[f]) => a + (side === "o" ? oPts(q, f) : dPts(q, f)), 0), pts); return `<td></td><td><strong class="${pts>=0?"pos":"neg"}">${fmt1(pts)}</strong></td><td>${pc!=null ? pctlQ(pc, "among players with 1,000+ possessions that season") : "–"}</td>`; };
+  return `<div class="box"><h2>Six factors <small>${S[si]} regular season · his effect on each factor, adjusted for teammates and opponents</small></h2>
+    <p class="sub" style="margin:0 0 8px">How each team rate moved with him on the floor (percentage points), and what that's worth in points per 100 possessions.</p>
+    <div class="tscroll"><table class="pt-tbl"><thead><tr><th class="l">Offense</th><th title="Change in his team's rate, percentage points">Rate</th><th title="Points per 100 possessions">Pts/100</th><th>Pct</th><th class="l">Defense</th><th title="Change in the opponent's rate, percentage points">Rate</th><th title="Points per 100 possessions (positive is good)">Pts/100</th><th>Pct</th></tr></thead>
+    <tbody>${rows}<tr><td class="l"><strong>Total</strong></td>${tot(ot, "o")}<td class="l"><strong>Total</strong></td>${tot(dt, "d")}</tr></tbody></table></div>
+    <p class="sub" style="margin:6px 0 0">From a separate fit on the four factors (2000-01 to 2024-25), so it won't match Chip Equity exactly.</p></div>`;
 }
 // percentile badges for the offense / defense split of a Chip Equity value (same pool as the total)
 const pScope = v => v.w ? `with a ${v.w}-year window ending ${S[v.s]}` : "on this list";
@@ -1616,7 +1650,7 @@ function renderPlayerSeason(k, s){
   plOut.innerHTML = nav + seasonCard(k, s, tl, rsR, poR, myRank) + `<div class="box"><div class="stints">${teamLine}</div>${hlLinks(k, s, poR.length > 0)}${ctx ? `<p class="note" style="margin-bottom:0">${ctx}</p>` : ""}</div>
     ${ceBox}${TYPE === 0 && c1 ? `<div class="box" id="st-box"></div>` : ""}${boxBox}${live ? `<div id="pl-live"></div>` : ""}
     <div class="box"><h2>On / off <small>${S[s]} · team net rating per 100 possessions with him on vs. off the floor · garbage time out</small></h2><div id="ps-onoff"><div class="msg">Loading on/off…</div></div></div>
-    ${ptB}${dptB}${simSeasonBox(k, s)}${playoffSeriesBox(k, s)}`;
+    ${ptB}${TYPE ? "" : facBox(k, s)}${dptB}${simSeasonBox(k, s)}${playoffSeriesBox(k, s)}`;
   const sel = document.getElementById("ps-season"); sel.onchange = () => openPlayer(k, +sel.value);
   plOut.querySelectorAll("[data-sct]").forEach(b => b.onclick = () => setType(+b.dataset.sct));       // same switch as the page's Regular season / Playoffs
   if (document.getElementById("st-box")) stretchBox(k, s);
