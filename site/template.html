@@ -535,6 +535,8 @@ function faceImgSeason(k, s, ab, cls=""){
   const id = DATA.ids[k], n = DATA.names[k];
   return `<img class="face ${cls}" src="https://cdn.nba.com/headshots/nba/${DATA.teamIds[ai]}/${y}/1040x760/${id}.png" data-alt="https://cdn.nba.com/headshots/nba/latest/1040x760/${id}.png|https://cdn.nba.com/headshots/nba/latest/260x190/${id}.png" data-fb="${esc(initialsOf(n))}" alt="${esc(n)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="__imgFail(this)">`;
 }
+// headshot for a player-season: that season's photo (2015-16 on) for the team he played most for that season
+function faceAt(k, s, cls=""){ if (s == null) return faceImg(k, cls); const pt = peakTeams(k, s, 1); return pt.length ? faceImgSeason(k, s, pt[pt.length - 1][0], cls) : faceImg(k, cls); }
 function logoImg(ab, s, cls=""){
   if (!ab) return `<span class="logo ${cls}"></span>`;
   if (isDefunct(ab,s)) return `<span class="logo badge ${cls}" title="${esc(teamName(ab,s))}">${esc(ab)}</span>`;
@@ -1045,7 +1047,7 @@ function renderPoCepm(m){
   const teamCell = e => { const t = pcepmTeam.get(e.k*64 + e.s), ab = t!=null ? AB(t) : ""; return `<td class="l"><div class="who">${ab ? logoImg(ab, e.s) : ""}${ab}</div></td>`; };
   ldOut.innerHTML = `<div class="box"><h2>${head} <small>${sub}</small></h2><div class="tscroll"><table>
     <thead><tr><th>#</th><th class="l">Player</th>${career ? sth("n","Postseasons") : `<th class="l">Team</th>${m==="best"?"<th>Season</th>":""}`}${sth("p","Playoff poss.")}${sth("r","Playoff Chip Equity")}${sth("o","Off")}${sth("d","Def")}${career ? sth("b","Best run") : `<th>Rank that year${K!=="r" ? ` (${SORT_NAME[K]})` : ""}</th>`}</tr></thead><tbody>
-    ${shown.map((e,i)=>`<tr><td>${e.pos}</td><td class="l"><div class="who">${faceImg(e.k,"sm")}${pLink(e.k, esc(DATA.names[e.k]), career ? null : e.s)}${career ? "" : trophyIf(e.k, e.s)}</div></td>${career ? `<td class="nw">${sb("n", e.n)}${pc("n", e)}</td>` : teamCell(e) + (m==="best" ? `<td>${S[e.s]}</td>` : "")}<td class="nw">${sb("p", e.p.toLocaleString())}${pc("p", e)}</td><td class="nw">${sb("r",pm(e.r))}${pc("r", e)}</td><td class="nw">${sb("o",pm(e.o))}${pc("o", e)}</td><td class="nw">${sb("d",pm(e.d))}${pc("d", e)}</td>${career ? `<td class="l sub nw">${sb("b", `${S[e.best[1]]} ${pm(e.best[2])}`)}${pc("b", e)}</td>` : `<td class="sub">${ord(e.yrk)} of ${yrN.get(e.s).toLocaleString()}</td>`}</tr>`).join("")}</tbody></table></div>
+    ${shown.map((e,i)=>`<tr><td>${e.pos}</td><td class="l"><div class="who">${career ? faceImg(e.k,"sm") : faceAt(e.k, e.s, "sm")}${pLink(e.k, esc(DATA.names[e.k]), career ? null : e.s)}${career ? "" : trophyIf(e.k, e.s)}</div></td>${career ? `<td class="nw">${sb("n", e.n)}${pc("n", e)}</td>` : teamCell(e) + (m==="best" ? `<td>${S[e.s]}</td>` : "")}<td class="nw">${sb("p", e.p.toLocaleString())}${pc("p", e)}</td><td class="nw">${sb("r",pm(e.r))}${pc("r", e)}</td><td class="nw">${sb("o",pm(e.o))}${pc("o", e)}</td><td class="nw">${sb("d",pm(e.d))}${pc("d", e)}</td>${career ? `<td class="l sub nw">${sb("b", `${S[e.best[1]]} ${pm(e.best[2])}`)}${pc("b", e)}</td>` : `<td class="sub">${ord(e.yrk)} of ${yrN.get(e.s).toLocaleString()}</td>`}</tr>`).join("")}</tbody></table></div>
     <p class="note">Click any column with an arrow to rank by it.</p><p class="mlink"><a href="#" data-method="po">How it's calculated ›</a></p></div>`;
 }
 let TITLE_RUNS = null;
@@ -1067,7 +1069,7 @@ function renderTitles(){
         <div class="tile"><div class="v">${sgn1(r.fieldSrs)}</div><div class="k">Avg opponent SRS</div></div>
         <div class="tile"><div class="v">${sgn1(r.fieldDef)}</div><div class="k">Opp DRtg vs league</div></div></div>
       ${r.partial ? `<p class="note" style="margin:6px 0 0">Play-by-play covers ${r.gamesWithLines} of their ${r.w + r.l} playoff games${S[r.s]==="2025-26" ? " (the archive ends May 10, 2026)" : ""}, so the leading-player line and series nets use those games. Team totals and the ranking use every game.</p>` : ""}
-      ${r.lead ? `<div class="tr-lead">${faceImg(r.lead.k, "sm")}<div><strong>${pLink(r.lead.k, esc(DATA.names[r.lead.k]), r.s)}</strong> <span class="muted">· Playoff Chip Equity</span> <strong>${pm(r.lead.pc.v)}</strong> <span class="muted">(${ord(r.lead.pc.rank)} of ${r.lead.pc.n} that postseason; offensive Chip Equity ${pm(r.lead.pc.o)}, defensive Chip Equity ${pm(r.lead.pc.d)}) ·${L.pts75.toFixed(1)} pts, ${L.reb75.toFixed(1)} reb, ${L.ast75.toFixed(1)} ast per 75 · TS ${(L.ts*100).toFixed(1)}% · opp-adj rTS ${sgn1(L.rtsOpp)} · roRTG ${sgn1(L.roRtg)}</span></div></div>` : ""}
+      ${r.lead ? `<div class="tr-lead">${faceAt(r.lead.k, r.s, "sm")}<div><strong>${pLink(r.lead.k, esc(DATA.names[r.lead.k]), r.s)}</strong> <span class="muted">· Playoff Chip Equity</span> <strong>${pm(r.lead.pc.v)}</strong> <span class="muted">(${ord(r.lead.pc.rank)} of ${r.lead.pc.n} that postseason; offensive Chip Equity ${pm(r.lead.pc.o)}, defensive Chip Equity ${pm(r.lead.pc.d)}) ·${L.pts75.toFixed(1)} pts, ${L.reb75.toFixed(1)} reb, ${L.ast75.toFixed(1)} ast per 75 · TS ${(L.ts*100).toFixed(1)}% · opp-adj rTS ${sgn1(L.rtsOpp)} · roRTG ${sgn1(L.roRtg)}</span></div></div>` : ""}
       <details class="how"><summary>Who they beat</summary><div class="tscroll"><table>
         <thead><tr><th>Round</th><th class="l">Opponent</th><th class="l">Result</th><th>ORtg</th><th>DRtg</th><th>Net</th><th>SRS</th><th>Series net</th></tr></thead>
         <tbody>${oppRows}</tbody></table></div></details></div>`; };
@@ -1604,7 +1606,7 @@ function renderPlayerSeason(k, s){
   const boxRow = (lab, rows) => { if (!rows.length) return ""; const r = agg(rows); return `<tr><td class="l">${lab}</td><td>${r.gp}</td><td>${fmt(val(r,"MPG"),1)}</td>${boxCells(boxSum(rows), r)}<td>${fmt(val(r,"USG"),1)}</td></tr>`; };
   const boxBox = `<div class="box"><h2>Stats <small>${S[s]} · ${plMode === "p75" ? "per 75 possessions" : "per game"} · rTS = true shooting minus the league average</small></h2><div class="tscroll"><table class="box-t">
     <thead><tr><th class="l"></th><th>GP</th><th>MPG</th>${BOX_HEAD}<th>USG</th></tr></thead><tbody>${TYPE ? boxRow("Playoffs", poR) + boxRow("Regular season", rsR) : boxRow("Regular season", rsR) + boxRow("Playoffs", poR)}</tbody></table></div></div>`;
-  const ptB = (TYPE ? [1, 0] : [0, 1]).filter(t => ptHas(k, s, t)).map(t => `<div class="box"><h2>${t ? "Playoff play types" : "Play types"} <small>${S[s]} ${t ? "playoffs" : "regular season"} · from play-by-play and shot charts</small></h2>${ptBox(k, s, t)}<p class="mlink"><a href="#" data-method="pt">How play types are measured ›</a></p></div>`).join("");
+  const ptB = (TYPE ? [1] : [0, 1]).filter(t => ptHas(k, s, t)).map(t => `<div class="box"><h2>${t ? "Playoff play types" : "Play types"} <small>${S[s]} ${t ? "playoffs" : "regular season"} · from play-by-play and shot charts</small></h2>${ptBox(k, s, t)}<p class="mlink"><a href="#" data-method="pt">How play types are measured ›</a></p></div>`).join("");
   const dptB = DPTMAP.has((k*64 + s)*2 + TYPE) ? `<div class="box"><h2>Defensive play types <small>${S[s]} ${typeName().toLowerCase()}</small></h2>${defBox(k, s)}<p class="mlink"><a href="#" data-method="dpt">How defensive play types are measured ›</a></p></div>` : "";
   const live = s === LATEST && TYPE === 0 && typeof CUR !== "undefined" && CUR && Date.now() >= +CUR.seasonStart;
   plOut.innerHTML = nav + seasonCard(k, s, tl, rsR, poR, myRank) + `<div class="box"><div class="stints">${teamLine}</div>${hlLinks(k, s, poR.length > 0)}${ctx ? `<p class="note" style="margin-bottom:0">${ctx}</p>` : ""}</div>
@@ -1698,7 +1700,7 @@ function renderCompare(){
   else { const [x,y] = withV, close = isCepm ? Math.abs(x.sv - y.sv) < 1 : Math.abs(x.sv - y.sv) <= 0.02 * Math.max(Math.abs(x.sv), Math.abs(y.sv));
     headline = close ? `Too close to separate by ${shortLbl}: ${x.name} ${fmt(x.sv, st.fmt)}, ${y.name} ${fmt(y.sv, st.fmt)}`
                      : `${x.name} has the ${lower ? "lower" : "higher"} ${shortLbl}: ${fmt(x.sv, st.fmt)} to ${fmt(y.sv, st.fmt)}`; }
-  const chips = withV.concat(noV).map(it=>`<div class="chip">${faceImg(it.k,"sm")}<div><div class="sc" style="color:${it.color}">${fmt(it.sv, st.fmt)}</div>
+  const chips = withV.concat(noV).map(it=>`<div class="chip">${career ? faceImg(it.k,"sm") : faceAt(it.k, it.s, "sm")}<div><div class="sc" style="color:${it.color}">${fmt(it.sv, st.fmt)}</div>
       <div class="cn">${esc(it.name)}</div><div class="cs">${esc(it.ssub)}</div></div></div>`).join("");
   // bars: Chip Equity grows both ways from zero; other stats grow from zero to the right
   const posBars = rows => { const mx = Math.max(...rows.map(r=>Math.abs(r.v)), 1e-9);
@@ -1715,7 +1717,7 @@ function renderCompare(){
   const keys = MODE_KEYS[cmMode], labels = ["Points","Rebounds","Assists","Steals","Blocks","3-pointers made"];
   const heads = ok.map(it=>{ const last=it.rows[it.rows.length-1], ab=AB(P.tm[last]);
     const yrs = career ? `${S[P.s[it.rows[0]]]} to ${S[P.s[last]]}` : S[it.s];
-    return `<td>${faceImg(it.k)}<div class="nm">${pLink(it.k, esc(DATA.names[it.k]), career ? null : it.s)}</div><div class="tl">${career ? stintsNow(it.k).map(st => `<span title="${esc(st.now ? curTeamName(st.ab) : teamName(st.ab, st.s1))} ${stintYrs(st)}">${logoImg(st.ab, Math.min(st.s1, LATEST))}</span>`).join("") : playerTeams(it.k, it.s, ab).map(([a]) => logoImg(a, it.s) + esc(teamName(a, it.s))).join(" / ")}</div><div class="yr">${yrs}</div></td>`; }).join("");
+    return `<td>${career ? faceImg(it.k) : faceAt(it.k, it.s)}<div class="nm">${pLink(it.k, esc(DATA.names[it.k]), career ? null : it.s)}</div><div class="tl">${career ? stintsNow(it.k).map(st => `<span title="${esc(st.now ? curTeamName(st.ab) : teamName(st.ab, st.s1))} ${stintYrs(st)}">${logoImg(st.ab, Math.min(st.s1, LATEST))}</span>`).join("") : playerTeams(it.k, it.s, ab).map(([a]) => logoImg(a, it.s) + esc(teamName(a, it.s))).join(" / ")}</div><div class="yr">${yrs}</div></td>`; }).join("");
   const pkv = (n,f="r") => it => { const v = M.peakOf(it.k,n); return v ? v[f] : NaN; };
   const decRow = n => [PEAK_LABEL[n], it => { const v = M.peakOf(it.k,n); return v ? `${pm(v.r)} (${ord(v.rank)})` : "–"; }, null, true];
   const rowDefs = career
@@ -1801,7 +1803,7 @@ function renderMatchup(){
   const tape = r.tape.map(t=>`<tr><td class="${t.better==="A"?"best":""}" style="text-align:right">${t.a}${t.ra?` <span class="muted">${ord(t.ra)}</span>`:""}</td>
       <td style="text-align:center;color:var(--ink-2);white-space:normal">${t.label}</td><td class="${t.better==="B"?"best":""}" style="text-align:left">${t.b}${t.rb?` <span class="muted">${ord(t.rb)}</span>`:""}</td></tr>`).join("");
   const top3Rows = ro => ro.top3Info.length ? ro.top3Info.map(p=>{ const i=p.i, k=P.p[i], a=agg([i]);
-    return `<tr><td class="l"><div class="who">${faceImg(k,"sm")}<span class="n">${pLink(k, esc(DATA.names[k]), P.s[i])}</span></div></td>
+    return `<tr><td class="l"><div class="who">${faceAt(k, P.s[i], "sm")}<span class="n">${pLink(k, esc(DATA.names[k]), P.s[i])}</span></div></td>
       <td>${fmt(val(a,"MPG"),1)}</td><td>${fmt(val(a,"PPG"),1)}</td><td>${fmt(val(a,"RPG"),1)}</td><td>${fmt(val(a,"APG"),1)}</td><td>${fmt(val(a,"TS"),"pct")}</td>${(c => `<td class="nw"><strong>${pm(c?c.r:NaN)}</strong>${pctl(c)}</td><td class="nw">${pm(c?c.o:NaN)}${pctlO(c)}</td><td class="nw">${pm(c?c.d:NaN)}${pctlD(c)}</td>`)(M.rwOf(k, P.s[i], 3))}<td class="sub">${pm(p.r3)}</td></tr>`; }).join("")
     : `<tr><td colspan="10" class="muted">No data for this team.</td></tr>`;
   const keyBox = x => { const ro = x==="A"?r.rA:r.rB;
@@ -1949,7 +1951,7 @@ function renderLeaders(){
   const valCells = r => rwW ? `<td class="nw">${sb("r",pm(r.rv.r))}${bpl("r", r)}</td><td class="nw">${sb("o",pm(r.rv.o))}${bpl("o", r)}</td><td class="nw">${sb("d",pm(r.rv.d))}${bpl("d", r)}</td>` : `<td><strong>${fmt(r.v,f)}</strong></td>`;
   ldOut.innerHTML = `<div class="box"><h2>${esc(title)}${rwW && LD_SORT!=="r"?` · ranked by ${SORT_NAME[LD_SORT]}`:""} <small>${isC ? "regular season + playoffs" : typeName()}</small></h2><div class="tscroll"><table>
     <thead><tr><th>#</th><th class="l">Player</th><th class="l">Team</th><th class="l">${m==="season"||m==="best"?(rwW?"Window":"Season"):"Years"}</th><th>GP</th>${rwW ? sth("r",esc(head))+sth("o","Off")+sth("d","Def") : `<th>${esc(head)}</th>`}</tr></thead>
-    <tbody>${list.map((r,i)=>`<tr><td>${r.pos}</td><td class="l"><div class="who">${faceImg(r.k,"sm")}<span class="n">${pLink(r.k, esc(DATA.names[r.k]), m==="season" || m==="best" ? r.s : null)}</span>${(m==="season" || m==="best") && (!rwW || rwW === 1) ? trophyIf(r.k, r.s) : ""}</div></td>
+    <tbody>${list.map((r,i)=>`<tr><td>${r.pos}</td><td class="l"><div class="who">${m==="season" || m==="best" ? faceAt(r.k, r.s, "sm") : faceImg(r.k,"sm")}<span class="n">${pLink(r.k, esc(DATA.names[r.k]), m==="season" || m==="best" ? r.s : null)}</span>${(m==="season" || m==="best") && (!rwW || rwW === 1) ? trophyIf(r.k, r.s) : ""}</div></td>
       <td class="l"><div class="who">${tLink(r.tm, r.s, `${logoImg(r.tm, r.s)}${r.tm||""}`)}</div></td><td class="l">${m==="season"||m==="best"?(rwW?rwSpan(r.s,rwW):S[r.s]):r.span}</td><td>${r.gp.toLocaleString()}</td>${valCells(r)}</tr>`).join("")}</tbody>
     </table></div><p class="note">${rwW ? "Click a column to rank by it." : "Click a column to sort."}</p>${rwW ? `<p class="mlink"><a href="#" data-method="windows">How it's calculated ›</a></p>` : ""}</div>`;
 }
@@ -2013,7 +2015,7 @@ function renderRoster(ab, s){
   const rows = pl.map(x => { const k = x[0], i = (rowsByPlayer[k] || []).find(j => P.s[j] === s && P.t[j] === TYPE), a = i != null ? agg([i]) : null;
     const tl = playerTeams(k, s, i != null ? AB(P.tm[i]) : ab), traded = tl.length > 1, gpHere = traded ? (tl.find(t => t[0] === ab) || [])[1] : null;
     const c = M.rwOf(k, s, 1), onN = netOf(x.slice(1)), offN = netOf(off(x));
-    return `<tr><td class="l"><div class="who">${faceImg(k, "sm")}<span class="n">${pLink(k, esc(DATA.names[k]), s)}</span></div></td>
+    return `<tr><td class="l"><div class="who">${faceAt(k, s, "sm")}<span class="n">${pLink(k, esc(DATA.names[k]), s)}</span></div></td>
       <td>${a ? (traded && gpHere ? gpHere : a.gp) : "–"}</td><td>${a ? fmt(val(a, "MPG"), 1) : "–"}${traded ? `<sup title="Season totals across all his ${S[s]} teams">†</sup>` : ""}</td><td>${a ? fmt(val(a, "PPG"), 1) : "–"}</td><td>${a ? fmt(val(a, "RPG"), 1) : "–"}</td><td>${a ? fmt(val(a, "APG"), 1) : "–"}</td><td>${a ? fmt(val(a, "TS"), "pct") : "–"}</td>
       <td><strong>${pm(c ? c.r : NaN)}</strong></td><td>${Math.round(x[1]).toLocaleString()}</td><td>${sgnf(onN)}</td><td>${sgnf(offN)}</td><td><strong>${sgnf(onN - offN)}</strong></td></tr>`; }).join("");
   tmOut.innerHTML = head + `
@@ -2172,7 +2174,7 @@ function renderTeams(){
     html += `<h3 class="pk-h" style="margin-top:18px">Top performers <small>${S[s]} regular season · ranked by 3-year Chip Equity · ${minGp}+ games, 15+ minutes</small></h3><div class="tscroll"><table>
       <thead><tr><th class="l">Team</th><th class="l">Player</th><th>GP</th><th>MPG</th><th>PTS</th><th>REB</th><th>AST</th><th>TS%</th><th>3-yr Chip Equity</th><th>Off</th><th>Def</th></tr></thead><tbody>
       ${t3.map(({ab, top}) => top.length ? top.map(({i, c}) => { const k = P.p[i], a = agg([i]);
-        return `<tr><td class="l"><div class="who">${logoImg(ab,s)}${ab}</div></td><td class="l"><div class="who">${faceImg(k,"sm")}<span class="n">${pLink(k, esc(DATA.names[k]), s)}</span></div></td>
+        return `<tr><td class="l"><div class="who">${logoImg(ab,s)}${ab}</div></td><td class="l"><div class="who">${faceImgSeason(k, s, ab, "sm")}<span class="n">${pLink(k, esc(DATA.names[k]), s)}</span></div></td>
           <td>${P.gp[i]}</td><td>${fmt(val(a,"MPG"),1)}</td><td>${fmt(val(a,"PPG"),1)}</td><td>${fmt(val(a,"RPG"),1)}</td><td>${fmt(val(a,"APG"),1)}</td><td>${fmt(val(a,"TS"),"pct")}</td><td class="nw"><strong>${pm(c.r)}</strong>${pctl(c)}</td><td class="nw">${pm(c.o)}${pctlO(c)}</td><td class="nw">${pm(c.d)}${pctlD(c)}</td></tr>`; }).join("")
         : `<tr><td class="l"><div class="who">${logoImg(ab,s)}${ab}</div></td><td class="l muted" colspan="10">No player with ${minGp}+ games and 15+ minutes yet</td></tr>`).join("")}
       </tbody></table></div></div>`;
@@ -2566,7 +2568,7 @@ function renderHome(){
   }
   cand.sort((a,b)=>b.v-a.v);
   M.tieRank(cand, x => x.v, "pos");
-  const lead = cand.slice(0,5).map((r,j)=>`<div class="hrow"><span class="n">${r.pos}</span>${faceImg(r.k,"sm")}<span>${pLink(r.k, esc(DATA.names[r.k]), r.rv ? r.rv.s : null)} <span class="muted">${esc(r.tm)} · o ${pm(r.o)} · d ${pm(r.d)}</span></span><span class="v">${pm(r.v)}${pctl(r.rv)}</span></div>`).join("");
+  const lead = cand.slice(0,5).map((r,j)=>`<div class="hrow"><span class="n">${r.pos}</span>${r.rv ? faceAt(r.k, r.rv.s, "sm") : faceImg(r.k,"sm")}<span>${pLink(r.k, esc(DATA.names[r.k]), r.rv ? r.rv.s : null)} <span class="muted">${esc(r.tm)} · o ${pm(r.o)} · d ${pm(r.d)}</span></span><span class="v">${pm(r.v)}${pctl(r.rv)}</span></div>`).join("");
   // teams: best net rating
   const teams = M.tm.filter(r=>r.s===s && r.t===0).sort((a,b)=>b.net-a.net);
   const tms = teams.slice(0,5).map((r,j)=>`<div class="hrow"><span class="n">${j+1}</span>${logoImg(AB(r.a), s)}<span>${esc(teamName(AB(r.a), s))} <span class="muted">${r.w}-${r.l}</span></span><span class="v">${r.net>=0?"+":""}${r.net.toFixed(1)}</span></div>`).join("");
