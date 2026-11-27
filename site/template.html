@@ -533,7 +533,9 @@ function faceImg(k, cls=""){
 // the headshot from that season (NBA.com keeps them by team and season from 2015-16 on); falls back to his current one
 function faceImgSeason(k, s, ab, cls=""){
   const E = (ERA_FACE[DATA.ids[k]] || {})[S[s]];
-  if (E) return `<img class="face ${cls}" src="${esc(E)}" data-fb="${esc(initialsOf(DATA.names[k]))}" alt="${esc(DATA.names[k])}" loading="lazy" decoding="async" onerror="__imgFail(this)">`;
+  if (E && E.startsWith("nba:")){ const [tid, yy] = E.slice(4).split("/"), id = DATA.ids[k], n = DATA.names[k];   // an official NBA season photo from another season
+    return `<img class="face ${cls}" src="https://cdn.nba.com/headshots/nba/${tid}/${yy}/1040x760/${id}.png" data-alt="https://cdn.nba.com/headshots/nba/latest/1040x760/${id}.png" data-fb="${esc(initialsOf(n))}" alt="${esc(n)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="__imgFail(this)">`; }
+  if (E) return `<img class="face era ${cls}" src="${esc(E)}" data-fb="${esc(initialsOf(DATA.names[k]))}" alt="${esc(DATA.names[k])}" loading="lazy" decoding="async" onerror="__imgFail(this)">`;
   const ai = ab ? DATA.abbrs.indexOf(ab) : -1, y = +String(S[s] || "").slice(0, 4);
   if (ai < 0 || !(y >= 2015) || !DATA.teamIds || !DATA.teamIds[ai] || ALT_FACE[DATA.ids[k]]) return faceImg(k, cls);
   const id = DATA.ids[k], n = DATA.names[k];
