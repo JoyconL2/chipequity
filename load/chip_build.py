@@ -7,7 +7,7 @@
                (1.1: was the lead's for both ends, with one shrink). Garbage time out.
   CompShare  = his share of his team's non-garbage minutes, in games he played. Only half of its gap from 1 counts
                (tested 1997-2026: better next-season player and team prediction than the full share)
-LeadMargin also counts his playoff lead stints (one lead for both ends), each playoff possession worth 6 regular-season ones
+LeadMargin also counts his playoff stints (offense as the lead; defense half to the lead, half to the best defender on the floor, load/po_def.py), each playoff possession worth 6 regular-season ones
 (1.1; was 2), with the margin adjusted for the opponent: + the opponent team's regular-season offense/defense vs league
 (load/po_lead.py).
 Lead margin is also adjusted for teammates, offense and defense separately: the four teammates' 3-year o (or d), centred
@@ -54,6 +54,16 @@ LEAD = {k_: (*OFF.get(k_, (0.0, 0.0)), *DEF.get(k_, (0.0, 0.0))) for k_ in set(O
 for k_, q in POL.items():
     if q["n"] > 0:
         ao, ad = TMA.get((k_[0], k_[1], "po"), (0.0, 0.0)); bo, bd = bet(ao), bet(ad); q["lead_t"] -= bo * ao + bd * ad; q["off_t"] -= bo * ao; q["de_t"] -= bd * ad
+# playoff defense: POD of each stint's defense goes to the best defender on the floor (load/po_def.py), the rest stays with
+# the lead; both teammate-adjusted the same way. dn / de_m = his playoff defensive possessions and margin.
+POD = 0.5
+PDF = pd.read_csv("po_def.csv"); _g = PDF.assign(w=PDF.dtm * PDF.dposs).groupby("season"); _cpd = (_g.w.sum() / _g.dposs.sum()).to_dict()
+PDEF = {}
+for p, s_, n_, d_, t_ in zip(PDF.p, PDF.season, PDF.dposs, PDF.dlead, PDF.dtm):
+    ad = t_ - _cpd[s_]; PDEF[(int(p), s_)] = (n_, d_ - bet(ad) * ad)
+for k_, q in POL.items():
+    na = q["n"] if q["n"] > 0 else 0.0; nb, db = PDEF.get(k_, (0.0, 0.0)); dn = (1 - POD) * na + POD * nb
+    q["dn"] = dn; q["de_m"] = ((1 - POD) * na * q["de_t"] + POD * nb * db) / dn if dn > 0 else 0.0
 C = pd.read_csv("comp_share.csv"); COMP = {(int(p), s): (a, b) for p, s, a, b in zip(C.p, C.season, C.comp, C.t_comp)}
 def comps(p, seas, K, po_seas=None):
     no = so = nd = sd = ca = cb = 0.0
@@ -64,9 +74,10 @@ def comps(p, seas, K, po_seas=None):
             if v[2] > 0: nd += v[2]; sd += v[2] * v[3]
         if c: ca += c[0]; cb += c[1]
     if cb <= 0: return None
-    for s in (seas if po_seas is None else po_seas):      # playoff lead stints (one lead for both ends), opponent-adjusted, x MPO
+    for s in (seas if po_seas is None else po_seas):      # playoff stints, opponent-adjusted, x MPO: offense to the lead, defense split (POD)
         q = POL.get((p, s))
-        if q and q["n"] > 0: w = MPO * q["n"]; no += w; so += w * q["off_t"]; nd += w; sd += w * q["de_t"]
+        if q and q["n"] > 0: w = MPO * q["n"]; no += w; so += w * q["off_t"]
+        if q and q["dn"] > 0: w = MPO * q["dn"]; nd += w; sd += w * q["de_m"]
     lo = so / (no + K) if no + K > 0 else 0.0; ld = sd / (nd + K * KD) if nd + K * KD > 0 else 0.0
     return lo + ld, lo, ld, ca / cb
 disp = {w: pd.read_csv(f"../cepm/disp{w}.csv") for w in (1, 2, 3, 4, 5)}
@@ -74,8 +85,9 @@ c3 = disp[3]; C3 = {(int(p), s): (r, o, d) for p, s, r, o, d in zip(c3.player, c
 SOFT = lambda sh: 0.5 + 0.5 * sh          # half the minutes-share penalty
 def po_lead(q):
     """playoff-only lead margin, offense and defense shrunk separately (defense with KD x the possessions)"""
-    if not q or q["n"] <= 0: return 0.0, 0.0
-    return q["off_t"] * q["n"] / (q["n"] + KPO), q["de_t"] * q["n"] / (q["n"] + KPO * KD)
+    if not q: return 0.0, 0.0
+    lo = q["off_t"] * q["n"] / (q["n"] + KPO) if q["n"] > 0 else 0.0
+    return lo, (q["de_m"] * q["dn"] / (q["dn"] + KPO * KD) if q["dn"] > 0 else 0.0)
 # playoff-only Chip Equity per player-season (same formula as the pcepm rows below), for the playoff blend
 PCV = {}
 for k_, si_, v_, o_, d_, poss_, rank_, n_ in json.load(open("pcepm_raw.json")):
