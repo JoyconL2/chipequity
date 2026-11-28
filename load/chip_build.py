@@ -2,8 +2,8 @@
   Chip Equity = (0.60 x CEPM + 0.40 x LeadMargin) x (0.5 + 0.5 x CompShare)        (offense and defense the same way)
   CEPM       = the ridge regression (cepm/disp{w}.csv), points per 100 possessions on the floor
   LeadMargin = offense: his team's points scored vs league per 100 in the stints where he is the lead (best player on the
-               floor, load/lead_map.py), shrunk x n/(n+K); defense: points allowed vs league, shared among the five
-               players on the floor by 3-year defense + defensive activity (load/def_share.py), shrunk x n/(n+3K)
+               floor, load/lead_map.py), shrunk x n/(n+K); defense: points allowed vs league, credited to the best defender on
+               the floor by 3-year defensive rating (load/def_share.py), shrunk the same way, x n/(n+K)
                (1.1: was the lead's for both ends, with one shrink). Garbage time out.
   CompShare  = his share of his team's non-garbage minutes, in games he played. Only half of its gap from 1 counts
                (tested 1997-2026: better next-season player and team prediction than the full share)
@@ -13,24 +13,24 @@ LeadMargin also counts his playoff lead stints (one lead for both ends), each pl
 Lead margin is also adjusted for teammates, offense and defense separately: the four teammates' 3-year o (or d), centred
 by season, x 0.5 when they are above average and x 2.0 when below.
 Playoff-only Chip Equity (pcepm) = (0.70 x playoff-only regression + 0.30 x opponent-adjusted playoff lead margin, offense
-x n/(n+1000), defense x n/(n+3000)) x (0.5 + 0.5 x playoff competitive share) (1.1; tested on next-postseason team results).
+and defense each x n/(n+2000)) x (0.5 + 0.5 x playoff competitive share) (1.1; tested on next-postseason team results).
 Single seasons are steadied 70% toward the 3-season window (first full window 1996-99 for the first two seasons), and the
 single-season lead margin is shrunk with K = 6000 (window: 9000). Each season with playoffs then blends in playoff-only
-Chip Equity: weight 0.1 x n/(n+500), n = his playoff possessions. (1.1, tested on next-season team prediction 1997-98..2025-26.)
+Chip Equity: weight 0.2 x n/(n+500), n = his playoff possessions. (1.1, tested on next-season team prediction 1997-98..2025-26.)
 2-5 year windows (only for players with a rated season in every year of the window) are the possession-weighted average of the single seasons in them, each steadied 20% (2-year
 windows) or not at all (3-5 years).
 Writes data.json rw (1-5 year rows), peak (best 2-5 year windows + decades), cerm (playoff model, regular season only)
 and empties the old Chip Equity layer (ce, cepeak)."""
 import json, numpy as np, pandas as pd
 from decimal import Decimal, ROUND_HALF_UP
-WL, B, K1, KS, MPO, KPO = 0.40, 0.7, 6000, 9000, 6.0, 1000
-KD = 3.0                     # the defensive half of lead margin is shrunk with KD x the possessions of the offensive half
+WL, B, K1, KS, MPO, KPO = 0.40, 0.7, 6000, 9000, 6.0, 2000
+KD = 1.0                     # the defensive half of lead margin is shrunk with KD x the possessions of the offensive half
 WLPO = 0.30                  # lead-margin weight in playoff-only Chip Equity
-POB, POK = 0.1, 500          # playoff-only Chip Equity blended into each season with playoffs, by his playoff possessions
+POB, POK = 0.2, 500          # playoff-only Chip Equity blended into each season with playoffs, by his playoff possessions
 D = json.load(open("../site/data.json")); S = D["seasons"]; SI = {s: i for i, s in enumerate(S)}
 ids = [int(x) for x in D["ids"]]; kOf = {p: k for k, p in enumerate(ids)}
 M = pd.read_csv("margin_attr_od.csv"); LEAD = {(int(p), s): (n, o) for p, s, n, o in zip(M.p, M.season, M.lead_poss, M.lead_off)}
-DSH = pd.read_csv("def_share.csv")          # shared defensive credit: possessions, defensive margin, teammates' 3-year defense
+DSH = pd.read_csv("def_share.csv")          # defensive credit (best defender on the floor): possessions, defensive margin, teammates' 3-year defense
 PO = pd.read_csv("po_lead.csv"); POL = {(int(p), s): r for p, s, r in zip(PO.p, PO.season, PO.to_dict("records"))}
 # teammate adjustment (half strength): in his lead stints, subtract 0.5 x his four teammates' 3-year o and d, centred
 # on the season average, so a star carrying a thin roster isn't marked down for his teammates (load/tm_sums.py)
@@ -73,7 +73,7 @@ disp = {w: pd.read_csv(f"../cepm/disp{w}.csv") for w in (1, 2, 3, 4, 5)}
 c3 = disp[3]; C3 = {(int(p), s): (r, o, d) for p, s, r, o, d in zip(c3.player, c3.window_end, c3.rapm, c3.o_rapm, c3.d_rapm)}
 SOFT = lambda sh: 0.5 + 0.5 * sh          # half the minutes-share penalty
 def po_lead(q):
-    """playoff-only lead margin, offense and defense shrunk separately (defense KD x harder)"""
+    """playoff-only lead margin, offense and defense shrunk separately (defense with KD x the possessions)"""
     if not q or q["n"] <= 0: return 0.0, 0.0
     return q["off_t"] * q["n"] / (q["n"] + KPO), q["de_t"] * q["n"] / (q["n"] + KPO * KD)
 # playoff-only Chip Equity per player-season (same formula as the pcepm rows below), for the playoff blend
@@ -177,7 +177,7 @@ for k, si, v, o, d, poss, rank, n in json.load(open("pcepm_raw.json")):   # play
     pc.append([k, si, ((1 - WLPO) * v + WLPO * (lo + ld)) * sh, ((1 - WLPO) * o + WLPO * lo) * sh, ((1 - WLPO) * d + WLPO * ld) * sh, poss, n])
 PC = pd.DataFrame(pc, columns=["k", "si", "v", "o", "d", "poss", "n"]); PC["rank"] = PC.groupby("si").v.rank(ascending=False, method="min").astype(int)
 D["pcepm"] = [[int(a), int(b), round(c, 2), *split(c, e, f_), int(g_), int(h), int(i)] for a, b, c, e, f_, g_, h, i in zip(PC.k, PC.si, PC.v, PC.o, PC.d, PC.poss, PC["rank"], PC.n)]
-D["rw"] = {"rows": rw_rows, "n": rw_n, "src": "Chip Equity: 60% CEPM ridge regression + 40% lead margin (defense shared among the five on the floor), times (0.5 + 0.5 x share of competitive minutes); seasons with playoffs blend in playoff-only Chip Equity"}
+D["rw"] = {"rows": rw_rows, "n": rw_n, "src": "Chip Equity: 60% CEPM ridge regression + 40% lead margin (defense to the best defender on the floor), times (0.5 + 0.5 x share of competitive minutes); seasons with playoffs blend in playoff-only Chip Equity"}
 D["peak"] = {"ds": DS, "n": pn, "rows": prow}
 # each player's best 2- to 5-year stretch by total, by offense and by defense, with the window's last season
 D["peakx"] = {"cols": ["k", "w", "kind", "r", "o", "d", "end"], "rows": [[int(k), int(w), kind, round(r, 2), o, d, int(si)] for (k, w, kind), (_, r, o, d, si) in bestx.items()]}; D["cerm"] = cerm; D["ce"] = {"rows": [], "n": {}}; D["cepeak"] = {"ds": [], "n": [], "rows": []}

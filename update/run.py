@@ -30,7 +30,7 @@ BASE_FILES = {
     **{f"{n}.csv": f"load/{n}.csv" for n in ("margin_attr_od", "po_lead", "tm_sums", "comp_share", "def_share")},
 }
 WINDOW_FILES = ["disp1", "disp2", "disp3", "disp4", "disp5", "cepm3_rs"]
-LOAD_FILES = ["margin_attr_od", "po_lead", "tm_sums", "comp_share", "def_share"]   # def_share: shared defensive credit (1.1)
+LOAD_FILES = ["margin_attr_od", "po_lead", "tm_sums", "comp_share", "def_share"]   # def_share: defensive credit to the best defender on the floor (1.1)
 
 
 def log(msg): print(f"[{time.time() - T0:6.0f}s] {msg}", flush=True)

@@ -3237,7 +3237,7 @@ function renderMethod(){
   <div class="box" id="m-what"><h2>1. What Chip Equity is</h2>
     <p><b>Chip Equity</b> is how many points per 100 possessions a player is worth to his team compared with an average player, counting how much of the game he actually carries. <b>0 is average.</b> In a typical season about 25 players reach +2 (All-Star level), about 5 reach +4 (top-five player) and about one reaches +6 (an MVP-level season). It's built from three things:</p>
     <ul><li><b>Regression (60%).</b> For every stretch of every game, the model knows the ten players on the floor and the score. A regression solves for all players at once, so a player isn't credited for great teammates or blamed for bad ones. Where a player has little court time, it leans on his box score instead.</li>
-      <li><b>Lead margin (40%).</b> How his team does with him on the floor, end by end. <b>Offense</b>: how his team scores in the stretches where he's the main man: the best player on the floor, judged on his last three seasons, with near-ties going to the one who creates the most shots for himself and his teammates and carries the most of the offense. <b>Defense</b>: how his team defends while he's on the floor, shared among the five players by their defensive ratings (three-year defense plus steals, blocks and defensive rebounds), so the anchor of a defense gets most of it, and counted with more caution, since one season of defense swings with opponents' shooting. Playoff stretches count six times as much as regular-season ones and are adjusted for how good the opponent was; in the playoffs, the main man gets both ends. His teammates' quality is accounted for, offense and defense separately: where his help is good, half of it is taken back out so stars on stacked teams don't get their teammates' credit; where his help is poor, he gets twice the shortfall back, so a star carrying a thin roster isn't marked down for it.</li>
+      <li><b>Lead margin (40%).</b> How his team does with him on the floor, end by end. <b>Offense</b>: how his team scores in the stretches where he's the main man: the best player on the floor, judged on his last three seasons, with near-ties going to the one who creates the most shots for himself and his teammates and carries the most of the offense. <b>Defense</b>: how his team defends in the stretches where he's the best defender on the floor, judged on his three-year defensive rating, so the anchor of a defense gets the credit for it. Playoff stretches count six times as much as regular-season ones and are adjusted for how good the opponent was; in the playoffs, the main man gets both ends. His teammates' quality is accounted for, offense and defense separately: where his help is good, half of it is taken back out so stars on stacked teams don't get their teammates' credit; where his help is poor, he gets twice the shortfall back, so a star carrying a thin roster isn't marked down for it.</li>
       <li><b>Minutes that matter.</b> The total is scaled by his share of his team's competitive minutes (garbage time out), so a star who carries a big load counts for more than a great role player in short minutes. Only half of that penalty applies: a player at 60% of the minutes keeps 80% of his value, not 60%. Tested on every season since 1997, the half penalty predicted next season's players and teams better than the full one.</li></ul>
     <p>Every number splits into <b>offense</b> and <b>defense</b>, and the two always add up to the total.</p></div>
 
@@ -3245,7 +3245,7 @@ function renderMethod(){
     <p>Every NBA.com play-by-play event since 1996-97, regular season and playoffs: about 1.1 million stretches of play with the same ten players on the floor. Garbage time (fourth-quarter blowouts with the starters on the bench) is removed. 1996-97, the first season with play-by-play, is the noisiest, so it's left off the single-season leaderboard.</p></div>
 
   <div class="box" id="m-windows"><h2>3. Seasons, peaks and decades</h2>
-    <ul><li><b>Single seasons</b> are steadied: 70% of each season comes from that player's three-year number, so one hot season can't outrank a sustained peak. A season with playoffs also blends in his playoff-only Chip Equity, up to 10% depending on how many playoff possessions he played. Both settings were chosen on next-season prediction.</li>
+    <ul><li><b>Single seasons</b> are steadied: 70% of each season comes from that player's three-year number, so one hot season can't outrank a sustained peak. A season with playoffs also blends in his playoff-only Chip Equity, up to 20% depending on how many playoff possessions he played. Both settings were chosen on next-season prediction.</li>
       <li><b>2- to 5-year windows</b> and <b>decades</b> pool every possession in the span. A player's headline number is his best 5-year window (best 3-year for shorter careers).</li>
       <li>Leaderboards show all-time ranks, and the single-season board starts in 1997-98.</li></ul>
     <h3 id="m-stretch">Stretches inside a season</h3>
@@ -3255,15 +3255,15 @@ function renderMethod(){
       <li>Garbage time is left out, as everywhere else.</li></ul></div>
 
   <div class="box" id="m-po"><h2>4. Playoffs</h2>
-    <ul><li><b>In Chip Equity:</b> playoff possessions are part of the plus-minus, and playoff stretches count six times as much as regular-season ones in lead margin, credited for the strength of the opponent. In the playoffs the main man gets both ends: one postseason is too small a sample to share defense reliably.</li>
-      <li><b>Playoffs-only Chip Equity</b> is the same recipe run on one postseason at a time: 70% regression, 30% lead margin, with defense counted more cautiously. It drives the career playoff board and the most impressive title runs, which are ranked by how well a champion did against the field it beat. Its settings were checked on how well one postseason predicts each team's next one.</li></ul></div>
+    <ul><li><b>In Chip Equity:</b> playoff possessions are part of the plus-minus, and playoff stretches count six times as much as regular-season ones in lead margin, credited for the strength of the opponent. In the playoffs the main man gets both ends: one postseason is too small a sample to split the two ends reliably.</li>
+      <li><b>Playoffs-only Chip Equity</b> is the same recipe run on one postseason at a time: 70% regression, 30% lead margin. It drives the career playoff board and the most impressive title runs, which are ranked by how well a champion did against the field it beat. Its settings were checked on how well one postseason predicts each team's next one.</li></ul></div>
 
   <div class="box" id="m-read"><h2>5. How we know it works</h2>
     <p>Every version of the model was tested on seasons it never saw: it was fit on all the other seasons, then asked to predict the missing one.</p>
     <ul><li><b>This season's games:</b> picking the side it favored before tip-off, the model is <span class="m-rec">counting…</span>. Each game counts the pick shown here before tip-off, saved when the game starts, so later rating changes and injury news never change it.</li>
       <li><b>Playoff series:</b> it picks about 76% of the 450 series since 1997 correctly, and its probabilities are well calibrated (when it says 70%, those teams win about 70% of the time).</li>
       <li><b>Next season:</b> rating each roster with Chip Equity predicts teams' next-season results to within about 7 wins on average.</li>
-      <li><b>What didn't make it:</b> a lot was tried and dropped because it didn't predict better: weighting by usage or shot volume, raw on/off numbers, play types as a value input, splitting the whole lead margin proportionally (only the defensive half is shared), and style matchups (rebounding, turnovers, rim protection, pace, threes). A change was kept only when it held up.</li></ul></div>
+      <li><b>What didn't make it:</b> a lot was tried and dropped because it didn't predict better: weighting by usage or shot volume, raw on/off numbers, play types as a value input, splitting the whole lead margin proportionally (only the defensive half has its own player: the best defender), and style matchups (rebounding, turnovers, rim protection, pace, threes). A change was kept only when it held up.</li></ul></div>
 
   <div class="box" id="m-model"><h2>6. Playoff odds</h2>
     <p>Each team gets a strength made of four things, then home court is applied game by game in the 2-2-1-1-1 format and every path to four wins is added up:</p>
@@ -3363,34 +3363,34 @@ function renderPatch(){
     <ul>
       <li><b>Regression 60%, lead margin 40%</b> (was 65% / 35%).</li>
       <li><b>Small samples count for less.</b> A single season's offensive lead margin is pulled toward zero by n / (n + 6,000) lead possessions (was 3,000).</li>
-      <li><b>Defense is shared.</b> The defensive half of lead margin, how many points his team allows against the league, no longer goes to the stretch's lead alone. It's shared among the five players on the floor by defensive rating: three-year defense plus half the gap of his steals, blocks and defensive rebounds from league average. It's also pulled toward zero three times as hard as offense (n / (n + 18,000)), because one season of defense swings with opponents' shooting. The teammate adjustment on defense uses the other four players' three-year defense. Playoff stretches keep one lead for both ends.</li>
+      <li><b>Defense goes to the anchor.</b> The defensive half of lead margin, how many points his team allows against the league, no longer goes to the stretch's lead. It goes to the best defender on the floor by three-year defensive rating, and is pulled toward zero the same way as offense (n / (n + 6,000)). The teammate adjustment on defense uses the other four players' three-year defense. Playoff stretches keep one lead for both ends.</li>
       <li><b>Steadier single seasons.</b> 70% of each season now comes from the player's three-year number (was 40%).</li>
       <li><b>Who counts as the lead.</b> Lead margin credits the best player on the floor by 3-year rating; near-ties are now broken by shot creation for himself and his teammates (play types) and usage together, at half weight each, instead of usage alone. Usage alone handed the lead to finishers who use a lot of possessions but create little.</li>
       <li><b>Playoff stretches count more.</b> In lead margin, each playoff possession now counts as six regular-season ones (was two), still adjusted for the opponent. Deep playoff runs carry more weight in the ratings.</li>
-      <li><b>Playoffs blended in.</b> A season with playoffs blends in the player's playoff-only Chip Equity, up to 10%, scaled by how many playoff possessions he played.</li>
-      <li><b>Playoff-only Chip Equity.</b> 70% playoff regression, 30% playoff lead margin (was 65% / 35%), with the defensive half pulled toward zero three times as hard (n / (n + 3,000)).</li>
+      <li><b>Playoffs blended in.</b> A season with playoffs blends in the player's playoff-only Chip Equity, up to 20%, scaled by how many playoff possessions he played.</li>
+      <li><b>Playoff-only Chip Equity.</b> 70% playoff regression, 30% playoff lead margin (was 65% / 35%), with each half of the lead margin pulled toward zero by n / (n + 2,000) playoff possessions.</li>
     </ul>
     <h3>How it was tested</h3>
-    <p>100 variants were built from these ideas and scored on one question: how well each season's ratings predict next season's team net rating (863 team-seasons, 1997-98 to 2025-26), with a separate check on 2012-13 onward using only earlier seasons to fit. Changes to the box-score inputs alone moved that test by about 0.01 points per 100 or less; the larger effects came from how the regression, lead margin, minutes and playoffs are combined. Counting playoff stretches six times instead of twice cost about 0.03 points per 100 on this test, for more weight on deep playoff runs. Sharing the defensive half of lead margin and pulling it in harder won most of that back: about 2,000 versions of the lead-margin and playoff settings were run, and this was the largest gain among them. Breaking lead near-ties by shot creation and usage together tested even with usage alone. On playoff series, 1.1 picks 76.0% of the 450 series since 1997 right (1.0: 76.0%), with a Brier score of 0.1597 (1.0: 0.1602). Playoff-only numbers were checked on how well a postseason predicts each team's next postseason: correlation 0.239 (1.0: 0.235).</p>
+    <p>100 variants were built from these ideas and scored on one question: how well each season's ratings predict next season's team net rating (863 team-seasons, 1997-98 to 2025-26), with a separate check on 2012-13 onward using only earlier seasons to fit. Changes to the box-score inputs alone moved that test by about 0.01 points per 100 or less; the larger effects came from how the regression, lead margin, minutes and playoffs are combined. Counting playoff stretches six times instead of twice cost about 0.03 points per 100 on this test, for more weight on deep playoff runs. About 2,000 versions of the lead-margin and playoff settings were then run. Splitting each stretch's defense among all five players by rating scored a little better on this test (3.004 points per 100), but it spread an anchor's defense across the teammates around him; giving it to the best defender on the floor scores 3.011, and better when the test uses three-year ratings (3.912 vs 3.914). Breaking lead near-ties by shot creation and usage together tested even with usage alone. On playoff series, 1.1 picks 76.4% of the 450 series since 1997 right (1.0: 76.0%), with a Brier score of 0.1594 (1.0: 0.1602). Playoff-only numbers were checked on how well a postseason predicts each team's next postseason: correlation 0.239 (1.0: 0.235).</p>
     <div class="mscroll"><table><thead><tr><th>Next-season team net rating</th><th>1.0</th><th>1.1</th></tr></thead><tbody>
-      ${row("Average miss, all seasons (pts/100)", "3.00", "3.00")}
-      ${row("Average miss, 2012-13 on", "3.00", "3.02")}
+      ${row("Average miss, all seasons (pts/100)", "3.00", "3.01")}
+      ${row("Average miss, 2012-13 on", "3.00", "3.03")}
       ${row("Box-score part: share of 3-year plus-minus explained", "50%", "51%")}
     </tbody></table></div>
     <h3>How history was updated</h3>
     <p>Stored ratings for 1996-97 to 2025-26 weren't rebuilt from scratch. Every window was fit twice with the same code, once with the old box-score inputs and once with the new, and the difference was added to the stored ratings; the new way of combining the parts then applies to every season.</p>
     <h3>What moved</h3>
-    <p data-pn="moved">A typical full season moved by about 0.25. Lead creators on poor defensive teams moved up the most, since their team's defense is no longer charged to them alone; players whose single-season lead margin rested on an elite team defense moved down, since that defense is now shared and trusted less. The biggest changes among full seasons, before → after:</p>
+    <p data-pn="moved">A typical full season moved by about 0.27. Lead creators on poor defensive teams moved up the most, since their team's defense is no longer charged to them; players whose lead margin rested on their team's defense moved down, since that defense now goes to the best defender on the floor and the offense to the lead creator. The biggest changes among full seasons, before → after:</p>
     <div class="mscroll"><table><thead><tr><th>Season</th><th>Before</th><th>After</th></tr></thead><tbody>
-      ${row("LeBron James 2017-18", "+5.42", "+7.33")}
-      ${row("Damian Lillard 2021-22", "+1.61", "+3.17")}
-      ${row("James Harden 2020-21", "+4.10", "+5.51")}
-      ${row("Rudy Gobert 2020-21", "+5.35", "+3.25")}
-      ${row("Dikembe Mutombo 1999-00", "+5.78", "+4.02")}
-      ${row("Dwight Howard 2007-08", "+3.63", "+1.89")}
+      ${row("LeBron James 2017-18", "+5.42", "+7.02")}
+      ${row("Damian Lillard 2021-22", "+1.61", "+3.11")}
+      ${row("Dwyane Wade 2007-08", "+2.92", "+4.36")}
+      ${row("Chris Paul 2008-09", "+7.12", "+5.29")}
+      ${row("Rudy Gobert 2020-21", "+5.35", "+3.71")}
+      ${row("Dwight Howard 2007-08", "+3.63", "+1.87")}
     </tbody></table></div>
     <ul>
-      <li>The top three single seasons: LeBron James 2016-17 (+9.35), Stephen Curry 2016-17 (+9.00) and Nikola Jokić 2024-25 (+8.79).</li>
+      <li>The top three single seasons: LeBron James 2008-09 (+9.47), Stephen Curry 2016-17 (+8.85) and Nikola Jokić 2024-25 (+8.58).</li>
       ${(() => { const L = S.length - 1, top = ((DATA.rw || {rows: []}).rows).filter(v => v[2] === 1 && v[1] === L).sort((a, b) => b[5] - a[5])[0]; return top ? `<li>This season, ${esc(DATA.names[top[0]])} leads at about ${pm(top[5])}.</li>` : ""; })()}
     </ul>
   </div>
