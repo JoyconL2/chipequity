@@ -27,10 +27,10 @@ BASE_FILES = {
     "data.json": "site/data_base.json", "wowy.json": "wowy/wowy_base.json", "orig.html": "loadout/orig.html",
     "features_rs.csv": "mymodel/features_rs.csv", "rw3.csv": "rapm_out/rw3.csv", "player_game_last.csv": "pomodel/player_game.csv",
     **{f"{n}.csv": f"cepm/{n}.csv" for n in ("disp1", "disp2", "disp3", "disp4", "disp5", "cepm3_rs", "ddec1990", "ddec2000", "ddec2010", "ddec2020")},
-    **{f"{n}.csv": f"load/{n}.csv" for n in ("margin_attr_od", "po_lead", "tm_sums", "comp_share", "def_share", "po_def")},
+    **{f"{n}.csv": f"load/{n}.csv" for n in ("margin_attr_od", "po_lead", "tm_sums", "comp_share", "def_share")},
 }
 WINDOW_FILES = ["disp1", "disp2", "disp3", "disp4", "disp5", "cepm3_rs"]
-LOAD_FILES = ["margin_attr_od", "po_lead", "tm_sums", "comp_share", "def_share", "po_def"]   # def_share / po_def: defensive credit to the best defender on the floor (1.1)
+LOAD_FILES = ["margin_attr_od", "po_lead", "tm_sums", "comp_share", "def_share"]   # def_share: defensive credit to the best defender on the floor (1.1)
 
 
 def log(msg): print(f"[{time.time() - T0:6.0f}s] {msg}", flush=True)

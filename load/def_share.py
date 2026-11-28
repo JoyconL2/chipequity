@@ -4,7 +4,7 @@ instead of the stint's lead.
                   has no 3-year window; -1 if unrated)
 Per player-season: dposs = possessions as the best defender on the floor, dlead = defensive margin per 100 in them (league
 points per 100 minus points allowed, garbage time out), dtm = the other four players' 3-year defense in them (for the
-teammate adjustment in chip_build.py). Playoff defense is split half to the lead (po_lead.py), half to the best defender (po_def.py).
+teammate adjustment in chip_build.py). Playoffs keep one lead for both ends (po_lead.py).
 Writes def_share.csv. Tested 1997-2026 with the rest of 1.1 on next-season team prediction."""
 import os, sys, numpy as np, pandas as pd
 sys.argv = ["x"]; src = open("../rapm_engine.py").read(); exec(src[:src.index("def main(")])
